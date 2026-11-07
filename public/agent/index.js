@@ -12,6 +12,7 @@ import { offerLine } from './offer.js';
 import { EVERYTHING } from './demo-plan.js';
 import { phoneApp } from './phone-apps.js';
 import { installToken } from './token.js';
+import { meContext } from '../lib/profile.js';
 
 if (globalThis.window) installToken(); // /api/* carries the device token from here on
 
@@ -297,7 +298,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     const fresh = movedAt != null && clock.now() - movedAt < 120000;
     const cal = fresh && app('calendar')?.state?.(), mv = cal?.lastMoved, ev = mv && cal.events?.find((e) => e.id === mv.id);
     const moved = ev?.with ? { what: ev.title.replace(/\s+with\s+.+$/i, ''), with: ev.with, day: mv.to, time: mv.time } : null;
-    return { app: current(), ...(slotAsk ? { asked: slotAsk } : {}), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [], ...(moved ? { moved } : {}) };
+    return { app: current(), me: meContext(), ...(slotAsk ? { asked: slotAsk } : {}), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [], ...(moved ? { moved } : {}) };
   }
   async function planFor(text) {
     const context = await contextNow();

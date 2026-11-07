@@ -170,7 +170,7 @@ test('the lead 15:50: "what can I do" is everything, "who am I" describes the pe
   const said = (s) => demoPlan(s, reg, { app: null, workflows: [] }).plan.map((x) => x.params.text).join(' ');
   for (const s of ['what can you do', 'What can I do for me']) assert.equal(said(s), 'Everything. Just tell me what you need.', s);
   const who = said('Who am I?');
-  assert.match(who, /Mum and Sam/); assert.match(who, /book club/i);
+  assert.match(who, /^You're Joy Adeyemi, in Stratford, London, and you're partly sighted\./); assert.match(who, /Mum, Sam and Priya/); assert.match(who, /book club/i); assert.match(who, /Pasta Corner/);
   assert.doesNotMatch(who, /you (?:asked|did|moved|sent)|I (?:did|moved|sent)/i, 'about the person, never what Murmur did');
   for (const s of ['How can I find friends?', 'how can I make friends', 'how do I meet new friends']) {
     const a = said(s); assert.match(a, /Book club/, s); assert.doesNotMatch(a, /can'?t/i, s);
@@ -189,4 +189,16 @@ test('"open <app>" opens every app on the phone, by id and by name, before any a
     const p = demoPlan(said, r, { app: null, workflows: [] });
     assert.deepEqual(p.plan, [{ tool: 'open_app', params: { app: a.id } }], `${said} -> ${JSON.stringify(p)}`);
   }
+});
+
+test('the profile: the planner context carries her name and home, and the server prompt names them', async () => {
+  const { meContext } = await import('../public/lib/profile.js');
+  const me = meContext();
+  assert.equal(me.name, 'Joy Adeyemi'); assert.match(me.home, /Stratford/); assert.match(me.usual, /Pasta Corner/);
+  let body = null;
+  const fetch = async (url, o) => { body = JSON.parse(o.body); return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ functionCall: { name: 'say', args: { text: 'ok' } } }] } }] }) }; };
+  const real = globalThis.fetch; globalThis.fetch = fetch;
+  try { const { plan } = await import('../lib/agent/planner.js'); await plan({ key: 'k', utterance: 'take me home', apps: [], context: { app: null, me } }); }
+  finally { globalThis.fetch = real; }
+  assert.match(body.contents[0].parts[0].text, /Person's name: Joy Adeyemi\.\nPerson's home: 12 Larkspur Mews/);
 });

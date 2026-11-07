@@ -53,7 +53,8 @@ const api = {
   },
   // The agent's planner: the browser sends what was said and its registry; a validated plan comes back.
   async 'POST /api/plan'(body) {
-    return agent.plan({ key: KEY, spend: () => guard.spend(), utterance: body.utterance, apps: agent.cleanApps(body.apps), context: { app: String(body.context?.app || '').slice(0, 30), workflows: (Array.isArray(body.context?.workflows) ? body.context.workflows : []).slice(0, 20).map((w) => String(w).slice(0, 60)) } });
+    return agent.plan({ key: KEY, spend: () => guard.spend(), utterance: body.utterance, apps: agent.cleanApps(body.apps), context: { app: String(body.context?.app || '').slice(0, 30), workflows: (Array.isArray(body.context?.workflows) ? body.context.workflows : []).slice(0, 20).map((w) => String(w).slice(0, 60)),
+      me: Object.fromEntries(['name', 'home', 'work', 'usual'].map((k) => [k, String(body.context?.me?.[k] || '').slice(0, 80)])) } }); // the invented profile, capped
   },
   async 'POST /api/live-token'() {
     if (LIVE_URL) return { token: 'test', url: LIVE_URL, model: gemini.LIVE_MODEL, voice: gemini.VOICE, persona: gemini.LIVE_PERSONA, tools: gemini.LIVE_TOOLS };
