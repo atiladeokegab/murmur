@@ -27,8 +27,14 @@ export const REMOVE_APP = {
   params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
 };
 
-// A spoken name against an app's id, name and manifest words ("the taxi app", "my groceries").
-const heard = (name) => { const q = String(name || '').toLowerCase(); return (x) => [x.id, x.name.toLowerCase(), ...(x.words || [])].some((w) => q.includes(w) || (q.length > 2 && w.includes(q))); };
+// A spoken name against an app's id, name and manifest words, in whole words either way: "the taxi app" and "Corner"
+// find theirs, "taxidermy" and "cabbage" find nothing. Bounded to the first 80 characters heard.
+const words = (s) => String(s || '').toLowerCase().slice(0, 80).match(/[a-z0-9]+/g) || [];
+const within = (run, ws) => run.length > 0 && ws.some((_, i) => run.every((w, k) => ws[i + k] === w));
+const heard = (name) => { const q = words(name); return (x) => [x.id, x.name, ...(x.words || [])].some((a) => within(words(a), q) || within(q, words(a))); };
+/** Every app in list a spoken name could mean. The callers act only on exactly one. */
+export const appsHeard = (list, name) => list.filter(heard(name));
+const which = (hits) => ({ ok: false, say: `Which one: ${hits.map((x) => x.name).join(' or ')}?` });
 
 const port = (o) => o.port || browserKV({ prefix: 'murmur' });
 // The saved list is a trust boundary too: anything but an array of { id, path } strings is dropped, never fatal at boot.
@@ -127,7 +133,8 @@ export async function availableApps(o = {}) {
 /** install_app {name}: resolve a spoken name through the manifest and install. Never throws: { ok, say, id? }. */
 export async function installByName(name, o) {
   const list = await availableApps(o);
-  const p = list.find(heard(name));
+  const hits = appsHeard(list, name), p = hits[0];
+  if (hits.length > 1) return which(hits);
   if (!p) return { ok: false, say: `I can't find ${name}. I can add ${list.map((x) => x.name).join(', ')}.` };
   if (p.installed || o.registry.get(p.id)) return { ok: true, id: p.id, say: `${p.name} is already on your phone.` };
   try {
@@ -140,8 +147,9 @@ export async function installByName(name, o) {
 
 /** remove_app {name}: an added app by spoken name, then removeApp (asks first). A built-in gets "came with the phone". */
 export async function removeByName(name, o, confirm = o.confirm) {
-  const hit = heard(name);
-  const p = (await availableApps(o)).find((x) => x.installed && hit(x)) || o.registry.list().find(hit);
+  const added = appsHeard((await availableApps(o)).filter((x) => x.installed), name);
+  const hits = added.length ? added : appsHeard(o.registry.list(), name), p = hits[0];
+  if (hits.length > 1) return which(hits);
   if (!p) return { ok: false, say: `There's no ${name} on your phone.` };
   return removeApp(p.id, o, confirm);
 }

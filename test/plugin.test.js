@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createBus, createRegistry, createCtx, appKv, mountApp, loadApps, runAction } from '../public/sdk/index.js';
-import { installApp, uninstallApp, removeApp, removeByName, restoreApps, installByName, availableApps, PLUGINS, INSTALL_APP, REMOVE_APP } from '../public/sdk/plugin.js';
+import { installApp, uninstallApp, removeApp, removeByName, restoreApps, installByName, availableApps, appsHeard, PLUGINS, INSTALL_APP, REMOVE_APP } from '../public/sdk/plugin.js';
 import { browserKV } from '../public/ports/browser-kv.js';
 import appIds from '../public/apps/apps.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
@@ -318,4 +318,20 @@ test('remove_app by voice: the same delete sheet; a No keeps it; built-ins and u
   assert.match((await removeByName('pizza', p.plug, confirm)).say, /There's no pizza on your phone/);
   assert.match((await removeByName('Corner Grocer', p.plug, confirm)).say, /There's no Corner Grocer/, 'already gone');
   assert.equal(asked.length, 3, 'none of those asked');
+});
+
+test('a spoken name matches whole words only, and only when it means one app', async () => {
+  const p = await phone();
+  for (const t of ['taxidermy', 'cabbage', 'a cabinet', 'groceriesss', 'corners']) {
+    assert.equal((await installByName(t, p.plug)).ok, false, t);
+    assert.equal(p.registry.get('taxi') || p.registry.get('grocer'), undefined, `${t} installed nothing`);
+  }
+  assert.equal((await installByName('get me a cab', p.plug)).id, 'taxi');
+  assert.equal((await installByName('Corner', p.plug)).id, 'grocer');
+  assert.equal((await removeByName('taxidermy', p.plug, async () => true)).say, "There's no taxidermy on your phone.");
+  assert.ok(p.registry.get('taxi'), 'still there');
+  const two = [{ id: 'a', name: 'Corner Grocer' }, { id: 'b', name: 'Corner Cafe' }];
+  assert.deepEqual(appsHeard(two, 'corner').map((x) => x.id), ['a', 'b'], 'ambiguous: both');
+  assert.deepEqual(appsHeard(two, 'the corner cafe').map((x) => x.id), ['b']);
+  assert.deepEqual(appsHeard(two, 'x'.repeat(90) + ' cafe'), [], 'bounded: only the first 80 characters are heard');
 });
