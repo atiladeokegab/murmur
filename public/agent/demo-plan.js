@@ -405,6 +405,18 @@ function plan(said, apps, context, dry) {
   }
   if (/^read (?:it|that|this)$/i.test(t)) return task([step(here || 'messages', ['read'])]);
 
+  // Uber, Deliveroo, Maps (demo apps; each only when it is on the phone)
+  const has = (id) => apps.some((a) => a.id === id);
+  if (has('uber') && /^(?:how far (?:away )?is (?:a|the|my|an?) (?:car|uber|ride|cab|taxi)|how (?:long|far) (?:for|until|till) (?:a|the) (?:car|uber|ride|cab)|(?:are there|any) (?:cars|ubers) near(?:by| me)?)(?:\s+(?:on|in)\s+uber)?$/i.test(t)) return task([step('uber', ['howFar'])]);
+  if (has('uber') && /^(?:book|get|order|call)\s+(?:me\s+)?(?:a|an)\s+(?:car|uber|ride|cab|taxi)(?:\s+home)?(?:\s+(?:on|with)\s+uber)?$|^(?:book|get)\s+(?:me\s+)?(?:a\s+)?(?:car|uber|ride) home$/i.test(t)) return task([step('uber', ['bookHome'])]);
+  if (has('deliveroo') && (/^(?:(?:get|show|find)\s+(?:me\s+)?)?my usual(?:\s+(?:on|from)\s+deliveroo)?$/i.test(t) && (here === 'deliveroo' || /deliveroo/i.test(t) || !has('shop'))
+    || /^(?:(?:get|show|find|order)\s+(?:me\s+)?)?my usual (?:from|at) pasta corner$|^(?:my )?pasta corner usual$|^deliveroo,? my usual$/i.test(t))) return task([step('deliveroo', ['usual'])]);
+  if (has('deliveroo') && (here === 'deliveroo' && /^(?:order|pay for|get)\s+(?:it|that|this|them)(?:\s+now)?$/i.test(t) || /^order my usual (?:on|from) (?:deliveroo|pasta corner)$/i.test(t))) {
+    return task(here === 'deliveroo' ? [step('deliveroo', ['order'])] : [step('deliveroo', ['usual']), step('deliveroo', ['order'])]);
+  }
+  if (has('maps') && (m = t.match(/^(?:(?:give me |get |show me )?directions|take me|the way|walk me|show me the way)\s+(?:to\s+)?(?:the\s+)?(home|my house|.+?)(?:\s+on maps)?$/i)) && (/^(?:home|my house)$/i.test(m[1]) || /on maps$/i.test(t) || !has('transit'))) return task([step('maps', ['directions'], { place: m[1] })]);
+  if (has('maps') && (m = t.match(/^how far (?:away )?is\s+(?:it to\s+)?(?:the\s+)?(?!(?:a|the|my) (?:car|uber|ride|cab|taxi)\b)(.+?)(?:\s+from here)?$/i))) return task([step('maps', ['howFar'], { place: m[1] })]);
+
   // Shop
   if (/^(?:re-?order(?:\s+(?:my|the)\s+last(?:\s+order)?)?|(?:order\s+)?(?:the\s+)?same(?:\s+again)?|(?:order|reorder)\s+(?:the\s+)?last(?:\s+(?:order|one))?(?:\s+again)?|order what i had last time)$/i.test(t)) {
     return task([step('shop', ['reorderLast', 'reorder']), step('shop', ['pay', 'checkout'])]);
