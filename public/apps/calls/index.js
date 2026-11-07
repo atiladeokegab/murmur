@@ -6,7 +6,7 @@ export const RING_MS = 2000;
 const MISSED = [{ who: 'mum', ago: 'twenty minutes ago' }, { who: 'sam', ago: 'an hour ago' }, { who: 'mum', ago: 'yesterday' }];
 const fresh = () => ({ missed: structuredClone(MISSED), status: 'idle', with: null, heard: false });
 let s = fresh();
-let root = null, os = null, body = null, timer = null, ringing = Promise.resolve(), endRing = () => {};
+let root = null, os = null, body = null, timer = null, ringing = Promise.resolve(), endRing = () => {}, offStop = [];
 const q = (sel) => root && root.querySelector(sel);
 const nameOf = (id) => CONTACTS[id]?.name || id;
 
@@ -51,6 +51,7 @@ const app = {
         const id = who(p.who);
         if (!id) throw new Error(`${p.who} isn't in your contacts.`);
         await ctx.tap(q(`[data-call="${id}"]`));
+        endOnStop(ctx.signal);
         if (s.status === 'calling') await ctx.say(`Calling ${nameOf(id)}.`);
         await ringing;
         if (s.status === 'noanswer') await ctx.say(noAnswer(id));
@@ -92,6 +93,7 @@ const app = {
         const id = backTo(p);
         if (!id) throw new Error(p.who ? `${p.who} didn't call.` : 'No missed calls.');
         await ctx.tap(q(`[data-back="${id}"]`));
+        endOnStop(ctx.signal);
         if (s.status === 'calling') await ctx.say(`Calling ${nameOf(id)}.`);
         await ringing;
         if (s.status === 'noanswer') await ctx.say(noAnswer(id));
@@ -110,10 +112,19 @@ async function callAsked(id, back, byHand) {
   const readback = back ? app.actions.callBack.readback(s, { who: id }) : app.actions.call.readback(s, { who: id });
   if (!(os?.confirm && (await os.confirm({ gate: 'call', readback })))) return;
   s.status = 'calling'; s.with = id; render('#calls-hangup');
+  endOnStop(os?.signal);
   if (byHand) os?.say?.(`Calling ${nameOf(id)}.`); // the agent's run says its lines through ctx.say
   await new Promise((done) => { endRing = done; timer = setTimeout(() => { s.status = 'noanswer'; render('#calls-hangup'); if (byHand) os?.say?.(noAnswer(id)); done(); }, RING_MS); });
 }
-function hangUp() { clearTimeout(timer); endRing(); s.status = 'idle'; s.with = null; }
+function hangUp() { clearTimeout(timer); endRing(); offStop.forEach((off) => off()); offStop = []; s.status = 'idle'; s.with = null; }
+/** Stop ends a ringing or active call: the shell's Stop (os.signal, renewed after each Stop) and the agent's (ctx.signal). */
+function endOnStop(signal) {
+  if (!signal) return;
+  if (signal.aborted) { hangUp(); render('#calls-h'); return; }
+  const end = () => { if (s.status !== 'idle') { hangUp(); render('#calls-h'); } };
+  signal.addEventListener('abort', end, { once: true });
+  offStop.push(() => signal.removeEventListener('abort', end));
+}
 
 // ---------- the screen ----------
 function el(tag, props = {}, ...kids) {

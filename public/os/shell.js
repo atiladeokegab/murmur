@@ -149,6 +149,7 @@ const osFor = (app, kv) => ({
       sheet: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true) })),
     get workflows() { return agent?.workflows; },
     get agent() { return agent; }, // Mine runs a workflow with os.agent.runWorkflow(name)
+    get signal() { return personal.signal; }, // the person's Stop; Calls hangs up on it
     hear: (text) => hear(text, 'typed'),
     librarian, datastore,
 });

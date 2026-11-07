@@ -15,13 +15,16 @@ async function phone({ answers = [], signal = new AbortController().signal } = {
   const kv = appKv('calls', browserKV({ storage: fakeStorage(), prefix: 'murmur' }));
   const asked = [];
   // The shell's os.confirm says yes at once when the agent pressed the control (the runner already asked).
-  const root = await mountApp(calls, doc.body, { kv, bus, say: (text) => bus.emit('say', { text }), confirm: async () => true });
+  const person = { stop: new AbortController() }; // the shell's Stop: aborted, then renewed, like shell.js's personal
+  const root = await mountApp(calls, doc.body, { kv, bus, say: (text) => bus.emit('say', { text }), confirm: async () => true,
+    get signal() { return person.stop.signal; } });
   await calls.reset();
   const ask = async (a) => { asked.push(a); return answers.shift() ?? false; };
   const ctxFor = (app) => createCtx({ app, root, bus, kv, cursor: { async moveTo() {}, hide() {} }, ask, signal });
   const run = (name, params) => runAction({ registry, name, params, bus, ctxFor, n: 1, of: 1 });
   const said = () => bus.log.filter((e) => e.name === 'say').map((e) => e.payload?.text ?? e.text);
-  return { root, run, said, asked, registry, s: () => calls.state() };
+  const stopAll = () => { person.stop.abort(); person.stop = new AbortController(); };
+  return { root, run, said, asked, registry, stopAll, s: () => calls.state() };
 }
 
 test('calls: on the board, a real heading, call and call back are gated "call"', async () => {
@@ -94,4 +97,37 @@ test('calls: every say phrase plans to its own calls__ tool, and "text Mum" plan
   assert.deepEqual(demoPlan('call Sam back', apps).plan, [{ tool: 'calls__callBack', params: { who: 'Sam' } }]);
   assert.deepEqual(demoPlan('missed calls', apps).plan.map((x) => x.tool), ['calls__missed']);
   assert.equal(demoPlan('text Mum', apps).plan[0].tool, 'messages__openChat');
+});
+
+const tick = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('calls: Stop mid-ring ends the agent\'s call, and no tick', async () => {
+  const stop = new AbortController();
+  const p = await phone({ answers: [true], signal: stop.signal });
+  const going = p.run('calls__call', { who: 'Mum' });
+  await tick(300);
+  assert.equal(p.s().status, 'calling');
+  stop.abort();
+  const r = await going;
+  assert.equal(r.ok, false);
+  assert.equal(r.stopped, true);
+  assert.equal(p.s().status, 'idle', 'the call is hung up, not left ringing');
+  await tick(2100);
+  assert.equal(p.s().status, 'idle', 'the ring timer never comes back');
+});
+
+test('calls: the shell\'s Stop ends a call the person tapped, ringing or not answered', async () => {
+  const p = await phone();
+  p.root.querySelector('[data-call="sam"]').click();
+  await tick(50);
+  assert.equal(p.s().status, 'calling');
+  p.stopAll();
+  assert.equal(p.s().status, 'idle', 'ringing call ended');
+  p.root.querySelector('[data-call="mum"]').click();
+  await tick(2100);
+  assert.equal(p.s().status, 'noanswer');
+  p.stopAll();
+  assert.equal(p.s().status, 'idle', 'active call ended');
+  p.stopAll();
+  assert.equal(p.s().status, 'idle', 'a Stop with no call is harmless');
 });
