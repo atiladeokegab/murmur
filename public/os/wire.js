@@ -51,7 +51,12 @@ export async function wireExtras({ bus, registry, speak, settings, save, kv, app
     cursor: { async moveTo() {}, hide() {} }, ask: async () => false, speak: say });
   const run = (name, params, n, of) => runAction({ registry, name, params, bus, ctxFor, n, of });
   const onboard = { kv: { get: (k) => kv.get('os.onboard', k), set: (k, v) => kv.set('os.onboard', k, v) } };
-  const demo = createDemo({ registry, bus, run, say, board, replay, stop, onboard });
+  const planner = settings && (() => {
+    settings.planner = settings.planner === 'offline' ? 'auto' : 'offline';
+    try { save?.(); } catch { /* stays in memory */ }
+    return say(`Planner: ${settings.planner === 'offline' ? 'offline' : 'Gemini'}.`);
+  });
+  const demo = createDemo({ registry, bus, run, say, board, replay, stop, onboard, planner });
   const panel = clockEl ? bindDemo(clockEl, demo, { doc }) : null;
 
   // First open: one sentence, once. Not awaited, so boot never waits on the voice.

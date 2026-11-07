@@ -38,6 +38,10 @@ test('wireExtras mounts Your look, syncs the shell look, wraps the voice, speaks
   await w.say('Sent.');
   assert.equal(status.getAttribute('aria-live'), 'off');
 
+  await w.demo.planner();
+  assert.deepEqual([settings.planner, spoken.at(-1)], ['offline', 'Planner: offline.'], 'Planner flips the shell look and says which');
+  await w.demo.planner();
+  assert.equal(settings.planner, 'auto');
   await w.demo.nextMorning();
   await w.demo.reset();
   assert.deepEqual([days, resets], [1, 1]);
