@@ -26,11 +26,18 @@ function pickOf(q, flights) {
 }
 
 export function createTravel() {
-  let root = null, body = null, doc = null, ui = null, s = {};
+  let root = null, body = null, doc = null, ui = null, s = {}, confirm = null, holding = null;
   const fresh = () => ({ view: 'search', query: null, results: [], selected: null, held: null });
   const sel = () => s.results.find((f) => f.id === s.selected);
 
-  // A person's own tap on Hold is their yes (contract §7); the agent's tap comes after the runner's gate.
+  // Hold is a pay gate (spec §3.7): a person's own tap asks through os.confirm (fingerprint included);
+  // when the agent pressed it, the runner already asked and os.confirm answers yes at once.
+  async function hold() {
+    if (!sel()) return;
+    if (confirm && !(await confirm({ gate: 'pay', readback: app.actions.hold.readback(s) }))) return;
+    if (!sel()) return;
+    s.held = { ...sel(), day: s.query.day, ref: `MUR-${sel().id}` }; s.view = 'held'; render();
+  }
   const on = {
     search(key) {
       const [route, day] = key.split('|');
@@ -39,7 +46,7 @@ export function createTravel() {
       s.selected = null; s.view = 'results'; render();
     },
     pick(id) { s.selected = id; s.view = 'flight'; render(); },
-    hold() { if (!sel()) return; s.held = { ...sel(), day: s.query.day, ref: `MUR-${sel().id}` }; s.view = 'held'; render(); },
+    hold() { holding = hold(); return holding; },
     back() { s.view = s.results.length ? 'results' : 'search'; s.selected = s.view === 'results' ? null : s.selected; render(); },
     newSearch() { s.view = 'search'; render(); },
   };
@@ -60,8 +67,8 @@ export function createTravel() {
 
   const app = {
     id: 'travel', name: 'Travel',
-    async mount(el) {
-      root = el; doc = el.ownerDocument; ui = controls(doc); style(doc);
+    async mount(el, os = {}) {
+      root = el; confirm = os.confirm || null; doc = el.ownerDocument; ui = controls(doc); style(doc);
       body = h(doc, 'div', { className: 'm-app-body' });
       root.append(h(doc, 'h2', { id: 'travel-h', textContent: 'Travel' }), body);
       render();
@@ -121,6 +128,7 @@ export function createTravel() {
         async run(p, ctx) {
           if (!sel()) throw new Error('Pick a flight first.');
           await ctx.tap(ui.find('hold'));
+          await holding; // the click's handler awaits os.confirm; settle it before the runner verifies
         },
         verify(st) { return (st.view === 'held' && !!st.held && st.held.id === st.selected) || 'The flight is not held.'; },
       },

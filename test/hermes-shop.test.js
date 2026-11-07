@@ -41,12 +41,14 @@ test('kv and state hold only ids and counts, no card data', async () => {
   assert.doesNotMatch(stored + JSON.stringify(app.state()), /card|cvv|expiry|price/i);
 });
 
-test('by hand: the person taps their usual and Pay, and that tap is their yes', async () => {
-  const { app, press, asked } = await shopPhone();
-  press('shop', 'Your usual: Flat white');
-  press('shop', 'Pay £3.20');
+test('by hand: tapping Pay still asks, with the fingerprint, through os.confirm', async () => {
+  const { app, press, asked } = await shopPhone({ answers: [false, true] });
+  await press('shop', 'Your usual: Flat white');
+  await press('shop', 'Pay £3.20');
+  assert.equal(app.state().orders.length, 1, 'a No pays nothing');
+  await press('shop', 'Pay £3.20');
   assert.equal(app.read(), 'Paid. Ready at ten past.');
-  assert.equal(asked.length, 0);
+  assert.deepEqual(asked.map((q) => [q.gate, q.readback, q.byHand]), [['pay', 'Flat white, Demo Café, £3.20.', true], ['pay', 'Flat white, Demo Café, £3.20.', true]]);
 });
 
 test('reorder, add, and failures in words', async () => {
@@ -78,7 +80,7 @@ test('a person\'s press moves focus to the new view\'s first line, not the top o
   const { doc, roots, press } = await shopPhone();
   const usual = [...roots.shop.all()].find((n) => n.tagName === 'BUTTON' && n.textContent.startsWith('Your usual'));
   usual.focus();
-  press('shop', 'Your usual: Flat white');
+  await press('shop', 'Your usual: Flat white');
   assert.ok(roots.shop.contains(doc.activeElement) && doc.activeElement.tagName !== 'BUTTON');
   assert.equal(doc.activeElement.textContent, 'Shop, Demo Café');
 });

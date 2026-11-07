@@ -49,7 +49,7 @@ test('Travel: three flights in three sentences, book the 9:40 through the pay ga
 
 test('Travel: a No holds nothing, refusals are in words, reset clears', async () => {
   const app = createTravel();
-  const { run, press } = await phone([app], { answers: [false] });
+  const { run, press, asked } = await phone([app], { answers: [false, false, true] });
   assert.match((await run('travel__pick', { flight: '9:40' })).reason, /Find the flights first/);
   assert.match((await run('travel__findFlights', { to: 'Paris' })).reason, /only find flights from London to Lisbon/);
   assert.match((await run('travel__findFlights', { to: 'Lisbon', day: 'Monday' })).reason, /Which day/);
@@ -58,8 +58,11 @@ test('Travel: a No holds nothing, refusals are in words, reset clears', async ()
   await run('travel__pick', { flight: 'third' });
   assert.equal((await run('travel__hold')).cancelled, true);
   assert.equal(app.state().held, null);
-  press('travel', 'Hold this flight');
-  assert.equal(app.state().held.id, 'AT118', "a person's own tap is their yes");
+  await press('travel', 'Hold this flight');
+  assert.equal(app.state().held, null, 'a No on the sheet after a hand tap holds nothing');
+  await press('travel', 'Hold this flight');
+  assert.equal(app.state().held.id, 'AT118', "a hand tap holds only after the sheet's yes (fingerprint inside it)");
+  assert.deepEqual(asked.filter((q) => q.byHand).map((q) => q.gate), ['pay', 'pay']);
   await app.reset();
   assert.equal(app.state().view, 'search');
 });

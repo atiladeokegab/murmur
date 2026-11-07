@@ -39,7 +39,7 @@ function findItem(q, inShop) {
 }
 
 export function createShop({ now = () => Date.now() } = {}) {
-  let root = null, body = null, doc = null, ui = null, kv = memKV(), s = {};
+  let root = null, body = null, doc = null, ui = null, kv = memKV(), s = {}, confirm = null, paying = null;
 
   const fresh = () => ({ view: 'shop', shop: 'demo-cafe', basket: [], usual: structuredClone(USUAL), orders: structuredClone(PAST) });
   const save = () => kv.set('usual', s.usual).catch(() => {}); // only ids and counts; never prices or payment
@@ -56,8 +56,11 @@ export function createShop({ now = () => Date.now() } = {}) {
     render();
   }
 
-  // A person's own tap on Pay is their yes (contract §7); the agent's tap comes after the runner's gate.
-  function pay() {
+  // Pay always needs the fingerprint (spec §3.7): a person's own tap asks through os.confirm, which checks it;
+  // when the agent pressed Pay, the runner already asked and os.confirm answers yes at once.
+  async function pay() {
+    if (!s.basket.length) return;
+    if (confirm && !(await confirm({ gate: 'pay', readback: app.actions.pay.readback(s) }))) return;
     if (!s.basket.length) return;
     const t = new Date(now() + PREP_MIN * 60e3);
     t.setSeconds(0, 0); t.setMinutes(Math.ceil(t.getMinutes() / 5) * 5);
@@ -77,7 +80,7 @@ export function createShop({ now = () => Date.now() } = {}) {
     reorder() { const o = lastOrder(); if (o) addLines(structuredClone(o.items)); },
     add(key) { const [shop, id] = key.split('/'); addLines([{ shop, id, qty: 1 }]); },
     remove(id) { s.basket = s.basket.filter((l) => l.id !== id); render(); },
-    pay, track() { s.view = 'track'; render(); }, back() { s.view = 'shop'; render(); },
+    pay() { paying = pay(); return paying; }, track() { s.view = 'track'; render(); }, back() { s.view = 'shop'; render(); },
   };
 
   function trackLine(o) {
@@ -116,7 +119,7 @@ export function createShop({ now = () => Date.now() } = {}) {
   const app = {
     id: 'shop', name: 'Shop',
     async mount(el, os = {}) {
-      root = el; doc = el.ownerDocument; ui = controls(doc); kv = os.kv || kv;
+      root = el; doc = el.ownerDocument; ui = controls(doc); kv = os.kv || kv; confirm = os.confirm || null;
       style(doc);
       body = h(doc, 'div', { className: 'm-app-body' });
       root.append(h(doc, 'h2', { id: 'shop-h', textContent: 'Shop' }), body);
@@ -189,6 +192,7 @@ export function createShop({ now = () => Date.now() } = {}) {
         async run(p, ctx) {
           if (!s.basket.length) throw new Error('Your basket is empty.');
           await tap(ctx, 'pay');
+          await paying; // the click's handler awaits os.confirm; settle it before the runner verifies
         },
         verify(st) { return (st.basket.length === 0 && st.orders.at(-1)?.status === 'preparing' && st.view === 'track') || 'It did not pay.'; },
       },
