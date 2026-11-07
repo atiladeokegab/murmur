@@ -7,16 +7,17 @@ const room = qs.get('room') || 'stage'; // a phone with no room forwards nothing
 const pass = `?room=${encodeURIComponent(room)}`;
 $('inside-frame').src = `/inside?big&room=${encodeURIComponent(room)}`; // Inside's own projector view
 
-// The phone at phone size, scaled to the height it has; observed, since the top line settles after the font loads.
-const col = document.querySelector('.phone-col'), phone = $('phone'), label = $('phone-label');
+// The phone at phone size, scaled to the full height of the screen (the body's padding aside), keeping its shape.
+const phone = $('phone'), label = $('phone-label');
 let size = { w: 390, h: 844 };
 const BEZEL = 14; // px of device body around the screen, before scaling
 const fit = () => {
-  const s = Math.max(0.1, (col.clientHeight - label.offsetHeight - 8) / (size.h + 2 * BEZEL));
+  const cs = getComputedStyle(document.body), room = document.body.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const s = Math.max(0.1, Math.min(room / (size.h + 2 * BEZEL), (innerWidth * 0.45) / (size.w + 2 * BEZEL))); // never more than 45% of the width: Inside keeps its room
   phone.style.setProperty('--w', size.w); phone.style.setProperty('--h', size.h); phone.style.setProperty('--s', String(s));
   return s;
 };
-new ResizeObserver(fit).observe(col);
+new ResizeObserver(fit).observe(document.body);
 
 // Left pane: the real phone's own screen, from its mirror:frame events (public/os/mirror.js), drawn into a
 // script-free iframe. No frame for 8 s (the phone beats every 5 s when idle): this laptop's phone instead, opened with
