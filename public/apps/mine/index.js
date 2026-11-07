@@ -55,21 +55,6 @@ const app = {
       verify: (st, p) => (!!Mi.find(st, p.name) && st.explained === Mi.find(st, p.name).name) || `Nothing saved as ${p.name}.`,
       done: () => '', // it just said the steps
     },
-    run: {
-      describe: 'Run a saved workflow, step by step; its sends still ask first',
-      doing: 'Running it',
-      params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
-      gate: null, // each step keeps its own gate when it runs
-      hint: 'Run is the second button after the steps',
-      async run(p, ctx) {
-        await refresh();
-        const w = named(p);
-        if (!w) throw new Error(`You have nothing saved as ${p.name}.`);
-        await ctx.tap(q(`[data-run="${w.name}"]`));
-      },
-      verify: (st, p) => (!!Mi.find(st, p.name) && st.lastRun === Mi.find(st, p.name).name) || `${p.name} didn't start.`,
-      done: (st, p) => `${Mi.find(st, p.name)?.name || p.name} started.`,
-    },
     delete: {
       describe: 'Delete a saved workflow and its tile',
       doing: 'Deleting it',

@@ -4,6 +4,8 @@
 export const FIRST_WORDS = "Hi, I'm Murmur. I run this phone for you by voice. Tap anywhere and speak. Try saying: read my messages.";
 export const NO_EARS = "Hi, I'm Murmur. I run this phone for you by voice, but this browser can't hear you. To talk, open this page in Chrome. To type instead, tap the Talk button at the bottom. Try: read my messages.";
 export const FIRST_WIN = "That's it. Say 'what can I do' any time, 'stop' to stop me, or 'undo' to take it back.";
+// build-plugin's hint, folded into step 2 so it is said once, after the first success, not at open.
+export const OFFER_HINT = "Say 'what can I do' any time.";
 export const NUDGE = "Try: text Sam I'm ten minutes late.";
 export const MIC_BLOCKED = "The microphone is blocked, so I can't hear you. Allow it in this site's settings, or type in the box at the bottom.";
 
