@@ -55,10 +55,14 @@ test('calls: Stop at the gate does nothing', async () => {
 
 test('calls: yes, then "Calling Mum…", then no answer and the text suggestion', async () => {
   const p = await phone({ answers: [true] });
+  p.root.querySelector('[data-call="mum"]').focus();
   const going = p.run('calls__call', { who: 'mum' });
   await new Promise((r) => setTimeout(r, 300));
   assert.equal(p.s().status, 'calling');
-  assert.equal(p.root.querySelector('[role="status"]').textContent, 'Calling Mum…');
+  assert.equal(p.root.querySelector('p').textContent, 'Calling Mum…');
+  assert.equal(p.said().at(-1), 'Calling Mum.', 'said once, no live region');
+  assert.equal(p.root.querySelector('[role="status"]'), null);
+  assert.equal(p.root.ownerDocument.activeElement?.id, 'calls-hangup', 'focus moves to Hang up, never to body');
   assert.equal(calls.read(), 'Calling Mum.');
   const r = await going;
   assert.equal(r.ok, true, r.reason);
@@ -77,6 +81,7 @@ test('calls: missed calls read back, and call back asks for the last caller', as
   const r = await p.run('calls__callBack', {});
   assert.equal(r.cancelled, true);
   assert.equal(p.asked[0].readback, 'Call Mum back?');
+  assert.equal(p.root.querySelector('[data-back="mum"]').getAttribute('aria-label'), 'Mum, twenty minutes ago. Call back');
   assert.equal(p.s().status, 'idle');
 });
 

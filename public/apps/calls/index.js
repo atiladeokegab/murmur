@@ -51,6 +51,7 @@ const app = {
         const id = who(p.who);
         if (!id) throw new Error(`${p.who} isn't in your contacts.`);
         await ctx.tap(q(`[data-call="${id}"]`));
+        if (s.status === 'calling') await ctx.say(`Calling ${nameOf(id)}.`);
         await ringing;
         if (s.status === 'noanswer') await ctx.say(noAnswer(id));
       },
@@ -91,6 +92,7 @@ const app = {
         const id = backTo(p);
         if (!id) throw new Error(p.who ? `${p.who} didn't call.` : 'No missed calls.');
         await ctx.tap(q(`[data-back="${id}"]`));
+        if (s.status === 'calling') await ctx.say(`Calling ${nameOf(id)}.`);
         await ringing;
         if (s.status === 'noanswer') await ctx.say(noAnswer(id));
       },
@@ -103,12 +105,13 @@ export default app;
 // ---------- the call ----------
 // A call always asks, a person's own tap too: a mis-dial by someone who can't see is the risk. The shell's
 // os.confirm says yes at once when the agent pressed it (the runner already asked). No confirm, no call.
-async function callAsked(id, back) {
+async function callAsked(id, back, byHand) {
   if (s.status !== 'idle') return;
   const readback = back ? app.actions.callBack.readback(s, { who: id }) : app.actions.call.readback(s, { who: id });
   if (!(os?.confirm && (await os.confirm({ gate: 'call', readback })))) return;
   s.status = 'calling'; s.with = id; render('#calls-hangup');
-  await new Promise((done) => { endRing = done; timer = setTimeout(() => { s.status = 'noanswer'; render('#calls-hangup'); done(); }, RING_MS); });
+  if (byHand) os?.say?.(`Calling ${nameOf(id)}.`); // the agent's run says its lines through ctx.say
+  await new Promise((done) => { endRing = done; timer = setTimeout(() => { s.status = 'noanswer'; render('#calls-hangup'); if (byHand) os?.say?.(noAnswer(id)); done(); }, RING_MS); });
 }
 function hangUp() { clearTimeout(timer); endRing(); s.status = 'idle'; s.with = null; }
 
@@ -128,29 +131,30 @@ const button = (text, props = {}) => el('button', { type: 'button', className: '
 
 function render(focus) {
   if (!body) return;
+  const had = root.contains(root.ownerDocument.activeElement); // before the re-render drops focus
   body.replaceChildren(s.status === 'idle' ? idleView() : callView());
-  if (focus && root.contains(root.ownerDocument.activeElement)) q(focus)?.focus?.();
+  if (focus && had) q(focus)?.focus?.();
 }
 
 function callView() {
   return el('div', {},
-    el('p', { className: 'app-done', role: 'status' }, s.status === 'calling' ? `Calling ${nameOf(s.with)}…` : noAnswer(s.with)),
+    el('p', { className: 'app-done' }, s.status === 'calling' ? `Calling ${nameOf(s.with)}…` : noAnswer(s.with)),
     button('Hang up', { id: 'calls-hangup', className: 'app-btn primary', onclick: () => { hangUp(); render('#calls-h'); } }));
 }
 
 function idleView() {
   return el('div', {},
+    el('h3', { className: 'app-h3' }, 'Missed calls'),
     button('Read missed calls', { id: 'calls-read', onclick: (e) => {
       s.heard = true; // a person's tap reads aloud here; the agent's run reads through ctx.say
       if (e.isTrusted) os?.say?.(missedWords(s));
     } }),
-    el('h3', { className: 'app-h3' }, 'Missed calls'),
     s.missed.length ? el('ul', { className: 'app-list', 'aria-label': 'Missed calls' }, s.missed.map((m, i) => el('li', { style: 'border-top: 0' },
       button([el('b', { className: 'app-title' }, nameOf(m.who)), el('span', { className: 'app-why' }, ` ${m.ago}. Call back`)],
         // the first row for a person is the one "call back" presses
-        { ...(s.missed.findIndex((x) => x.who === m.who) === i && { 'data-back': m.who }), onclick: () => { ringing = callAsked(m.who, true); } }))))
+        { 'aria-label': `${nameOf(m.who)}, ${m.ago}. Call back`, ...(s.missed.findIndex((x) => x.who === m.who) === i && { 'data-back': m.who }), onclick: (e) => { ringing = callAsked(m.who, true, e.isTrusted); } }))))
       : el('p', { className: 'app-why' }, 'No missed calls.'),
     el('h3', { className: 'app-h3' }, 'People'),
     el('ul', { className: 'app-list', 'aria-label': 'People' }, Object.keys(CONTACTS).map((id) => el('li', { style: 'border-top: 0' },
-      button(`Call ${nameOf(id)}`, { 'data-call': id, onclick: () => { ringing = callAsked(id, false); } })))));
+      button(`Call ${nameOf(id)}`, { 'data-call': id, onclick: (e) => { ringing = callAsked(id, false, e.isTrusted); } })))));
 }
