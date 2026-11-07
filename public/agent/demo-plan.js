@@ -123,6 +123,8 @@ function plan(said, apps, context, dry) {
     return task([{ tool: 'install_app', params: { name: m[1] } }]);
   }
   if (/^(?:what are |list |say )?(?:my |the )?(?:tiles|routines|workflows)$/i.test(t) || /^what (?:tiles|routines) do i have$/i.test(t)) return task([{ tool: 'list_workflows', params: {} }]);
+  // "Clear my calendar", "delete everything": the calendar's gated clear, which reads back how many go
+  if (/^(?:(?:clear|empty|wipe)(?: out)? (?:the |my )?(?:whole )?(?:calendar|diary)|(?:delete|remove|cancel|clear) (?:everything|all (?:of )?(?:my |the )?(?:events|plans|appointments))(?: (?:from|in|on) (?:the |my )?(?:calendar|diary))?)$/i.test(t)) return task([step('calendar', ['clear'])]);
   if ((m = t.match(/^(?:remove|delete|forget)\s+(?:the\s+|my\s+)?(.+?)(?:\s+(?:tile|routine|workflow))?$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'remove_workflow', params: { name: m[1] } }]);
   if ((m = t.match(/^(?:remove|delete|uninstall|get rid of)\s+(?:the\s+|my\s+)?(.+?)(?:\s+app)?$/i)) && apps.some((a) => a.name.toLowerCase() === m[1].toLowerCase() || a.id === m[1].toLowerCase())) return task([{ tool: 'remove_app', params: { name: m[1] } }]);
   if (/^(?:go )?(?:home|back to (?:the )?(?:board|home))$|^(?:show|open) (?:the )?(?:board|home)$/i.test(t)) return task([{ tool: 'go_home', params: {} }]);

@@ -168,3 +168,33 @@ test('calendar: "move my 12:30" finds the event by its time; a time with nothing
   assert.equal(none.ok, false);
   assert.match(none.reason, /Nothing's at 3 pm this week/);
 });
+
+test('calendar: delete every event is gated with a count; no keeps them, yes empties it and it stays empty', async () => {
+  const no = await phone({ answers: [false] });
+  const r = await no.run('calendar__clear', {});
+  assert.equal(r.cancelled, true);
+  assert.equal(no.s().events.length, 3);
+  const c = no.last('confirm');
+  assert.equal(c.payload?.readback ?? c.readback, 'Delete all 3 events from your calendar?');
+  const yes = await phone({ answers: [true] });
+  assert.equal((await yes.run('calendar__clear', {})).ok, true);
+  assert.deepEqual(yes.s().events, []);
+  assert.ok(yes.said().includes('Deleted all 3 events. Your calendar is empty.'));
+  await calendar.seed(); // the next boot does not refill it
+  assert.deepEqual(calendar.state().events, []);
+  const again = await yes.run('calendar__clear', {});
+  assert.equal(again.ok, false);
+});
+
+test("calendar: a person's own Delete every event tap asks first; no confirm means nothing is deleted", async () => {
+  for (const yes of [false, true]) {
+    const asked = [];
+    const { root, s } = await phone({ confirm: async (q) => { asked.push(q); return yes; } });
+    root.querySelector('#cal-clear').dispatchEvent({ type: 'click', isTrusted: true }); await new Promise((r) => setTimeout(r));
+    assert.deepEqual(asked, [{ gate: 'delete', readback: 'Delete all 3 events from your calendar?' }]);
+    assert.equal(s().events.length, yes ? 0 : 3);
+  }
+  const bare = await phone(); // mounted without the shell's confirm: fail closed
+  bare.root.querySelector('#cal-clear').dispatchEvent({ type: 'click', isTrusted: true }); await new Promise((r) => setTimeout(r));
+  assert.equal(bare.s().events.length, 3);
+});

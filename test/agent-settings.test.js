@@ -172,3 +172,10 @@ test('remove_app: the agent gate asks, a spoken no keeps it, a tile of the same 
   assert.deepEqual(removed, ['hello']);
   assert.deepEqual(demoPlan('Remove pizza', describeRegistry(s.registry)).plan.map((x) => x.tool).includes('remove_app'), false);
 });
+
+test('"clear my calendar" and "delete everything" plan the gated calendar clear; "delete the calendar app" still removes the app', () => {
+  const apps = describeRegistry([{ id: 'calendar', name: 'Calendar', actions: { clear: { gate: 'delete' }, add: {} } }]);
+  for (const said of ['clear my calendar', 'Delete everything', 'delete all my events', 'wipe the calendar', 'delete everything from my calendar'])
+    assert.deepEqual(demoPlan(said, apps)?.plan?.map((x) => x.tool), ['calendar__clear'], said);
+  assert.deepEqual(demoPlan('delete the calendar app', apps)?.plan?.map((x) => x.tool), ['remove_app']);
+});

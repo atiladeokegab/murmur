@@ -211,6 +211,23 @@ function invited(e, who) {
   save(); render('cal-status');
 }
 
+// Delete everything always asks: the agent's run was asked by the runner; a person's own tap asks here. No confirm, no delete.
+const clearLine = (n) => (!n ? 'Your calendar is already empty.' : n === 1 ? 'Delete the one event in your calendar?' : `Delete all ${n} events from your calendar?`);
+function clearAll() {
+  if (!events.length) { status = clearLine(0); return render('cal-status'); }
+  if (!personal) return cleared();
+  if (!osConfirm) return;
+  return osConfirm({ gate: 'delete', readback: clearLine(events.length) }).then((ok) => {
+    if (ok) cleared(); else { status = 'Nothing deleted.'; render('cal-status'); }
+  });
+}
+function cleared() {
+  const n = events.length;
+  events = []; open = null; picking = adding = inviting = false; clash = null; lastMoved = lastAdded = lastInvite = null; before = null;
+  status = `Deleted ${n === 1 ? 'the one event' : `all ${n} events`}. Your calendar is empty.`;
+  save(); render('cal-status');
+}
+
 function render(focusId) {
   const e = ev();
   const days = DAYS.map((d) => {
@@ -253,6 +270,7 @@ function render(focusId) {
       el('ol', { id: 'cal-list' }, ...(on.length
         ? on.map((x) => el('li', {}, btn(`cal-ev-${x.id}`, `${x.title}, ${spoken(x.time)}`, () => { open = x.id; status = ''; render('cal-ev-h'); })))
         : [el('li', { textContent: 'Nothing on.' })]))];
+    if (events.length) body.push(el('div', { className: 'choices' }, btn('cal-clear', 'Delete every event', clearAll)));
   }
   root.querySelector('#cal-days').replaceChildren(...days);
   root.querySelector('#cal-body').replaceChildren(...body);
@@ -334,7 +352,7 @@ const app = {
     };
   },
   async seed() {
-    if (!events.length) events = SEED.map((e) => ({ ...e, invited: [] }));
+    if (!events.length && (await kv.get('events')) === undefined) events = SEED.map((e) => ({ ...e, invited: [] })); // a cleared calendar stays empty
     await kv.set('events', events);
     render();
   },
@@ -447,6 +465,22 @@ const app = {
         if (clash) await ctx.tap($('cal-anyway'));
         before = null;
       },
+    },
+    clear: {
+      describe: 'Delete every event in the calendar, after asking',
+      doing: 'Clearing your calendar',
+      gate: 'delete',
+      hint: 'Delete every event is the last button under the day. I ask first.',
+      params: { type: 'object', properties: {} },
+      readback: (s) => clearLine(s.events.length),
+      async run(p, ctx) {
+        if (!events.length) throw new Error(clearLine(0));
+        if (open || adding) await ctx.tap($(`cal-day-${shown}`));
+        await ctx.tap($('cal-clear'));
+        await ctx.say(status);
+      },
+      verify: (s) => s.events.length === 0 || 'Some events are still there.',
+      done: () => '', // it already said how many went
     },
     invite: {
       describe: 'Send someone an invite to an event, or tell them its new time',
