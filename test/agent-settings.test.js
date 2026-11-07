@@ -195,4 +195,9 @@ test('Stop while a gated action resolves its person finishes the task: nothing p
   assert.equal(out.status, 'stopped');
   assert.equal(agent.runner.busy, false);
   assert.equal(agent.gates.current, null);
+test('"clear my calendar" and "delete everything" plan the gated calendar clear; "delete the calendar app" still removes the app', () => {
+  const apps = describeRegistry([{ id: 'calendar', name: 'Calendar', actions: { clear: { gate: 'delete' }, add: {} } }]);
+  for (const said of ['clear my calendar', 'Delete everything', 'delete all my events', 'wipe the calendar', 'delete everything from my calendar'])
+    assert.deepEqual(demoPlan(said, apps)?.plan?.map((x) => x.tool), ['calendar__clear'], said);
+  assert.deepEqual(demoPlan('delete the calendar app', apps)?.plan?.map((x) => x.tool), ['remove_app']);
 });
