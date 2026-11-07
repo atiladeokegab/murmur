@@ -124,6 +124,8 @@ function onBack(kind) {
 
 // ---------- the apps ----------
 const bus = createBus();
+// Fetch a line's audio the moment it is queued, so it is ready when the line before it ends.
+bus.on('say', (e) => { if (caps.tts && e?.text && !readerSpeaks()) cachedTts(String(e.text)).catch(() => {}); });
 const registry = createRegistry();
 await loadApps(registry, appIds);
 registry.register(createPhone({ stop: () => stopAll(), where: () => where(), noLook: (on) => setNoLook(on), isNoLook: () => !!look.nolook,
