@@ -50,12 +50,13 @@ test('Gemini function calls become the plan, validated', async () => {
   } finally { globalThis.fetch = realFetch; }
 });
 
-test('the planner tries each model in turn: a 503 moves on, a JSON plan is read, the model is reported', async () => {
+test('one model, one try: a JSON plan is read, the model is reported, a 503 does not try a second model', async () => {
   const realFetch = globalThis.fetch;
   const asked = [];
+  let fail = false;
   globalThis.fetch = async (url) => {
     asked.push(String(url).match(/models\/([^:]+)/)[1]);
-    if (asked.length === 1) return { ok: false, status: 503 };
+    if (fail) return { ok: false, status: 503 };
     return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ steps: [
       { tool: 'open_app', params: '{"app":"the board"}' },
       { tool: 'messages__openChat', params: '{"who":"Sam"}' },
@@ -64,11 +65,14 @@ test('the planner tries each model in turn: a 503 moves on, a JSON plan is read,
   };
   try {
     const out = await plan({ key: 'k', utterance: 'tell Sam late', apps });
-    assert.deepEqual(asked, MODELS().slice(0, 2));
-    assert.ok(MODELS().includes('gemini-3.1-flash-lite'));
+    assert.deepEqual(MODELS(), [process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite']);
     assert.equal(out.provider, 'gemini');
-    assert.equal(out.model, asked[1]);
+    assert.equal(out.model, asked[0]);
     assert.deepEqual(out.steps.map((s) => [s.tool, s.params]), [['messages__openChat', { who: 'Sam' }], ['messages__reply', { text: 'Late.' }]], 'open_app of a non-app is dropped');
+    fail = true; asked.length = 0;
+    const down = await plan({ key: 'k', utterance: 'tell Sam late', apps });
+    assert.equal(asked.length, 1, 'no second model');
+    assert.equal(down.provider, 'demo');
   } finally { globalThis.fetch = realFetch; }
 });
 

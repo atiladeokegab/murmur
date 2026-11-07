@@ -177,7 +177,7 @@ function render(focusId) {
   const e = ev();
   const days = DAYS.map((d) => {
     const on = d === shown && !adding;
-    const b = btn(`cal-day-${d}`, d === TODAY ? `${d}, today` : d, () => show(d), on ? 'choice yes' : 'choice');
+    const b = btn(`cal-day-${d}`, d === TODAY ? `${d}, today` : d, () => show(d));
     b.setAttribute('aria-pressed', String(on));
     return b;
   });
@@ -247,13 +247,14 @@ const app = {
     root = r; kv = os.kv; osConfirm = os.confirm || null;
     // Tokens only (os/contract.md §2.1); the buttons reuse the shell's .choice.
     const style = el('style', { textContent: `#app-calendar{padding:0 var(--gutter)}#app-calendar ol{padding:0}
-#app-calendar li{padding:var(--ring) 0}#app-calendar label,#app-calendar h4{display:block;margin-top:var(--gutter)}
-#app-calendar .choices{margin:var(--ring) 0}#app-calendar li .choice{width:100%;justify-items:start;text-align:start}
-#app-calendar .cal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,8rem),1fr));gap:calc(var(--ring) * 2);margin:var(--ring) 0}
+#app-calendar li{padding:0.25rem 0}#app-calendar label,#app-calendar h4{display:block;margin-top:var(--gutter)}
+#app-calendar .choices{margin:0.25rem 0}#app-calendar li .choice{width:100%;justify-items:start;text-align:start}
+#app-calendar .cal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,8rem),1fr));gap:0.5rem;margin:0.25rem 0}
+#app-calendar .choice{border-color:var(--c-slat)}#app-calendar .choice[aria-pressed="true"]{border-color:var(--c-ink);background:var(--c-board-press)}#app-calendar .choice.yes{border-color:var(--c-accent)}
 #app-calendar .cal-grid .choice[aria-current]{border-style:dashed}
-#app-calendar h3,#app-calendar h4{font-size:var(--fs-title);margin:var(--gutter) 0 var(--ring)}
+#app-calendar h3,#app-calendar h4{font-size:var(--fs-title);margin:var(--gutter) 0 0.25rem}
 #app-calendar label,#app-calendar p{font-size:var(--fs-sheet)}#cal-status:empty{margin:0}
-#app-calendar mark.changed{background:var(--c-mark);color:var(--c-on-mark);border-radius:var(--ring);padding:0 var(--ring)}
+#app-calendar mark.changed{background:var(--c-mark);color:var(--c-on-mark);border-radius:var(--r-cell);padding:0 0.25rem}
 .cal-fly{position:fixed;z-index:20;pointer-events:none;padding:var(--pad-tile);border-radius:var(--r-btn);background:var(--c-accent);color:var(--c-on-accent);font-weight:700;font-size:var(--fs-sheet);white-space:nowrap}
 #app-calendar input{box-sizing:border-box;width:100%;padding:0 var(--gutter);min-height:var(--h-link);font:inherit;font-size:var(--fs-sheet);background:var(--c-board);color:var(--c-ink);border:var(--bw-talk) solid var(--c-ink);border-radius:var(--r-btn)}` });
     root.append(style, el('h2', { id: 'calendar-h', textContent: 'Calendar' }),
