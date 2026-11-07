@@ -53,7 +53,7 @@ test('registry: refuses a malformed app, and tools are generated from what apps 
   const names = tools.map((t) => t.name);
   for (const b of ['open_app', 'read_screen', 'where', 'say', 'ask', 'save_workflow', 'run_workflow', 'explain']) assert.ok(names.includes(b), b);
   assert.ok(names.includes('hello__write') && names.includes('hello__send'));
-  assert.deepEqual(tools.find((t) => t.name === 'open_app').parameters.properties.app.enum, ['hello']);
+  assert.deepEqual(tools.find((t) => t.name === 'open_app').parameters.properties.app.enum, appIds);
   assert.match(tools.find((t) => t.name === 'hello__send').description, /asked first: send/);
   assert.equal(r.resolve('hello__delete'), null, 'an action nobody declared does not exist');
   assert.equal(r.resolve('hello__write__x'), null);
