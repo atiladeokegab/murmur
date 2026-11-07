@@ -27,10 +27,11 @@ body.inside[data-link="on"] #link::before { background: var(--c-ink); }
 .inside section > ol { list-style: none; margin: 0; padding: 0 .9rem; overflow-y: auto; flex: 1; scrollbar-width: thin; scrollbar-color: var(--c-slat) transparent; }
 .inside section > ol > li { padding: .7rem 0; border-bottom: 1px solid var(--c-slat); }
 .inside section > ol > li:last-child { border-bottom: 0; }
-.inside li.old { opacity: .45; }
+.inside li.old { opacity: .32; }
+.inside li.old .heard, .inside li.old .read { font-size: var(--fs-hint); }
 .inside p { margin: 0; }
 .inside p + p { margin-top: .2rem; }
-.inside .heard, .inside .read { font-size: var(--fs-talk); line-height: 1.25; }
+.inside .heard, .inside .read { font-size: 1.6rem; line-height: 1.2; }
 .inside .raw, .inside .meta, .inside .pressed, .inside code { color: var(--c-quiet); font-size: var(--fs-hint); }
 .inside .meta, .inside code { font-family: var(--f-time); font-size: .78rem; }
 .inside code { white-space: pre-wrap; overflow-wrap: break-word; }
@@ -44,8 +45,9 @@ body.inside[data-link="on"] #link::before { background: var(--c-ink); }
 .inside .calls { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
 .inside .calls li { display: flex; flex-wrap: wrap; gap: .1rem .45rem; align-items: baseline; }
 .inside .calls .n { font: 600 .78rem/1 var(--f-time); background: var(--c-cell); border-radius: var(--r-cell); padding: .2rem .35rem; }
-.inside .step { display: flex; align-items: center; gap: .5rem; font-weight: 700; }
-.inside .gate { margin-left: auto; font: 600 .72rem/1 var(--f-time); text-transform: uppercase; letter-spacing: .06em; padding: .25rem .4rem;
+.inside .step { display: grid; grid-template-columns: 1.1rem 1fr auto; align-items: center; gap: .5rem; font-weight: 700; }
+.inside .res { color: var(--c-ink); }
+.inside .gate { grid-column: 3; font: 600 .72rem/1 var(--f-time); text-transform: uppercase; letter-spacing: .06em; padding: .25rem .4rem;
   border: 1px solid var(--c-ink); border-radius: var(--r-cell); }
 .inside .tick { width: 1.1rem; height: 1.1rem; flex: none; fill: none; stroke: var(--c-ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .inside .cross { width: 1.1rem; text-align: center; flex: none; }

@@ -17,7 +17,7 @@ const MARK = { verified: '<svg class="tick" viewBox="0 0 16 16" aria-hidden="tru
 const ROW = {
   Heard: (r) => `<p class="heard">“${esc(r.text)}”</p>${r.raw && r.raw !== r.text ? `<p class="raw">raw: ${esc(r.raw)}</p>` : ''}<p class="meta">${esc(r.path || 'from the task')}${ms(r.ms)}</p>`,
   Plan: (r) => `<ol class="calls">${r.plan.map((c, i) => `<li><span class="n">${i + 1}</span><span>${esc(c.name)}</span>${params(c.params)}</li>`).join('') || '<li>No plan</li>'}</ol>`
-    + `${r.dropped.length ? `<p class="meta">dropped by the schema ${code(r.dropped)}</p>` : ''}${r.provider ? `<p class="meta">${esc(r.provider)}</p>` : ''}`,
+    + `${r.dropped.length ? `<p class="meta">dropped by the schema ${code(r.dropped)}</p>` : ''}${r.provider ? `<p class="meta">planned by ${esc(r.provider)}</p>` : ''}`,
   Actions: (r) => `<p class="step">${MARK[r.result] || ''}<span>${esc(r.label || r.action)}</span>${r.gate ? `<b class="gate">${esc(r.gate)}</b>` : ''}</p>`
     + `<p class="meta">${esc(r.action)}${params(r.params)}</p>`
     + `<p class="meta">verify: <span class="res">${esc(r.result)}</span>${ms(r.ms)}</p>`
