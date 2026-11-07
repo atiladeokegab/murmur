@@ -34,7 +34,8 @@ async function phone({ storage = fakeStorage(), answers = [] } = {}) {
     roots[app.id] = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say() {}, workflows: null });
     await app.seed();
   }
-  const plug = { registry, host: doc.body, port, os: (app, kv) => ({ kv, bus, say() {} }) };
+  // confirm: yes, as the shell's is when the agent pressed the control (the runner already asked)
+  const plug = { registry, host: doc.body, port, os: (app, kv) => ({ kv, bus, say() {}, confirm: async () => true }) };
   const add = (r) => { roots[r.id] = r.root; return r; };
   for (const r of await restoreApps(plug)) add(r);
   const asked = [];
@@ -233,4 +234,24 @@ test('built-in apps cannot be removed, and are never asked about', async () => {
   assert.ok(p.names().includes('hello__send'));
   assert.equal((await removeApp('nope', p.plug, async () => true)).ok, false);
   assert.equal((await installApp(GROCER, p.plug)).root.querySelector('#app-grocer-remove'), null, 'no confirm, no Remove button');
+});
+
+test('fail closed: with no confirm on the mount, a hand tap books, orders and cancels nothing', async () => {
+  const p = await phone({ answers: [true] });
+  p.add(await installApp(TAXI, p.plug));
+  assert.equal((await p.run('taxi__book', { to: 'Home' })).ok, true);
+  const bare = { ...p.plug, os: (app, kv) => ({ kv, say() {} }) };
+  await uninstallApp('taxi', p.plug);
+  const t = p.add(await installApp(TAXI, bare));
+  await p.plug.port.set('app.taxi', 'booking', null);
+  const taxi = p.registry.get('taxi');
+  t.root.querySelector('#taxi-to').value = 'Home';
+  t.root.querySelector('#taxi-to').dispatchEvent(new Event('input'));
+  t.root.querySelector('#taxi-book').click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(taxi.state().booking, null, 'no booking without a confirm');
+  const g = p.add(await installApp(GROCER, bare));
+  g.root.querySelector('#grocer-order').click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(p.registry.get('grocer').state().order, null, 'no order without a confirm');
 });
