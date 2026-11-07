@@ -239,6 +239,15 @@ function plan(said, apps, context, dry) {
         (m = t.match(/^(?:what are )?(?:the )?opening (?:hours|times) (?:for|of|at)\s+(.+)$/i))) return at(['hours'], m[1]);
   }
 
+  // Weather (read-only). An optional "today", "this afternoon", "tonight" or "tomorrow" on the end.
+  if (apps.some((a) => a.id === 'weather')) {
+    const W = '(?:\\s+(?:for\\s+)?((?:today|now|tonight|tomorrow(?: morning| afternoon)?|this (?:morning|afternoon|evening))))?';
+    const sky = (names, when) => task([step('weather', names, when ? { when: when.toLowerCase() } : {})]);
+    if ((m = t.match(new RegExp(`^(?:what'?s|what is|how'?s|how is) the (?:weather|forecast)(?: like)?${W}$|^(?:the )?weather${W}$`, 'i')))) return sky(['forecast'], m[1] || m[2]);
+    if ((m = t.match(new RegExp(`^(?:do|will|should) i (?:need|take|want) (?:a |my )?(?:coat|jacket|umbrella|brolly)${W}$`, 'i')))) return sky(['coat'], m[1]);
+    if ((m = t.match(new RegExp(`^(?:will|is) it (?:going to )?rain${W}$|^is (?:it|there) (?:any )?rain(?: coming)?${W}$`, 'i')))) return sky(['rain'], m[1] || m[2]);
+  }
+
   // Transit
   if ((m = t.match(/\bnext bus(?:\s+to\s+(?:the\s+)?([a-z' ]+?))?(?:,|\s+and\b|$)/i)) || /^bus to work$/i.test(t)) {
     return task([step('transit', ['nextBus', 'next', 'bus'], m?.[1] ? { place: cap(m[1].trim()) } : {})]);
