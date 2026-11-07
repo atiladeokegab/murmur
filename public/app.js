@@ -305,7 +305,8 @@ function hold(on) {
     rec = new Rec(); rec.lang = 'en-GB'; rec.interimResults = true; rec.continuous = true;
     rec.onresult = (e) => { heard = [...e.results].map((r) => r[0].transcript).join(' '); talkLabel.textContent = heard; };
     rec.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') showTyped("Murmur can't hear you: allow the microphone");
+      if (e.error === 'not-allowed') showTyped("Murmur can't hear you: allow the microphone for this site.");
+      if (e.error === 'service-not-allowed') showTyped('Speech recognition is off on this phone. On iPhone turn on Dictation (Settings, General, Keyboard). Or type below.');
     };
     rec.onend = () => { if (heard.trim()) ask(heard); else if (!held) talkLabel.textContent = 'Hold to talk'; };
     try { rec.start(); } catch { /* already started */ }

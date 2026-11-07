@@ -407,23 +407,25 @@ const agentChoose = (c) => (c ? showSheet('choose', c, (v) => { agent.pick(Numbe
 // ---------- talk anywhere: a tap on blank space or a long press anywhere (os/talk.js), the bar, or Space ----------
 const talk = $('#talk'), talkLabel = $('#talk-label'), typed = $('#typed');
 const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null, heard = '', silence = null, still = null;
+let rec = null, heard = '', silence = null, still = null, quietRuns = 0;
+// 'service-not-allowed' is speech recognition switched off (iPhone Dictation, a blocked speech service), not a refused mic
+const MIC_ERRORS = { 'not-allowed': "Murmur can't hear you: allow the microphone for this site.", 'service-not-allowed': 'Speech recognition is off on this phone. On iPhone turn on Dictation (Settings, General, Keyboard). Or type below.' };
 function showTyped(reason) { typed.hidden = false; if (reason) talkLabel.textContent = reason; $('#typed-text').focus(); }
 function setListening(on) { listening = on; talk.setAttribute('aria-pressed', String(on)); talkLabel.textContent = handsFree ? 'Listening' : on ? 'Listening. Tap anywhere to finish' : 'Tap anywhere to talk'; }
 // Reopen the mic once Murmur is quiet: not mid-task (unless a sheet waits for a spoken answer), never during a fingerprint.
 function rearm(delay = 350, quiet = false) {
   clearTimeout(rearmTimer);
   rearmTimer = setTimeout(() => {
-    if (handsFree && !listening && !speaking && !printing && (!busy || pending) && document.visibilityState !== 'hidden') summon({ auto: true, quiet });
+    if (Rec && handsFree && !listening && !speaking && !printing && (!busy || pending) && document.visibilityState !== 'hidden') summon({ auto: true, quiet });
   }, delay);
 }
 function summon(o) {
   const auto = o?.auto === true;
   if (listening) { if (!auto) endTalk(); return; }
-  if (!auto) handsFree = true; // a tap, Space or long press: the browser's one gesture turns hands-free on
+  if (!auto) { handsFree = true; quietRuns = 0; } // a tap, Space or long press: the browser's one gesture turns hands-free on
   hush(); audioOut(); if (!o?.quiet) ding('summon');
   if (!Rec) { showTyped(); return; }
-  heard = '';
+  heard = ''; let why = '';
   rec = new Rec(); rec.lang = 'en-GB'; rec.interimResults = true; rec.continuous = true;
   rec.onresult = (e) => {
     heard = [...e.results].map((r) => r[0].transcript).join(' ');
@@ -433,9 +435,16 @@ function summon(o) {
   };
   rec.onerror = (e) => {
     if (!/no-speech|aborted/.test(e.error)) handsFree = false; // a mic that can't open must not loop
-    if (/not-allowed/.test(e.error)) showTyped("Murmur can't hear you: allow the microphone");
+    why = MIC_ERRORS[e.error] || '';
+    if (why) showTyped(why);
   };
-  rec.onend = () => { clearTimeout(silence); setListening(false); if (heard.trim()) hear(heard.trim(), 'voice'); else rearm(300, true); }; // silence: listen again, no ding
+  rec.onend = () => {
+    clearTimeout(silence);
+    if (!heard.trim() && ++quietRuns > 3) handsFree = false; // three silent re-listens in a row: stop quietly, a tap starts again
+    setListening(false);
+    if (why) talkLabel.textContent = why; // keep the reason, setListening just overwrote it
+    else if (heard.trim()) { quietRuns = 0; hear(heard.trim(), 'voice'); } else rearm(300, true); // silence: listen again, no ding
+  };
   try { rec.start(); setListening(true); show('Listening'); } catch { showTyped(); }
 }
 function endTalk() { clearTimeout(silence); try { rec?.stop(); } catch { /* already stopped */ } }
