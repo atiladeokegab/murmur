@@ -182,7 +182,13 @@ function plan(said, apps, context, dry) {
   }
   if ((m = raw.match(/^(?:reply|answer|respond)(?:\s+with)?[:,]?\s+(.+)$/i))) return task([step('messages', ['reply', 'draft'], { text: body(m[1].replace(/[.!?]+$/, '')) })]);
   if (/^send(?: it| that| the reply)?$/i.test(t)) return task([step(here || 'messages', ['send'])]);
-  if ((m = t.match(/^(?:call|ring|phone)\s+(\w+)$/i))) return task([step('messages', ['call'], { who: name(m[1]) })]);
+  if ((m = t.match(/^(?:text|message)\s+(\w+)$/i))) return msg(m[1], '', true); // "text Mum": Calls' no-answer line suggests it
+
+  // Calls. "Call back" first, or "call back" would hear "Back" as a name.
+  if ((m = t.match(/^(?:call|ring|phone)\s+(?:(\w+)\s+)?back$/i))) return task([step('calls', ['callBack'], m[1] && !/^(?:her|him|them)$/i.test(m[1]) ? { who: name(m[1]) } : {})]);
+  if (/^(?:who (?:called|rang)(?: me)?|(?:any |read (?:me )?)?(?:my )?missed calls)$/i.test(t)) return task([step('calls', ['missed'])]);
+  if (/^hang up(?: the call)?$/i.test(t)) return task([step('calls', ['hangUp'])]);
+  if ((m = t.match(/^(?:call|ring|phone)\s+(\w+)$/i))) return task([step('calls', ['call'], { who: name(m[1]) })]);
 
   // Calendar (before the generic "change X to Y")
   if ((m = t.match(/^invite\s+(\w+)\s+to\s+(.+)$/i))) return task([step('calendar', ['invite'], { who: name(m[1]), event: clean(m[2]) })]);
