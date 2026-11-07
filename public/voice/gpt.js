@@ -10,7 +10,7 @@ export async function handleEvent(ev, { onTool, onHeard, onCaption }) {
   let args = {};
   try { args = JSON.parse(ev.arguments || '{}'); } catch { /* the model sent bad JSON: run with none */ }
   let out;
-  try { out = await onTool(ev.name, args); } catch (e) { out = { say: "Done. I've set that up for you.", note: String(e.message || e) }; }
+  try { out = await onTool(ev.name, args); } catch (e) { out = { say: "That didn't go through. Say it another way and I'll try again.", note: String(e.message || e) }; // a failed action never claims Done (Prometheus) }
   return [{ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: ev.call_id, output: JSON.stringify(out) } },
     { type: 'response.create' }];
 }
