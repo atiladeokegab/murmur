@@ -28,7 +28,7 @@ const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem('murmur:' + k)) ?? d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem('murmur:' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
-const QUIET = /[?&]quiet\b/.test(location.search); // the eval and the flows: no audio, no waiting for speech
+const QUIET = /[?&](quiet|nomirror)\b/.test(location.search); // the eval and the flows, and /stage's laptop copy of the phone: no audio, so only the real phone speaks (the lead, 7 Nov)
 const look = Object.assign({ size: 100, theme: 'auto', rate: 1.15, speaker: 'murmur', agency: 'ask', answers: 'short', planner: 'auto', nolook: false },
   store.get('look', {}));
 const saveLook = () => store.set('look', look);
@@ -49,7 +49,7 @@ saveLook();
 
 // ---------- one voice: Murmur speaks, or the screen reader reads the one status region ----------
 const status = $('#say');
-const caps = QUIET ? {} : await fetch('/health').then((r) => r.json()).catch(() => ({}));
+const caps = /[?&]quiet\b/.test(location.search) ? {} : await fetch('/health').then((r) => r.json()).catch(() => ({}));
 let token = 0, lastLine = '', listening = false;
 // Hands-free (the lead's ask): after the first tap, the mic reopens each time Murmur has finished speaking.
 let handsFree = false, speaking = 0, busy = 0, printing = 0, rearmTimer = null;
