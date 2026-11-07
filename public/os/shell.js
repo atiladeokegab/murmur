@@ -506,6 +506,17 @@ const host = {
     no: () => answerSheet(pending?.kind === 'confirm' ? false : null), choose: (i) => answerSheet(i) },
   verbs: { stop: stopAll, where, again, takeOver },
 };
+let graph = null; // the personal graph; Murmur works the same without it
+try {
+  const [{ createGraph }, { CONTACTS }] = await Promise.all([import('../agent/graph.js'), import('../lib/tiles.js')]);
+  graph = createGraph({ bus }); graph.seed({ contacts: CONTACTS, look });
+  bus.on('memory', (e) => { if (e?.response?.id === 'first:transit' && e.response.answer === 'Yes') graph.relate('you', 'usually', 'check the bus first in the morning'); });
+  bus.on('step:verified', (e) => {
+    const st = e?.app === 'messages' && /send$/.test(e.action) && registry.get('messages')?.state();
+    const to = st?.lastSent && st.chats?.find((c) => c.id === st.lastSent.to)?.name;
+    if (to) graph.relate('you', 'knows', to);
+  });
+} catch (e) { console.info('[graph] off', e?.name); }
 try {
   const { createAgent } = await import('../agent/index.js');
   agent = await createAgent({
@@ -513,7 +524,7 @@ try {
     os: { open: (id) => open(id), current: () => current, install },
     fingerprint: () => passkey.confirm(),
     agency: () => look.agency, answers: () => look.answers,
-    onGate: agentGate, onChoose: agentChoose,
+    onGate: agentGate, onChoose: agentChoose, graph,
   });
   // Mine mounted before the agent, on its own seed. Give the real store that first tile so Run My morning runs.
   // shortcut: reseeds whenever the store is empty (a deleted My morning returns on reload); fine for the demo
@@ -536,11 +547,13 @@ renderBoard(); renderPanel();
 if (look.nolook) { nl.hidden = false; document.documentElement.classList.add('no-look'); }
 try {
   const { wireExtras } = await import('./wire.js');
-  await wireExtras({ bus, registry, speak, settings: look, save: () => { saveLook(); applySpeaker(); }, kv: port, appsEl,
+  await wireExtras({ bus, registry, speak, settings: look, save: () => { saveLook(); applySpeaker(); graph?.lookChanged(look); }, kv: port, appsEl,
     librarian, datastore, status, clockEl: $('#day'),
     board: { reset: resetAll, nextMorning: async () => { day++; store.set('day', day); await agent?.nextMorning?.(); renderBoard(); } },
     replay: async () => { const u = lastUtterance; await resetAll(); if (u) hear(u, 'replay'); }, stop: stopAll });
   roots.look = $('#app-look'); kvs.look = appKv('look', port);
 } catch (e) { console.error('Your look and the demo panel did not load', e); }
-window.murmur = { bus, registry, host, agent, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, install, ready: Promise.resolve(true) };
+window.murmur = { bus, registry, host, agent, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, install, graph, ready: Promise.resolve(true) };
 document.documentElement.dataset.ready = 'true';
+// SurrealDB (21 MB of WASM) only once the phone is ready and idle, never on the boot path.
+if (graph) (window.requestIdleCallback || setTimeout)(() => { graph.ready = graph.load(); }, { timeout: 3000 });

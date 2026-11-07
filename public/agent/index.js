@@ -10,6 +10,7 @@ import { attachMemory } from './memory.js';
 import { placeLine } from './narrate.js';
 import { offerLine } from './offer.js';
 import { installToken } from './token.js';
+import { sayAbout } from './graph.js';
 
 if (globalThis.window) installToken(); // /api/* carries the device token from here on
 
@@ -33,10 +34,10 @@ export const NARRATION_HOLD_MS = 150; // a question this soon after a step start
 
 export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, fingerprint = async () => false,
   agency = () => 'ask', answers = () => 'short', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
-  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {} }) {
+  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {}, graph = null }) {
   const appsList = () => (Array.isArray(registry) ? registry : typeof registry?.list === 'function' ? registry.list() : Object.values(registry || {}));
   const app = (id) => (typeof registry?.get === 'function' ? registry.get(id) : appsList().find((a) => a.id === id));
-  let lastSaid = '', lastMore = ''; // lastMore: the last result's longer answer ("tell me more")
+  let lastSaid = '', lastMore = '', toolMore = ''; // lastMore: the last result's longer answer ("tell me more")
   // One voice, one line at a time: each line waits for the one before, so steps can act while a line is spoken.
   // Stop empties the queue (gen moves on), so nothing queued is said after it.
   // A step's narration ("Opening the chat") is dropped if a question is asked before it starts: it waits a short
@@ -104,7 +105,16 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
       case 'where': await where(); return true;
       case 'say': await say(p.text); return true;
       case 'ask': bus.emit('ask', { question: p.question, result: null }); await say(p.question); return true;
-      case 'recall': say(memory ? await memory.recall() : 'Nothing yet.'); return true;
+      case 'recall': {
+        if (!graph?.about().length) { say(memory ? await memory.recall() : 'Nothing yet.'); return true; }
+        const a = sayAbout(graph.about()); toolMore = a.more; say(a.short); return true;
+      }
+      case 'forget_fact': {
+        const gone = graph?.find(p.what) || [];
+        if (!gone.length) { await say(`I don't know that you ${p.what}.`); return false; }
+        if (!(await gates.ask({ gate: 'delete', readback: `Forget that ${sayAbout(gone).more.replace(/\.$/, '').replace(/^./, (c) => c.toLowerCase())}?` }))) return false;
+        graph.forget(p.what); await say('Forgotten.'); return true;
+      }
       case 'explain': say(workflows ? await workflows.explain(p.name) : 'No tiles yet.'); return true;
       case 'edit_workflow': say(workflows ? await workflows.edit(p.name, p.drop) : 'No tiles yet.'); return true;
       case 'save_workflow': {
@@ -145,7 +155,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     taskMode = mode;
     try {
       const r = await runner.run({ utterance, steps, plan });
-      lastMore = r.more || '';
+      lastMore = r.more || toolMore; toolMore = '';
       if (lastMore && answers() === 'detailed') await say(lastMore);
       return r;
     } finally { taskMode = null; }
@@ -244,7 +254,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   // the plan when the final words and the open app match. Anything else plans afresh.
   let early = null;
   const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
-  async function contextNow() { return { app: current(), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [] }; }
+  async function contextNow() { return { app: current(), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [], known: graph ? graph.about().slice(0, 5).map((e) => `${e.from} ${e.edge} ${e.to}`) : [] }; }
   async function planFor(text) {
     const context = await contextNow();
     if (early && early.text === norm(text) && early.app === context.app) { const e = early; early = null; return e.plan; }

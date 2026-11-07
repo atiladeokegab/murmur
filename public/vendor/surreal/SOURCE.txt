@@ -1,0 +1,4 @@
+surrealdb@2.2.2 dist/surrealdb.mjs -> surrealdb.js
+@surrealdb/wasm@3.2.0 dist/surrealdb-wasm.mjs -> wasm.js (bare imports pointed at ./)
+@surrealdb/wasm-native@4.0.0 dist/index.js -> native.js, dist/index_bg.wasm
+All Apache-2.0, from npm. Loaded lazily by public/agent/graph.js after ready.

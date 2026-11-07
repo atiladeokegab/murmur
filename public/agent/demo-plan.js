@@ -114,6 +114,7 @@ function plan(said, apps, context, dry) {
   }
   if ((m = t.match(/^(?:run|start|do)\s+(.+)$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'run_workflow', params: { name: m[1] } }]);
   if (/what do you (know|remember) about me/i.test(t)) return task([{ tool: 'recall', params: {} }]);
+  if ((m = t.match(/^forget (?:that )?i\s+(.+)$/i))) return task([{ tool: 'forget_fact', params: { what: m[1] } }]);
 
   // The OS's own verbs
   // Install: "install X", "add X app", or "Add Northline Taxis" (capitalised words: a name, not "a flat white").

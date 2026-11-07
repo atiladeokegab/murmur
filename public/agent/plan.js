@@ -21,6 +21,7 @@ export const BUILTINS = {
   // shortcut: REMOVE_APP's literal from plugin.js (branch plugin-voice-remove); import it once that is on main
   remove_app: { describe: 'Take an added app off the phone, by its name', params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   recall: { describe: 'Say what Murmur remembers about you', params: { type: 'object', properties: {} } },
+  forget_fact: { describe: 'Forget one thing Murmur knows about you (asks first)', params: { type: 'object', properties: { what: { type: 'string' } }, required: ['what'] } },
   list_workflows: { describe: 'Say the saved tiles', params: { type: 'object', properties: {} } },
   remove_workflow: { describe: 'Remove a saved tile (asks first)', params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   go_home: { describe: 'Go back to the home board', params: { type: 'object', properties: {} } },

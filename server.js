@@ -17,7 +17,7 @@ const ELEVEN_DAILY_CHARS = Number(process.env.ELEVENLABS_DAILY_CHARS) || 60000; 
 const LIVE_URL = process.env.MURMUR_LIVE_URL || ''; // test only: point the browser at a fake Live server
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8',
-  '.webmanifest': 'application/manifest+json' };
+  '.webmanifest': 'application/manifest+json', '.wasm': 'application/wasm' };
 const PAGES = { '/': 'index.html', '/race': 'race.html' };
 
 function send(res, status, body, type = 'application/json') {
