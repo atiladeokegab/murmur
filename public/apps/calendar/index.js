@@ -381,7 +381,7 @@ const app = {
     },
     add: {
       describe: 'Add an event to the calendar',
-      say: 'add an event',
+      say: 'add an event on Friday',
       doing: 'Adding to your calendar',
       hint: 'Add an event is the second button under the heading. Fill in what, day and time, then Save.',
       params: {
@@ -404,7 +404,7 @@ const app = {
     },
     move: {
       describe: 'Move an event to another day, and optionally another time',
-      say: 'move an event',
+      say: 'move lunch to Wednesday',
       doing: 'Moving an event',
       hint: 'Open the event, then Move is the second button, then pick the day',
       params: {
@@ -454,7 +454,7 @@ const app = {
     },
     invite: {
       describe: 'Send someone an invite to an event, or tell them its new time',
-      say: 'invite someone',
+      say: 'invite Sam to lunch',
       doing: 'Sending an invite',
       gate: 'send',
       hint: 'Open the event, then Invite is the third button. Say who, then Send invite.',

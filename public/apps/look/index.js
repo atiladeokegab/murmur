@@ -293,6 +293,7 @@ const app = {
     textSmaller: stepper('size', 'less'),
     setText: undoable('size', {
       describe: 'Set the text size in percent',
+      say: 'set the text to 150 percent',   // what a person would say (offer.js)
       doing: 'Changing the text size',
       hint: 'Text: bigger and Text: smaller are the first row in Your look.',
       params: { type: 'object', properties: { percent: { type: 'integer', enum: STEPS.size.values } }, required: ['percent'] },
@@ -304,12 +305,13 @@ const app = {
     }),
     voiceFaster: stepper('rate', 'more'),
     voiceSlower: stepper('rate', 'less'),
-    colours: chooser('theme', 'colours', 'Change the colours: match my phone, dark, light, or yellow on black', 'Changing the colours', 'Colours is the third row in Your look.'),
-    whoSpeaks: chooser('speaker', 'who', 'Choose who speaks: Murmur, or my screen reader', 'Choosing who speaks', 'Who speaks is after Colours in Your look.'),
-    howMuch: chooser('agency', 'mode', 'Choose how much Murmur does: ask me, just do it, or teach me', 'Changing how much I do', 'How much Murmur does is after Who speaks.'),
-    answers: chooser('answers', 'length', 'Choose short answers, or detailed ones with an example and the options', 'Changing how long answers are', 'Answers is after How much Murmur does in Your look.'),
+    colours: { ...chooser('theme', 'colours', 'Change the colours: match my phone, dark, light, or yellow on black', 'Changing the colours', 'Colours is the third row in Your look.'), say: 'use dark mode' },
+    whoSpeaks: { ...chooser('speaker', 'who', 'Choose who speaks: Murmur, or my screen reader', 'Choosing who speaks', 'Who speaks is after Colours in Your look.'), say: 'use my screen reader' },
+    howMuch: { ...chooser('agency', 'mode', 'Choose how much Murmur does: ask me, just do it, or teach me', 'Changing how much I do', 'How much Murmur does is after Who speaks.'), say: 'just do it' },
+    answers: { ...chooser('answers', 'length', 'Choose short answers, or detailed ones with an example and the options', 'Changing how long answers are', 'Answers is after How much Murmur does in Your look.'), say: 'short answers' },
     learning: undoable('learning', {
       describe: 'Stop learning, or start learning again',
+      say: 'stop learning',
       doing: 'Changing learning',
       hint: 'Stop learning is the first button under Memory, near the end of Your look.',
       params: { type: 'object', properties: { on: { type: 'boolean', description: 'false to stop learning' } }, required: ['on'] },
@@ -318,6 +320,7 @@ const app = {
     }),
     whatYouKnow: {
       describe: 'Say what Murmur knows about me',
+      say: '',   // the words plan the agent's own recall
       doing: 'Reading what I know',
       hint: 'What do you know about me is under Memory, near the end of Your look.',
       params: { type: 'object', properties: {} },
@@ -326,6 +329,7 @@ const app = {
     },
     forget: {
       describe: 'Forget the first thing Murmur knows about me',
+      say: 'forget that',
       doing: 'Forgetting that',
       gate: 'delete',
       hint: 'Forget that is the last button in Your look.',

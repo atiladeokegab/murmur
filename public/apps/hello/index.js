@@ -53,7 +53,7 @@ const app = {
   actions: {
     write: {
       describe: 'Write a message to Sam',
-      say: 'write to Sam',   // what a person would say (offer.js)
+      say: '',   // offline, no words plan Hello's write yet (they find Writer or Messages)
       doing: 'Writing to Sam',
       hint: 'The message box is under the heading.',
       params: { type: 'object', properties: { text: { type: 'string', description: 'The message' } }, required: ['text'] },

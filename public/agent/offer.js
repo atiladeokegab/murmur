@@ -30,7 +30,7 @@ export function offerLine(registry, appId = null) {
     const raw = (Array.isArray(registry) ? registry : registry.list?.() || Object.values(registry)).find((a) => a.id === appId);
     let state; try { state = raw.state?.(); } catch { /* no state: say falls back */ }
     const can = [...new Set(Object.values(raw.actions || {}).map((x) => spokenAs(x, state)).filter(Boolean))].slice(0, OFFER_MAX);
-    return `${can.length ? `Here you can: ${list(can)}.` : `${app.name} has nothing to ask for yet.`} Or say go home.`;
+    return `${can.length ? `Here you can: ${list(can)}.` : `In ${app.name}, ask in your own words.`} Or say go home.`;
   }
   const today = apps.some((a) => a.id === 'calendar') ? ", or say what's on today" : '';
   return `On the board: ${list(apps.map((a) => a.name))}. Say an app's name to open it${today}.`;

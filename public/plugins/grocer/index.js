@@ -93,6 +93,7 @@ const app = {
   actions: {
     basket: {
       describe: 'Read what is in the basket and what it costs',
+      say: '',   // offline, basket words plan the Shop, not this app, yet (offer.js)
       doing: 'Reading your basket',
       hint: 'Your basket is the list under the heading.',
       params: { type: 'object', properties: {} },
@@ -101,6 +102,7 @@ const app = {
     },
     add: {
       describe: 'Add one item to the basket',
+      say: '',
       doing: 'Adding to your basket',
       hint: 'Type the item under Add an item, then Add to basket.',
       params: { type: 'object', properties: { item: { type: 'string', description: 'One thing, like milk or tea' } }, required: ['item'] },
@@ -113,6 +115,7 @@ const app = {
     },
     remove: {
       describe: 'Take one item out of the basket',
+      say: '',
       doing: 'Removing from your basket',
       hint: 'Each item in the basket has its own Remove button.',
       params: { type: 'object', properties: { item: { type: 'string', description: 'The item to take out' } }, required: ['item'] },
@@ -126,6 +129,7 @@ const app = {
     },
     order: {
       describe: 'Order and pay for the basket, delivered today',
+      say: '',
       doing: 'Ordering your shopping',
       gate: 'pay',
       hint: 'Order and pay is the big button under the basket.',

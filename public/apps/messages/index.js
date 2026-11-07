@@ -38,7 +38,7 @@ const app = {
   actions: {
     openChat: {
       describe: 'Open the chat with a person',
-      say: (st) => (M.chatOf(st) ? '' : 'open a chat'),   // what a person would say (offer.js); '' = not here, now
+      say: (st) => (M.chatOf(st) ? '' : "open Mum's chat"),   // what a person would say (offer.js); '' = not here, now
       doing: 'Opening the chat',
       params: { type: 'object', properties: { who: { type: 'string', description: 'The name as said' }, id: { type: 'string', enum: ['mum', 'sam', 'samira'] } } },
       gate: null,
@@ -98,7 +98,7 @@ const app = {
     },
     replace: {
       describe: 'Change one word in the reply to another',
-      say: (st) => (st.draft ? 'change a word' : ''),
+      say: '',   // no words plan it without the word itself
       doing: 'Changing the word',
       params: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] },
       gate: null,
