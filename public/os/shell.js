@@ -146,6 +146,9 @@ const osFor = (app, kv) => ({
       passkey: { usable: fingerprintUsable, confirm: () => passkey.confirm() },
       sheet: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true) })),
     get workflows() { return agent?.workflows; },
+    get agent() { return agent; }, // Mine runs a workflow with os.agent.runWorkflow(name)
+    hear: (text) => hear(text, 'typed'),
+    librarian, datastore,
 });
 for (const app of registry.list()) {
   kvs[app.id] = appKv(app.id, port);
@@ -510,6 +513,13 @@ try {
     agency: () => look.agency,
     onGate: agentGate, onChoose: agentChoose,
   });
+  // Mine mounted before the agent, on its own seed. Give the real store that first tile so Run My morning runs.
+  // shortcut: reseeds whenever the store is empty (a deleted My morning returns on reload); fine for the demo
+  if (agent.workflows && registry.get('mine') && !(await agent.workflows.all()).length) {
+    const { SEED } = await import('../apps/mine/model.js');
+    for (const w of SEED()) await agent.workflows.save(w.name, w.steps.map((s) => ({ ...s, tool: `${s.app}__${s.action}` })));
+  }
+  await registry.get('mine')?.seed?.();
 } catch (e) {
   if (!/Failed to fetch|Cannot find|404|Importing a module script failed/i.test(String(e?.message))) console.error('agent failed to start', e);
 }

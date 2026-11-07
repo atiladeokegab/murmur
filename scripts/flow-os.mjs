@@ -90,8 +90,9 @@ await page.locator('#look-agency-just').click(); await page.waitForTimeout(150);
 check('agency reaches the shell', await page.evaluate(() => window.murmur.host.agency()) === 'just');
 await page.locator('#look-speaker-reader').click(); await page.waitForTimeout(150);
 check('screen reader mode makes the status region polite', await page.locator('#say').getAttribute('aria-live') === 'polite');
-await page.locator('#look-speaker-murmur').click(); await page.waitForTimeout(150);
-check('Murmur mode turns the region off', await page.locator('#say').getAttribute('aria-live') === 'off');
+await page.locator('#look-speaker-murmur').click(); await page.waitForFunction(() => document.querySelector('#say').getAttribute('aria-live') === 'off', null, { timeout: 6000 }) /* in reader mode the last line holds up to 4 s for TalkBack */.catch(() => {});
+const live = await page.locator('#say').getAttribute('aria-live');
+check('Murmur mode turns the region off', live === 'off', live);
 await page.goBack(); await page.waitForTimeout(100);
 check('Back closes Your look', await page.evaluate(() => !document.querySelector('#board-view').hidden));
 check('Your look is not a board tile', await page.locator('#board .tile[data-app="look"]').count() === 0);
@@ -107,9 +108,9 @@ const native = await page.evaluate(async () => {
   const where = await run('phone__where', {});
   const names = registry.tools().map((t) => t.name).filter((n) => n.startsWith('phone__') || n.startsWith('look__'));
   window.murmur.home();
-  return { ok: off.ok && muted && on.ok && where.ok, names };
+  return { ok: off.ok && muted && on.ok && where.ok, names, why: JSON.stringify({ off, muted, on, where }) };
 });
-check('the agent reaches the shell settings as tools (phone__*, look__*)', native.ok && native.names.includes('phone__noLook') && native.names.includes('phone__stop') && native.names.some((n) => n.startsWith('look__')), native.names.join(' '));
+check('the agent reaches the shell settings as tools (phone__*, look__*)', native.ok && native.names.includes('phone__noLook') && native.names.includes('phone__stop') && native.names.some((n) => n.startsWith('look__')), native.why);
 
 // Demo controls: three taps on the day (build-look's panel)
 for (let i = 0; i < 3; i++) await page.locator('#day').click();
