@@ -12,7 +12,8 @@ import * as passkey from '../passkey.js';
 import { byHand, checkFingerprint } from './gate.js';
 import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
 import { installToken } from '../agent/token.js';
-import { play, buzz, mute, unmute, isMuted } from '../sound/index.js';
+import { play, buzz, mute, unmute, isMuted, EARCON_NAMES } from '../sound/index.js';
+import { cachedTts, warmTts } from '../voice/tts-cache.js';
 import { createPhone } from './phone.js';
 installToken(); // wraps fetch before any /api call
 
@@ -72,8 +73,7 @@ function speak(text, signal) {
     signal?.addEventListener('abort', abort, { once: true });
     const local = () => browserSpeak(text, () => end(my === token));
     if (!caps.tts) return local();
-    fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('tts'))))
+    cachedTts(text) // fetched once; the fixed lines are warmed at boot
       .then((a) => (my === token ? playPcm(a.audio, a.rate) : null))
       .then(() => end(my === token))
       .catch(() => (my === token ? local() : end(false)));
@@ -263,6 +263,7 @@ function renderPanel() {
   while (ticks.children.length > p.ticks.length) ticks.lastChild.remove();
 }
 bus.on('*', (name, e) => {
+  if (thinking && (/^(task:start|task:done|step:start|ask)$/.test(name) || (name === 'say' && !/^On it\b/.test(e.text)))) stopThinking();
   const was = panel;
   panel = reduce(panel, name, e);
   if (name === 'task:done') panel.ms = e.ms;
@@ -374,7 +375,7 @@ const agentChoose = (c) => (c ? showSheet('choose', c, (v) => { agent.pick(Numbe
 // ---------- tap to talk (never hold: TalkBack's double tap cannot hold) ----------
 const talk = $('#talk'), talkLabel = $('#talk-label'), typed = $('#typed');
 const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null, listening = false, heard = '', silence = null;
+let rec = null, listening = false, heard = '', silence = null, still = null;
 function showTyped(reason) { typed.hidden = false; if (reason) talkLabel.textContent = reason; $('#typed-text').focus(); }
 function setListening(on) { listening = on; talk.setAttribute('aria-pressed', String(on)); talkLabel.textContent = on ? 'Listening. Tap to finish' : 'Tap to talk'; }
 function summon() {
@@ -386,7 +387,8 @@ function summon() {
   rec.onresult = (e) => {
     heard = [...e.results].map((r) => r[0].transcript).join(' ');
     talkLabel.textContent = heard;
-    clearTimeout(silence); silence = setTimeout(endTalk, 1500);
+    clearTimeout(silence); silence = setTimeout(endTalk, 600);
+    clearTimeout(still); still = setTimeout(() => agent?.prefetch?.(heard.trim()), 400); // plan while they finish
   };
   rec.onerror = (e) => { if (/not-allowed/.test(e.error)) showTyped("Murmur can't hear you: allow the microphone"); };
   rec.onend = () => { clearTimeout(silence); setListening(false); if (heard.trim()) hear(heard.trim(), 'voice'); };
@@ -403,10 +405,19 @@ addEventListener('keydown', (e) => {
 });
 
 let lastUtterance = '';
+// A soft pulse every 600 ms while the plan is out; the task's first sign (or 7 s) ends it.
+const PULSE = EARCON_NAMES.includes('thinking') ? 'thinking' : 'heard';
+let thinking = 0;
+const stopThinking = () => { clearInterval(thinking); thinking = 0; };
+function think() {
+  stopThinking();
+  let n = 0;
+  thinking = setInterval(() => { if (++n > 12) stopThinking(); else if (!QUIET) play(PULSE); }, 600);
+}
 function hear(text, path) {
   ding('heard');
   lastUtterance = text;
-  if (agent) { agent.hear(text, { path }); return; }
+  if (agent) { think(); agent.hear(text, { path }); return; }
   // No agent on this build: a choice sheet still takes a spoken name ("Samira").
   if (pending?.kind === 'choose') {
     const i = pending.choices.findIndex((c) => new RegExp(`\\b${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text));
@@ -418,6 +429,7 @@ function hear(text, path) {
 
 // ---------- the eight verbs: the shell's side (the agent matches the words and does undo and carry on) ----------
 function stopAll() {
+  stopThinking();
   personal.abort(); personal = new AbortController();
   hush();
   if (pending) answerSheet(pending.kind === 'confirm' ? false : null);
@@ -503,7 +515,8 @@ try {
   const { createAgent } = await import('../agent/index.js');
   agent = await createAgent({
     registry, bus, ctxFor, speak, librarian,
-    os: { open: (id) => open(id), current: () => current, install },
+    os: { open: (id) => open(id), current: () => current, install, home: () => home(),
+      sound: (on) => { (on ? unmute : mute)(); store.set('muted', !on); } },
     fingerprint,
     agency: () => look.agency,
     onGate: agentGate, onChoose: agentChoose,
@@ -515,6 +528,7 @@ try {
     for (const w of SEED()) await agent.workflows.save(w.name, w.steps.map((s) => ({ ...s, tool: `${s.app}__${s.action}` })));
   }
   await registry.get('mine')?.seed?.();
+  if (caps.tts) agent.warm?.().then((lines) => warmTts(lines)).catch(() => {}); // not awaited: boot does not wait on the network
 } catch (e) {
   if (!/Failed to fetch|Cannot find|404|Importing a module script failed/i.test(String(e?.message))) console.error('agent failed to start', e);
 }
