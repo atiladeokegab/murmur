@@ -54,14 +54,16 @@ test('reset puts every app and the board back, and re-arms first open', async ()
 });
 
 test('next morning moves the board on a day; mode flips who speaks through the look action', async () => {
-  const { demo, board, registry, bus } = await phone();
+  const { demo, board, registry, bus, said } = await phone();
   await demo.nextMorning();
   assert.equal(board.day, 8);
   await demo.mode();
   assert.equal(registry.get('look').state().speaker, 'reader');
   assert.ok(bus.log.some((e) => e.name === 'step:verified' && e.action === 'look__whoSpeaks'));
+  assert.deepEqual(said.filter((t) => /speaks|Who speaks/.test(t)), ['My screen reader speaks.'], 'Mode says its row once');
   await demo.mode();
   assert.equal(registry.get('look').state().speaker, 'murmur');
+  assert.equal(said.at(-1), 'Murmur speaks.');
 });
 
 test('replay re-runs the last task plan, gates included', async () => {
