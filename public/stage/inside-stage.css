@@ -1,18 +1,30 @@
-/* Loaded into the Inside iframe by /stage: bigger type for the back of a room. Inside itself is unchanged. */
-body.inside { padding: 1rem 1.25rem; gap: 1rem; font-size: 1.2rem; }
+/* Loaded into the Inside iframe by /stage: one column of big rows for the back of a room. Inside itself is unchanged.
+   Nothing under 20px; history stays --c-quiet (8.5:1 on the board) at full size, it only folds to one line. */
+body.inside, body.inside[class] { height: 100svh; overflow: hidden; padding: .75rem 1rem; gap: .75rem; font-size: 1.25rem; grid-template-rows: auto 1fr; }
 .inside header h1, .inside footer { display: none; }
-.inside header { grid-template-columns: 1fr; }
-.inside #link { grid-row: 1; font-size: 1rem; }
-.inside #tally { grid-column: 1; grid-row: 2; justify-self: start; flex-wrap: wrap; }
-.inside #tally dt { font-size: 1rem; }
-.inside h2 { font-size: 1.15rem; }
+.inside header { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+.inside #link { font-size: 1.25rem; }
+.inside #tally { display: flex; flex-wrap: wrap; gap: 6px; }
+.inside #tally div { min-width: 0; flex: none; flex-direction: row-reverse; gap: .5rem; padding: .3rem .7rem; }
+.inside #tally dt { font-size: 1.25rem; white-space: nowrap; }
+.inside #tally dd { font-size: 1.75rem; padding: 0; min-width: 0; }
+
+/* five rows, the label on the left, the log scrolling on the right (inside.js keeps it at the bottom) */
+.inside main, .inside main[id] { grid-template-columns: minmax(0, 1fr); grid-template-rows: .8fr 1fr 1.4fr .8fr 1fr; gap: 8px; }
+.inside section { max-height: none; display: grid; grid-template-columns: 9.5rem minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.inside h2 { flex-direction: column; justify-content: flex-start; gap: .4rem; font-size: 1.25rem; border-bottom: 0; border-right: 1px solid var(--c-slat); padding: .7rem .9rem; }
+.inside h2 .count { font-size: 1.25rem; }
+.inside section > ol { min-height: 0; padding: 0 1rem; }
+.inside section > ol > li { padding: .5rem .25rem; }
+
 .inside .heard, .inside .read { font-size: 2rem; }
-.inside .step { font-size: 1.35rem; }
-.inside .meta, .inside code, .inside .fields { font-size: 1rem; }
-.inside .raw, .inside .pressed { font-size: 1.05rem; }
-.inside .gate { font-size: .95rem; }
-/* narrow pane (the 1280 projector): three columns, then two, each scrolls on its own */
-@media (max-width: 1100px) {
-  body.inside { height: 100svh; overflow: hidden; } /* Inside scrolls as a page below laptop width; the stage keeps it to the pane */
-  .inside main { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
-}
+.inside li.old .heard, .inside li.old .read { font-size: 1.25rem; }
+.inside .step { font-size: 1.5rem; }
+.inside .meta, .inside code, .inside .raw, .inside .pressed, .inside .answer, .inside .why, .inside .calls .n { font-size: 1.25rem; }
+.inside .gate { font-size: 1.25rem; }
+.inside .tick, .inside .spin, .inside .cross { width: 1.4rem; height: 1.4rem; }
+.inside .step { grid-template-columns: 1.4rem 1fr auto; }
+/* memory fields run as one wrapped line, so a record fits its row */
+.inside .fields { display: flex; flex-wrap: wrap; gap: .1rem .5rem; font-size: 1.25rem; }
+.inside .fields dd { margin-right: 1rem; }
+.inside .calls { display: flex; flex-wrap: wrap; gap: .3rem 1.25rem; }

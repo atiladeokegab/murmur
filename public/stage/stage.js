@@ -15,14 +15,9 @@ inside.addEventListener('load', () => {
   d.head.append(l);
 });
 
-// The phone at phone size, scaled to the height it has.
-const phone = $('phone');
-const fit = () => {
-  const h = document.querySelector('.stage main').clientHeight;
-  phone.style.setProperty('--s', String(h / 860));
-};
-addEventListener('resize', fit);
-fit();
+// The phone at phone size, scaled to the height it has; observed, since the top line settles after the font loads.
+const main = document.querySelector('.stage main'), phone = $('phone');
+new ResizeObserver(() => phone.style.setProperty('--s', String(main.clientHeight / 860))).observe(main);
 
 // The top line, from the same relay Inside reads. Text goes in by textContent only.
 const now = $('now');
