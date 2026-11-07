@@ -8,6 +8,7 @@ import { loadLook, writeLook, applyLook } from '../look.js';
 import { createToolkit } from '../vendor/toolkit/index.js';
 import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
+import { cachedTts } from '../voice/tts-cache.js';
 import * as passkey from '../passkey.js';
 import { byHand } from './gate.js';
 import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
@@ -72,8 +73,7 @@ function speak(text, signal) {
     signal?.addEventListener('abort', abort, { once: true });
     const local = () => browserSpeak(text, () => end(my === token));
     if (!caps.tts) return local();
-    fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('tts'))))
+    cachedTts(text)
       .then((a) => (my === token ? playPcm(a.audio, a.rate) : null))
       .then(() => end(my === token))
       .catch(() => (my === token ? local() : end(false)));
@@ -121,6 +121,8 @@ function onBack(kind) {
 
 // ---------- the apps ----------
 const bus = createBus();
+// Fetch a line's audio the moment it is queued, so it is ready when the line before it ends.
+bus.on('say', (e) => { if (caps.tts && e?.text && !readerSpeaks()) cachedTts(String(e.text)).catch(() => {}); });
 const registry = createRegistry();
 await loadApps(registry, appIds);
 registry.register(createPhone({ stop: () => stopAll(), where: () => where(), noLook: (on) => setNoLook(on), isNoLook: () => !!look.nolook,
