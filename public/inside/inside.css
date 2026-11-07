@@ -102,7 +102,7 @@ html.big .inside #tally :is(.t-tasks, .t-failed, .t-modelCalls) { display: none;
 /* one column: Heard and Plan stay on top, Actions takes the rest and follows its newest step, Asked under it;
    Memory is on the laptop view only */
 html.big .inside main { display: flex; flex-direction: column; gap: 6px; overflow: hidden; min-height: 0; }
-html.big .inside section { flex: none; max-height: none; min-height: 0; }
+html.big .inside section { flex: 0 1 auto; max-height: none; min-height: 0; }
 html.big .inside section:has(#c-Actions) { flex: 1 1 auto; min-height: 4rem; } /* heading plus the step name */
 html.big .inside section:has(#c-Asked) { flex: none; max-height: 40%; overflow: hidden; } /* never shrinks to its heading: the readback and answer stay readable */
 html.big .inside section:has(#c-Memory) { display: none; }
@@ -110,5 +110,5 @@ html.big .inside section:has(#c-Memory) { display: none; }
 html.big .inside h2 { padding: .3rem .6rem; }
 html.big .inside li.old { display: none; } /* history lives on the laptop view; the room sees what is happening now */
 /* the room reads what was heard, the plan, and each step's verify; the paths, providers and params stay on the laptop */
-html.big .inside :is(#c-Heard, #c-Plan) .meta, html.big .inside #c-Heard .raw, html.big .inside #c-Actions p.meta:not(:has(.res)) { display: none; }
+html.big .inside :is(#c-Heard, #c-Plan) .meta, html.big .inside #c-Plan code, html.big .inside #c-Heard .raw, html.big .inside #c-Actions p.meta:not(:has(.res)) { display: none; }
 html.big .inside section > ol > li { padding: .35rem 0; }

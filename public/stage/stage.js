@@ -1,4 +1,6 @@
 // /stage: the real phone (/) and Inside (/inside) on one projector screen, plus one line that follows the task.
+import { installToken } from '../agent/token.js';
+installToken();
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
 const room = qs.get('room') || 'stage'; // a phone with no room forwards nothing, so the stage always has one
