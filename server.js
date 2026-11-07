@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as demo from './lib/demo.js';
 import * as gemini from './lib/gemini.js';
+import * as relay from './lib/relay.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const KEY = process.env.GEMINI_API_KEY || '';
@@ -12,7 +13,7 @@ const PROVIDER = KEY ? 'gemini' : 'demo';
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json' };
-const PAGES = { '/': 'index.html', '/race': 'race.html' };
+const PAGES = { '/': 'index.html', '/race': 'race.html', '/inside': 'inside/index.html' };
 
 function send(res, status, body, type = 'application/json') {
   res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
@@ -45,11 +46,13 @@ const api = {
     return withFallback('menu', async () => ({ say: await gemini.menuLine(KEY, info) }), () => ({ say: demo.menuLine(info) }));
   },
 };
+Object.assign(api, relay.api);
 
 export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
     if (url.pathname === '/health') return send(res, 200, { ok: true, provider: PROVIDER });
+    if (url.pathname === '/api/bus/stream' && req.method === 'GET') return relay.stream(req, res);
     const handler = api[`${req.method} ${url.pathname}`];
     if (handler) return send(res, 200, await handler(await readJson(req)));
     if (url.pathname.startsWith('/api/')) return send(res, 404, { error: 'not found' });

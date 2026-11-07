@@ -1,0 +1,19 @@
+/* Inside: laptop-sized, Station-board tokens from /app.css, typeset like a log. */
+body.inside { margin: 0; padding: var(--gutter); background: var(--c-page); color: var(--c-ink); font-family: var(--f-read); line-height: var(--lh); }
+.inside header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1rem 2rem; border-bottom: 2px solid var(--c-slat); padding-bottom: .75rem; }
+.inside h1 { font-size: var(--fs-h1); margin: 0; }
+.inside .quiet { color: var(--c-quiet); margin: 0; }
+.inside #tally { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 0; }
+.inside #tally div { display: flex; flex-direction: column-reverse; }
+.inside #tally dt { color: var(--c-quiet); font-size: var(--fs-hint); }
+.inside #tally dd { margin: 0; font-family: var(--f-time); font-size: var(--fs-title); }
+.inside #tally .bad dd { color: var(--c-accent); }
+.inside main { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; margin-top: 1rem; }
+.inside section { background: var(--c-board); border: 1px solid var(--c-slat); border-radius: var(--r-cell); padding: .75rem; min-height: 50vh; overflow-wrap: anywhere; }
+.inside h2 { font-size: var(--fs-title); margin: 0 0 .5rem; }
+.inside ol { list-style: none; margin: 0; padding: 0; }
+.inside li { border-top: 1px solid var(--c-slat); padding: .4rem 0; font-size: var(--fs-say); }
+.inside code { font-family: var(--f-time); font-size: var(--fs-hint); color: var(--c-quiet); white-space: pre-wrap; }
+.inside .ok::before { content: "✓ "; color: var(--c-accent); }
+.inside .no::before { content: "✗ "; }
+.inside footer { border-top: 2px solid var(--c-slat); margin-top: 1rem; color: var(--c-quiet); }
