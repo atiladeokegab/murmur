@@ -2,7 +2,7 @@
 // One entry point, agent.hear(text, { path }), for Live, Web Speech, the typed field and the eval alike.
 // Speech is a direct call to `speak`; the bus `say` event only records it (contract rev 2).
 import { hear as reserved } from './words.js';
-import { describeRegistry } from './plan.js';
+import { describeRegistry, WORD_TOOLS } from './plan.js';
 import { planUtterance } from './planner.js';
 import { createRunner, createGates } from './runner.js';
 import { createWorkflows, lastChain } from './workflows.js';
@@ -92,6 +92,19 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
         say(`${w.text.replace(/\.$/, '')}. Saved as ${w.name}.`);
         return true;
       }
+      case 'list_workflows': {
+        const all = workflows ? (await workflows.all()).map((w) => w.name) : [];
+        await say(all.length ? `Your tiles: ${all.join(', ')}.` : 'No tiles yet. Do something, then say save that as a name.');
+        return true;
+      }
+      case 'remove_workflow': {
+        const w = workflows && (await workflows.all()).find((x) => x.name.toLowerCase() === String(p.name).toLowerCase());
+        if (!w) { await say(`There's no tile called ${p.name}.`); return false; }
+        if (!(await gates.ask({ gate: 'delete', readback: `Remove the ${w.name} tile.` }))) return false;
+        return workflows.remove(w.name);
+      }
+      case 'go_home': if (!os.home) return false; await os.home(); return true;
+      case 'sound': if (!os.sound) return false; await os.sound(!!p.on); await say(p.on ? 'Sounds on.' : 'Sounds off.'); return true;
       case 'run_workflow': return false; // handled in hear(): it becomes its own task
       default: return false;
     }
@@ -182,6 +195,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
       offer = { utterance: rest, steps: p.steps.map((s) => ({ ...s, complete: isComplete(s, reg) })) };
       return { status: 'taught', hints: lines };
     }
+    if (p.steps.length === 1 && WORD_TOOLS.has(p.steps[0].tool)) { await reservedWord({ kind: p.steps[0].tool }); return { status: 'reserved' }; }
     const wf = p.steps.find((s) => s.tool === 'run_workflow');
     if (wf) return runWorkflow(wf.params.name, rest);
     return runPlan(rest, p.steps, null, { provider: p.provider, ...(p.model ? { model: p.model } : {}) });

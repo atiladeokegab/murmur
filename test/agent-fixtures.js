@@ -5,6 +5,7 @@ import { browserKV } from '../public/ports/browser-kv.js';
 import messages from '../public/apps/messages/index.js';
 import calendar from '../public/apps/calendar/index.js';
 import hello from '../public/apps/hello/index.js';
+import look from '../public/apps/look/index.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
 
 /** A shop on the contract: Order your usual, then Pay behind the pay gate. Buttons a person could press. */
@@ -56,11 +57,11 @@ export async function phone({ patch = {} } = {}) {
   const bus = createBus();
   const registry = createRegistry();
   const port = browserKV({ storage: fakeStorage(), prefix: 'murmur' });
-  const apps = [messages, calendar, hello, stubShop()].map((a) => (patch[a.id] ? { ...a, actions: { ...a.actions, ...patch[a.id](a.actions) } } : a));
+  const apps = [messages, calendar, hello, look, stubShop()].map((a) => (patch[a.id] ? { ...a, actions: { ...a.actions, ...patch[a.id](a.actions) } } : a));
   const roots = {}, taps = [];
   for (const app of apps) {
     registry.register(app);
-    roots[app.id] = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say: () => {} });
+    roots[app.id] = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say: () => {}, confirm: async () => true });
     await app.reset();
   }
   const cursor = { async moveTo(el, name) { taps.push(name); }, hide() {} };
