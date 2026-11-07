@@ -5,6 +5,8 @@
 export const SEP = '__';
 
 // Murmur's own tools, beside one per app action (spec §3.1).
+import { INSTALL_APP } from '../sdk/plugin.js';
+
 export const BUILTINS = {
   open_app: { describe: 'Open an app', params: { type: 'object', properties: { app: { type: 'string' } }, required: ['app'] } },
   read_screen: { describe: 'Read what is on screen', params: { type: 'object', properties: {} } },
@@ -15,6 +17,7 @@ export const BUILTINS = {
   run_workflow: { describe: 'Run a saved tile', params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   explain: { describe: "Say what's in a saved tile", params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   edit_workflow: { describe: 'Drop a step from a saved tile', params: { type: 'object', properties: { name: { type: 'string' }, drop: { type: 'string' } }, required: ['name', 'drop'] } },
+  install_app: INSTALL_APP,
   recall: { describe: 'Say what Murmur remembers about you', params: { type: 'object', properties: {} } },
   list_workflows: { describe: 'Say the saved tiles', params: { type: 'object', properties: {} } },
   remove_workflow: { describe: 'Remove a saved tile (asks first)', params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
