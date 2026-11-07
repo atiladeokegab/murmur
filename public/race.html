@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Murmur race</title>
+<link rel="stylesheet" href="app.css">
+<script type="module" src="race.js"></script>
+</head>
+<body class="race">
+<main>
+  <div class="race-head">
+    <h1>Same task, two phones</h1>
+    <div class="choices">
+      <button class="choice yes" type="button" id="start">Start both</button>
+      <button class="choice" type="button" id="reset">Reset</button>
+    </div>
+  </div>
+  <div class="lanes">
+    <section class="lane" data-lane="a" aria-labelledby="a-name">
+      <h2 id="a-name">With Murmur</h2>
+      <p class="clock" aria-hidden="true">0:00.0</p>
+      <p class="taps"><span class="n">0</span> <span class="unit">taps</span></p>
+      <div class="choices">
+        <button class="choice tap" type="button">Tap</button>
+        <button class="choice done" type="button">Finished</button>
+      </div>
+    </section>
+    <section class="lane" data-lane="b" aria-labelledby="b-name">
+      <h2 id="b-name">The usual way</h2>
+      <p class="clock" aria-hidden="true">0:00.0</p>
+      <p class="taps"><span class="n">0</span> <span class="unit">taps</span></p>
+      <div class="choices">
+        <button class="choice tap" type="button">Tap</button>
+        <button class="choice done" type="button">Finished</button>
+      </div>
+    </section>
+  </div>
+</main>
+<footer><p class="say"><span id="say" role="status" aria-live="polite">Press Start both. Count each tap, press Finished when the task is done.</span></p></footer>
+</body>
+</html>
