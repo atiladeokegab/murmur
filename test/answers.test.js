@@ -23,7 +23,7 @@ async function setup(answers = () => 'short') {
   const spoken = [];
   const agent = createAgent({ registry: p.registry, bus: p.bus, ctxFor: p.ctxFor, librarian, agency: () => 'just', answers, clock, sleep,
     planOpts: { offline: true }, speak: async (t) => { spoken.push(t); } });
-  return { ...p, agent, spoken };
+  return { ...p, agent, spoken, clock };
 }
 
 test('1. SDK: an action with more(state, params) gives runAction a `more`; one without gives none', async () => {
@@ -148,4 +148,21 @@ test('a move with Mum ends on a statement, never a dead question, and "tell Mum"
   assert.ok(s.agent.gates.current, 'the send gate opened');
   await s.agent.yes(); await said;
   assert.deepEqual(s.state('messages').lastSent, { to: 'mum', text: 'Lunch is now on Friday at 12:30.' });
+});
+
+test('"tell Mum" describes a move once, and not after 2 minutes', async () => {
+  const tellMum = async (s) => { const h = s.agent.hear('tell Mum'); for (let i = 0; i < 50; i++) await tick();
+    const gate = !!s.agent.gates.current; if (gate) await s.agent.yes(); else await s.agent.stop(); await h; return gate; };
+  const s = await setup();
+  await s.agent.hear('Move lunch to Friday');
+  assert.equal(await tellMum(s), true);
+  assert.equal(s.state('messages').lastSent.text, 'Lunch is now on Friday at 12:30.');
+  s.spoken.length = 0;
+  assert.equal(await tellMum(s), false, 'told once: a second "tell Mum" does not resend the move');
+  assert.ok(!s.spoken.some((t) => /Lunch is now/.test(t)));
+  const late = await setup();
+  await late.agent.hear('Move lunch to Friday');
+  late.clock.t += 121000;
+  assert.equal(await tellMum(late), false, 'after 2 minutes the move is not described');
+  assert.equal(late.state('messages').lastSent, null);
 });
