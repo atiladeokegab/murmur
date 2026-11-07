@@ -1,4 +1,5 @@
 // Messages on the Murmur SDK (os/contract.md). The agent presses the same controls a person does.
+import { CONTACTS } from '../../lib/tiles.js';
 import * as M from './model.js';
 import { replaceWord, sentences } from '../../lib/notes.js';
 
@@ -41,7 +42,7 @@ const app = {
       describe: 'Open the chat with a person',
       say: (st) => (M.chatOf(st) ? '' : "open Mum's chat"),   // what a person would say (offer.js); '' = not here, now
       doing: 'Opening the chat',
-      params: { type: 'object', properties: { who: { type: 'string', description: 'The name as said' }, id: { type: 'string', enum: ['mum', 'sam', 'samira'] } } },
+      params: { type: 'object', properties: { who: { type: 'string', description: 'The name as said' }, id: { type: 'string', enum: Object.keys(CONTACTS) } } },
       gate: null,
       hint: 'Your chats are buttons under the Messages heading',
       async run(p, ctx) {

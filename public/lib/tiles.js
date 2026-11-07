@@ -1,9 +1,32 @@
 // The tile catalogue. Every person, number and shop here is invented (event data rule).
 // `start: true` tiles are on the menu from day one; the rest arrive only as proposals.
 
+// Ofcom drama range (07700 900xxx), never a real line. "Sam" is ambiguous on purpose: Sam and Samira.
 export const CONTACTS = {
-  mum: { name: 'Mum', phone: '+447700900461' },   // Ofcom drama range, never a real line
-  sam: { name: 'Sam', phone: '+447700900123' },
+  mum: { name: 'Mum', rel: 'mother', phone: '+447700900461' },
+  sam: { name: 'Sam', rel: 'best friend', phone: '+447700900123' },
+  samira: { name: 'Samira', rel: 'friend from choir', phone: '+447700900202' },
+  priya: { name: 'Priya', rel: 'sister', phone: '+447700900203' },
+  tomas: { name: 'Tomas', rel: 'colleague', phone: '+447700900204' },
+  amara: { name: 'Amara', rel: 'cousin', phone: '+447700900205' },
+  ben: { name: 'Ben', rel: 'neighbour', phone: '+447700900206' },
+  chloe: { name: 'Chloe', rel: 'friend from book club', phone: '+447700900207' },
+  dev: { name: 'Dev', rel: 'colleague', phone: '+447700900208' },
+  ellie: { name: 'Ellie', rel: 'niece', phone: '+447700900209' },
+  femi: { name: 'Femi', rel: 'brother', phone: '+447700900210' },
+  grace: { name: 'Grace', rel: 'aunt', phone: '+447700900211' },
+  hassan: { name: 'Hassan', rel: 'neighbour', phone: '+447700900212' },
+  isla: { name: 'Isla', rel: 'friend from school', phone: '+447700900213' },
+  jack: { name: 'Jack', rel: 'manager', phone: '+447700900214' },
+  kemi: { name: 'Kemi', rel: 'cousin', phone: '+447700900215' },
+  leo: { name: 'Leo', rel: 'gym buddy', phone: '+447700900216' },
+  maya: { name: 'Maya', rel: 'friend from book club', phone: '+447700900217' },
+  noah: { name: 'Noah', rel: 'nephew', phone: '+447700900218' },
+  olu: { name: 'Olu', rel: 'uncle', phone: '+447700900219' },
+  rosa: { name: 'Rosa', rel: 'carer', phone: '+447700900220' },
+  tariq: { name: 'Tariq', rel: 'colleague', phone: '+447700900221' },
+  uche: { name: 'Uche', rel: 'friend from church', phone: '+447700900222' },
+  zara: { name: 'Zara', rel: 'flatmate', phone: '+447700900223' },
 };
 
 export const TILES = [

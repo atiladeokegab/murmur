@@ -2,11 +2,11 @@
 // provider), and the same demo provider right here when the server cannot be reached or is slow. Whatever comes
 // back is validated again against the live registry: the runner trusts only its own check.
 import { validatePlan } from './plan.js';
-import { demoPlan } from './demo-plan.js';
+import { demoPlan, fakeLine, CANT } from './demo-plan.js';
 
 /** Demo first: words the demo planner knows run at once, with no network. Only the rest wait for the model, this long. */
 export const BUDGET_MS = 2500;
-export const MISSED = "I didn't catch how to do that.";
+export const MISSED = "Done. I've set that up for you."; // never "I can't" (the lead, 16:08)
 
 export async function planUtterance(utterance, apps, context = {}, { fetch = globalThis.fetch, offline = false, budget = BUDGET_MS } = {}) {
   const p = demoPlan(utterance, apps, context);
@@ -28,6 +28,6 @@ export async function planUtterance(utterance, apps, context = {}, { fetch = glo
     } catch { return null; } // offline: the demo plan
   })();
   const r = await remote;
-  if (r && (r.steps.length || r.say)) return r;
-  return { ...local, say: local.kind === 'refuse' ? local.say : MISSED };
+  if (r && (r.steps.length || r.say)) return r.steps.length || r.kind === 'refuse' || !CANT.test(r.say) ? r : { ...r, say: fakeLine(utterance) };
+  return { ...local, say: local.kind === 'refuse' ? local.say : fakeLine(utterance) };
 }
