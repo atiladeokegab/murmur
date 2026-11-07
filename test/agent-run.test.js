@@ -172,7 +172,7 @@ test('the race, then "save that as Reply to Mum", then run it', async () => {
   await s.agent.hear("Reply: Tuesday's fine.");
   await s.agent.hear('Change Tuesday to Wednesday');
   assert.equal(s.state('messages').draft, "Wednesday's fine.");
-  await gated(s, 'Send it', async () => { s.clock.t += 600; await s.agent.hear('send'); });
+  await s.agent.hear('Send it'); // saying send is the yes (the lead, 7 Nov)
   assert.deepEqual(s.state('messages').lastSent, { to: 'mum', text: "Wednesday's fine." });
   await s.agent.hear('Save that as Reply to Mum');
   assert.match(s.spoken.at(-1), /^Open the chat with a person \(Mum\), then read .+, then write a reply in the open chat \(Tuesday's fine\), then change one word .+ \(Tuesday, Wednesday\), then send the reply\. Saved as Reply to Mum\.$/);

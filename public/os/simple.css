@@ -1,0 +1,7 @@
+/* The judges, 7 Nov: the phone is one big talk button. Head-only, so the /stage mirror (body clone) keeps the full phone. ?full shows everything. */
+.statusbar, main, .typed, .who { display: none !important; }
+footer { position: fixed !important; inset: 0 !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; gap: 2.5rem !important; padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)) !important; background: var(--c-page) !important; border: 0 !important; box-shadow: none !important; }
+.say { order: 2 !important; max-width: 22em !important; text-align: center !important; font-size: 1.25rem !important; min-height: 3em !important; margin: 0 !important; }
+.talk { order: 1 !important; width: min(68vw, 16rem) !important; height: min(68vw, 16rem) !important; min-height: 0 !important; border-radius: 50% !important; padding: 0 !important; justify-content: center !important; flex-direction: column !important; gap: 0.5rem !important; }
+.talk svg { width: 38% !important; height: 38% !important; }
+.talk .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

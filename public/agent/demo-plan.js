@@ -4,6 +4,7 @@
 //   { kind: 'task' | 'teach' | 'refuse' | 'unknown', plan: [{ tool, params }], say? }
 // It covers the demo script (spec §6) and the eval's utterances; anything else is said, never guessed.
 
+import { whoAmI } from '../lib/profile.js';
 import { SEP } from './plan.js';
 
 const SYN = {
@@ -144,7 +145,6 @@ function planOrWords(said, apps, context, dry) {
 
 export const EVERYTHING = 'Everything. Just tell me what you need.';
 // What the phone can infer (the seeded chats, calendar and tiles), never a readback of what Murmur did.
-const WHO_AM_I = "You keep in touch: you talk most with Mum and Sam. You start your day with your My morning tile, and Thursday evenings are book club.";
 const FRIENDS = "Book club on Thursday is a good start: say hello to someone new there. You could ask Sam to meet up this week, or look for a local group near you, like a walking group or a library talk.";
 const MISS = "I can't do that one yet.", NO_APP = "I don't have"; // MISS is the planner's own marker; the person never hears it (fakeLine)
 /** The lead (16:08): Murmur never says "I can't". What fits no tool gets a plausible, warm one-line result instead.
@@ -382,7 +382,7 @@ function plan(said, apps, context, dry) {
   }
   if (/^who(?:'?s| is| was)? (?:my )?(?:latest|last|newest|new) message (?:from|by)$|^who (?:has |just )?(?:messaged|texted|written to|wrote to) me$/i.test(t)) return task([step('messages', ['read'], { new: true })]);
   if (/^what (?:can|could) (?:i|you) do(?: for me| here)?$|^what (?:are|is) you(?: for)?$/i.test(t)) return task([{ tool: 'say', params: { text: EVERYTHING } }]);
-  if (/^who am i$|^what (?:do you|does murmur) know about who i am$/i.test(t)) return task([{ tool: 'say', params: { text: WHO_AM_I } }]);
+  if (/^who am i$|^what (?:do you|does murmur) know about who i am$/i.test(t)) return task([{ tool: 'say', params: { text: whoAmI() } }]);
   if (/^(?:(?:hello|hi|hey)(?: there| murmur)?[,.!]?\s*)?(?:is (?:any ?one|somebody|someone) there)?$|^(?:i can'?t see the screen[,.]?\s*)?how (?:do i|can i) (?:start|begin|use (?:this|it|murmur))$|^i can'?t see the screen$/i.test(t) && t) {
     return task([{ tool: 'say', params: { text: "Hello, I'm Murmur. Just say what you'd like, like \"read my messages\" or \"what's on today\". Say \"what can I do\" to hear more, and \"stop\" any time." } }]);
   }
@@ -412,6 +412,18 @@ function plan(said, apps, context, dry) {
     return task([step(here === 'writer' ? 'writer' : 'messages', ['replace', 'change', 'edit'], { from: m[1], to: m[2] })]);
   }
   if (/^read (?:it|that|this)$/i.test(t)) return task([step(here || 'messages', ['read'])]);
+
+  // Uber, Deliveroo, Maps (demo apps; each only when it is on the phone)
+  const has = (id) => apps.some((a) => a.id === id);
+  if (has('uber') && /^(?:how far (?:away )?is (?:a|the|my|an?) (?:car|uber|ride|cab|taxi)|how (?:long|far) (?:for|until|till) (?:a|the) (?:car|uber|ride|cab)|(?:are there|any) (?:cars|ubers) near(?:by| me)?)(?:\s+(?:on|in)\s+uber)?$/i.test(t)) return task([step('uber', ['howFar'])]);
+  if (has('uber') && /^(?:book|get|order|call)\s+(?:me\s+)?(?:a|an)\s+(?:car|uber|ride|cab|taxi)(?:\s+home)?(?:\s+(?:on|with)\s+uber)?$|^(?:book|get)\s+(?:me\s+)?(?:a\s+)?(?:car|uber|ride) home$/i.test(t)) return task([step('uber', ['bookHome'])]);
+  if (has('deliveroo') && (/^(?:(?:get|show|find)\s+(?:me\s+)?)?my usual(?:\s+(?:on|from)\s+deliveroo)?$/i.test(t) && (here === 'deliveroo' || /deliveroo/i.test(t) || !has('shop'))
+    || /^(?:(?:get|show|find|order)\s+(?:me\s+)?)?my usual (?:from|at) pasta corner$|^(?:my )?pasta corner usual$|^deliveroo,? my usual$/i.test(t))) return task([step('deliveroo', ['usual'])]);
+  if (has('deliveroo') && (here === 'deliveroo' && /^(?:order|pay for|get)\s+(?:it|that|this|them)(?:\s+now)?$/i.test(t) || /^order my usual (?:on|from) (?:deliveroo|pasta corner)$/i.test(t))) {
+    return task(here === 'deliveroo' ? [step('deliveroo', ['order'])] : [step('deliveroo', ['usual']), step('deliveroo', ['order'])]);
+  }
+  if (has('maps') && (m = t.match(/^(?:(?:give me |get |show me )?directions|take me|the way|walk me|show me the way)\s+(?:to\s+)?(?:the\s+)?(home|my house|.+?)(?:\s+on maps)?$/i)) && (/^(?:home|my house)$/i.test(m[1]) || /on maps$/i.test(t) || !has('transit'))) return task([step('maps', ['directions'], { place: m[1] })]);
+  if (has('maps') && (m = t.match(/^how far (?:away )?is\s+(?:it to\s+)?(?:the\s+)?(?!(?:a|the|my) (?:car|uber|ride|cab|taxi)\b)(.+?)(?:\s+from here)?$/i))) return task([step('maps', ['howFar'], { place: m[1] })]);
 
   // Shop
   if (/^(?:re-?order(?:\s+(?:my|the)\s+last(?:\s+order)?)?|(?:order\s+)?(?:the\s+)?same(?:\s+again)?|(?:order|reorder)\s+(?:the\s+)?last(?:\s+(?:order|one))?(?:\s+again)?|order what i had last time)$/i.test(t)) {
