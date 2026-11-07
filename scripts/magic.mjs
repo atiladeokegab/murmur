@@ -29,6 +29,7 @@ const instrument = () => {
     proto.start = function (when = 0, ...rest) {
       const at = now() + Math.max(0, when - this.context.currentTime) * 1000;
       const s = sound(kind, at);
+      Object.assign(s, { call: now(), ctxState: this.context.state, ctxTime: this.context.currentTime, when });
       if (this.buffer) {
         const ch = this.buffer.getChannelData(0), loud = (x) => Math.abs(x) > 0.01, rate = this.buffer.sampleRate;
         let i = 0, j = ch.length - 1;
