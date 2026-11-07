@@ -148,7 +148,8 @@ async function once({ browser, devices }, n) {
   await page.goto(URL_, { timeout: 30000 }); await ready();
   await page.evaluate(() => { localStorage.clear(); localStorage.setItem('murmur:welcomed', 'true'); });
   await page.reload({ timeout: 30000 }); await ready();
-  await page.tap('#day').catch(() => {}); // a real first touch: unlocks audio the way a person's tap does
+  // No tap first: any tap starts listening, and headless recognition never ends. The autoplay flag unlocks audio.
+  // shortcut: the transcript is injected, so the shell's 1.5 s end-of-speech wait before hear() is not measured.
   await page.waitForTimeout(1200);
   const r = await page.evaluate(drive, { SAY, REACT_MS });
   const M = await page.evaluate(() => window.__magic);
