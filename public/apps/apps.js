@@ -13,6 +13,7 @@ export default [
   'uber',
   'deliveroo',
   'maps',
+  'gallery',
   'places',
   'weather',
   'clock',

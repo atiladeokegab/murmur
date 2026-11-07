@@ -247,3 +247,18 @@ test('draft any kind of text: a person gets a message, a note or post the Writer
   assert.equal(tool('draft a letter'), 'writer__dictate{"text":"Just a quick note to say hello."}');
   assert.equal(tool('write an email to Sam'), 'messages__openChat{"who":"Sam"} > messages__reply{"text":"Hi Sam, just checking in."}');
 });
+test('gallery routes: open, pick, last photo, and send Mum the beach photo through Messages', async () => {
+  const tools = (s) => demoPlan(s, reg, { app: null, workflows: [] }).plan.map((x) => x.tool + (x.params?.photo ? `:${x.params.photo}` : '') + (x.params?.who ? `:${x.params.who}` : '')).join(' ');
+  assert.equal(tools('Open my gallery'), 'gallery__browse');
+  assert.equal(tools('show me my last photo'), 'gallery__show:last');
+  assert.match(tools('pick a photo from my gallery'), /^gallery__(?:browse|show)/);
+  for (const s of ['send Mum the photo from the beach', 'Send the beach photo to Mum', 'share the photo from Brighton with Mum'])
+    assert.equal(tools(s), 'gallery__show:beach messages__openChat:Mum messages__reply messages__send', s);
+  const reply = demoPlan('send Mum the photo from the beach', reg, { app: null, workflows: [] }).plan[2].params.text;
+  const M = await import('../public/apps/messages/model.js');
+  const st = M.fresh(); M.open(st, 'mum'); M.setDraft(st, reply);
+  assert.equal(apps.find((a) => a.id === 'messages').actions.send.readback(st), 'Send the beach photo to Mum?');
+  const { lineOf, photoOf, PHOTOS } = await import('../public/apps/gallery/photos.js');
+  assert.equal(lineOf(photoOf('last')), 'Your photo from Saturday: you and Sam on the beach at Brighton.');
+  assert.ok(PHOTOS.length >= 6 && PHOTOS.length <= 8);
+});
