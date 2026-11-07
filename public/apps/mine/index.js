@@ -55,21 +55,6 @@ const app = {
       verify: (st, p) => (!!Mi.find(st, p.name) && st.explained === Mi.find(st, p.name).name) || `Nothing saved as ${p.name}.`,
       done: () => '', // it just said the steps
     },
-    run: {
-      describe: 'Run a saved workflow, step by step; its sends still ask first',
-      doing: 'Running it',
-      params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
-      gate: null, // each step keeps its own gate when it runs
-      hint: 'Run is the second button after the steps',
-      async run(p, ctx) {
-        await refresh();
-        const w = named(p);
-        if (!w) throw new Error(`You have nothing saved as ${p.name}.`);
-        await ctx.tap(q(`[data-run="${w.name}"]`));
-      },
-      verify: (st, p) => (!!Mi.find(st, p.name) && st.lastRun === Mi.find(st, p.name).name) || `${p.name} didn't start.`,
-      done: (st, p) => `${Mi.find(st, p.name)?.name || p.name} started.`,
-    },
     delete: {
       describe: 'Delete a saved workflow and its tile',
       doing: 'Deleting it',
@@ -103,20 +88,23 @@ function el(tag, props = {}, ...kids) {
   for (const k of kids.flat()) if (k != null && k !== false) n.append(typeof k === 'number' ? String(k) : k);
   return n;
 }
-const button = (text, props = {}) => el('button', { type: 'button', className: 'app-btn', ...props }, text);
+// At 400% .app-btn has 64 px side padding and 80 px text, so "Run My morning" clipped. Whole words first; a saved name too long to fit breaks rather than clips.
+const PAD = 'padding-inline: clamp(0.25rem, 4vw, 1rem); font-size: min(var(--fs-title), 15vw); overflow-wrap: anywhere';
+const STEP = 'padding-inline: clamp(0.25rem, 4vw, 0.5rem); font-size: min(var(--fs-sheet), 15vw)'; // "message" broke mid-word at 400%
+const button = (text, props = {}) => el('button', { type: 'button', className: 'app-btn', style: PAD, ...props }, text);
 
-function render() {
+function render(result) {
   if (!body) return;
-  body.replaceChildren(...[
+  keepFocus(() => body.replaceChildren(...[
     el('p', { className: 'app-place' }, Mi.read(s)),
     s.proposals.length ? el('h3', { className: 'app-h3' }, 'Offered to you') : null,
     s.proposals.length ? el('ul', { className: 'app-list', 'aria-label': 'Offered to you' }, s.proposals.map((x) => el('li', {}, x.text))) : null,
     ...s.workflows.map((w) => el('div', { className: 'app-card' },
       el('h3', { className: 'app-h3' }, w.name),
-      el('ol', { className: 'app-sentences', 'aria-label': `${w.name}, step by step` },
-        w.steps.map((st, i) => el('li', { tabIndex: 0 }, el('span', { className: 'sr' }, `Step ${i + 1} of ${w.steps.length}: `), Mi.stepWords(st)))),
+      el('ol', { className: 'app-sentences', 'aria-label': `${w.name}, step by step`, 'data-steps': w.name, tabIndex: -1 },
+        w.steps.map((st, i) => el('li', { tabIndex: 0, style: STEP }, el('span', { className: 'sr' }, `Step ${i + 1} of ${w.steps.length}: `), Mi.stepWords(st)))),
       button(`What's in ${w.name}`, { 'data-explain': w.name, onclick: (e) => {
-        s.selected = s.explained = w.name; render();
+        s.selected = s.explained = w.name; render(`[data-steps=${JSON.stringify(w.name)}]`);
         if (e.isTrusted) os.say?.(Mi.explain(w));
       } }),
       button(`Run ${w.name}`, { 'data-run': w.name, className: 'app-btn primary', onclick: (e) => {
@@ -126,7 +114,20 @@ function render() {
       } }),
       button(`Delete ${w.name}`, { 'data-delete': w.name, onclick: () => { removing = remove(w); } }),
     )),
-  ].filter(Boolean));
+  ].filter(Boolean)), result);
+}
+
+// A re-render replaces the controls. Keep keyboard focus in the app: on the result when one is named, else the same control.
+function keyOf(n) {
+  if (n.id) return `#${n.id}`;
+  const a = [...(n.attributes || [])].find((x) => x.name.startsWith('data-'));
+  return a ? `[${a.name}=${JSON.stringify(a.value)}]` : null;
+}
+function keepFocus(paint, result) {
+  const doc = root.ownerDocument, was = doc.activeElement;
+  const had = !!was && was !== doc.body && root.contains(was), key = had && keyOf(was);
+  paint();
+  if (had && !root.contains(doc.activeElement)) ((result && q(result)) || (key && q(key)) || q('h2'))?.focus?.();
 }
 
 // Delete always asks, a person's own tap too; the shell's confirm says yes at once for the agent's press.
