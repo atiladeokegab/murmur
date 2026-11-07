@@ -24,17 +24,18 @@ if (globalThis.window) installToken(); // /api/* carries the device token from h
  * @param {{ open?(id), current?(): string|null }} [o.os]  the shell: open an app, which one is open
  * @param {()=>Promise<boolean>} [o.fingerprint]  passkey.confirm
  * @param {(step)=>'ask'|'just'|'teach'} [o.agency]
+ * @param {()=>'short'|'detailed'} [o.answers]  Your look's Answers row: Detailed says a result's longer answer straight away
  * @param {(gate)=>boolean} [o.risky]  send/call need the fingerprint too (screen just locked, earphone out)
  */
 export const ACK = 'On it.';
 export const NARRATION_HOLD_MS = 150; // a question this soon after a step starts replaces the step's line
 
 export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, fingerprint = async () => false,
-  agency = () => 'ask', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
+  agency = () => 'ask', answers = () => 'short', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
   speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {} }) {
   const appsList = () => (Array.isArray(registry) ? registry : typeof registry?.list === 'function' ? registry.list() : Object.values(registry || {}));
   const app = (id) => (typeof registry?.get === 'function' ? registry.get(id) : appsList().find((a) => a.id === id));
-  let lastSaid = '';
+  let lastSaid = '', lastMore = ''; // lastMore: the last result's longer answer ("tell me more")
   // One voice, one line at a time: each line waits for the one before, so steps can act while a line is spoken.
   // Stop empties the queue (gen moves on), so nothing queued is said after it.
   // A step's narration ("Opening the chat") is dropped if a question is asked before it starts: it waits a short
@@ -140,7 +141,12 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
 
   async function runPlan(utterance, steps, mode = null, plan = {}) {
     taskMode = mode;
-    try { return await runner.run({ utterance, steps, plan }); } finally { taskMode = null; }
+    try {
+      const r = await runner.run({ utterance, steps, plan });
+      lastMore = r.more || '';
+      if (lastMore && answers() === 'detailed') await say(lastMore);
+      return r;
+    } finally { taskMode = null; }
   }
 
   async function runWorkflow(name, utterance) {
@@ -169,6 +175,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
         return;
       }
       case 'again': await say(lastSaid); return;
+      case 'more': await say(lastMore || "That's all there is."); return;
       case 'confirm': await gates.yes(); return;
       case 'deny': gates.no(); return;
       case 'ignored': return; // an early yes, or the wrong confirm word: the sheet stays open

@@ -11,8 +11,9 @@ export const CHOICES = {
   theme: { label: 'Colours', options: { auto: 'Match my phone', dark: 'Dark', light: 'Light', yellow: 'Yellow on black' } },
   speaker: { label: 'Who speaks', options: { murmur: 'Murmur', reader: 'My screen reader' } },
   agency: { label: 'How much Murmur does', options: { ask: 'Ask me', just: 'Just do it', teach: 'Teach me' } },
+  answers: { label: 'Answers', options: { short: 'Short', detailed: 'Detailed' } },
 };
-const DEFAULTS = { size: 100, rate: 1.15, theme: 'auto', speaker: 'murmur', agency: 'ask', learning: true };
+const DEFAULTS = { size: 100, rate: 1.15, theme: 'auto', speaker: 'murmur', agency: 'ask', answers: 'short', learning: true };
 
 let root = null, kv = null, os = null, toolkit = null;
 let look = { ...DEFAULTS }, known = null, lastChange = null, pending = Promise.resolve();
@@ -182,7 +183,14 @@ const undoable = (row, action) => ({
   async run(p, ctx) { before[row] = look[row]; await action.run(p, ctx); },
   async undo(ctx) { if (row in before) await pressTo(ctx, row, before[row]); },
   done: (s) => rowLine(row, s),
+  more: (s) => moreLine(row, s),
 });
+// "Tell me more" after a change: every other row and where it is now, and how to change one.
+function moreLine(row, s) {
+  const rows = [...Object.keys(STEPS), ...Object.keys(CHOICES)].filter((k) => k !== row)
+    .map((k) => `${(STEPS[k] || CHOICES[k]).label.toLowerCase()}, now ${STEPS[k] ? STEPS[k].words(s[k]) : CHOICES[k].options[s[k]].toLowerCase()}`);
+  return `You can also change ${rows.slice(0, -1).join('; ')}; and ${rows.at(-1)}. Say "yellow on black", "voice faster" or "keep it short".`;
+}
 // The done line after a change says only that row ("Text 150 percent."): seconds count on stage.
 function rowLine(row, s) {
   if (STEPS[row]) return `${STEPS[row].label} ${STEPS[row].words(s[row])}.`;
@@ -298,6 +306,7 @@ const app = {
     colours: chooser('theme', 'colours', 'Change the colours: match my phone, dark, light, or yellow on black', 'Changing the colours', 'Colours is the third row in Your look.'),
     whoSpeaks: chooser('speaker', 'who', 'Choose who speaks: Murmur, or my screen reader', 'Choosing who speaks', 'Who speaks is after Colours in Your look.'),
     howMuch: chooser('agency', 'mode', 'Choose how much Murmur does: ask me, just do it, or teach me', 'Changing how much I do', 'How much Murmur does is after Who speaks.'),
+    answers: chooser('answers', 'length', 'Choose short answers, or detailed ones with an example and the options', 'Changing how long answers are', 'Answers is after How much Murmur does in Your look.'),
     learning: undoable('learning', {
       describe: 'Stop learning, or start learning again',
       doing: 'Changing learning',

@@ -8,6 +8,7 @@ const PHRASES = {
   undo: ['undo', 'undo that', 'undo it', 'take that back'],
   carry_on: ['carry on', 'continue', 'keep going', 'go on', 'resume'],
   again: ['again', 'say again', 'say that again', 'repeat', 'repeat that', 'sorry again', 'pardon'],
+  more: ['more', 'tell me more', 'say more', 'explain', 'explain that', 'longer', 'more detail', 'in more detail'],
   take_over: ["i'll do it", 'i will do it', 'let me do it', "i'll take over", 'let me'],
 };
 // Confirm words open nothing by themselves: they only count while a gate is open (see hear()). Never ok or mm.
