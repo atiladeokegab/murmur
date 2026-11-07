@@ -39,7 +39,7 @@ const app = {
   },
 
   read() {
-    return draft ? `Hello. Your message to Sam says: ${draft}` : 'Hello. Your message to Sam is empty.';
+    return draft ? `Your message to Sam says: ${draft}` : 'Your message to Sam is empty.'; // no app name: the board shows it under the title
   },
   place() {
     return { where: 'Hello', item: 'your message to Sam', next: draft ? 'send' : 'write' };

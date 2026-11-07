@@ -22,6 +22,7 @@ export async function mountApp(app, host, os) {
   const h = root.querySelector('h2');
   if (!h) throw new Error(`app ${app.id}: mount() must render an <h2> with the app's name`);
   h.tabIndex = -1; // open_app moves focus here
+  h.setAttribute('role', 'heading'); h.setAttribute('aria-level', '1'); // the board's h1 hides when an app opens: the app's name is then the page's top heading
   root.setAttribute('aria-labelledby', h.id ||= `app-${app.id}-h`);
   return root;
 }
