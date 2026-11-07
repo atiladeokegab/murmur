@@ -8,7 +8,7 @@ import { browserKV } from '../ports/browser-kv.js';
 export const PLUGINS = new URL('../plugins/', import.meta.url);   // /plugins/ in the browser
 const AREA = 'os.plugins';
 // An action named like money or messages must ask first; a plug-in may not opt out.
-const RISKY = /pay|send|transfer|call|buy|purchase/i;
+const RISKY = /pay|send|transfer|call|buy|purchase|order|book|checkout/i;
 
 /** The agent's builtin tool (public/agent/plan.js BUILTINS shape). */
 export const INSTALL_APP = {
