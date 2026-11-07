@@ -21,17 +21,17 @@ test("what's on, in words", () => {
   assert.equal(C.whatsOn(s, 'wed'), 'Wednesday is free.');
   assert.equal(C.whatsOn(s, 'Blursday'), "I don't know Blursday.");
   s.showing = 'Tuesday';
-  assert.ok(A.whatsOn.verify(s, { day: 'Tuesday' }));
-  assert.equal(A.whatsOn.verify(s, {}), false);
+  assert.equal(A.whatsOn.verify(s, { day: 'Tuesday' }), true);
+  assert.notEqual(A.whatsOn.verify(s, {}), true);
 });
 
 test('the demo: move lunch with Mum to Wednesday', () => {
   const s = C.fresh();
   const r = C.resolve(s, { what: 'lunch with Mum' });
   assert.deepEqual(r, { id: 'lunch-mum' });
-  assert.equal(A.move.verify(s, { what: 'lunch with Mum', to: 'Wednesday' }), false);
+  assert.notEqual(A.move.verify(s, { what: 'lunch with Mum', to: 'Wednesday' }), true);
   assert.deepEqual(C.move(s, r.id, 'Wednesday'), { say: "Wednesday's free. Moved. Tell Mum?" });
-  assert.ok(A.move.verify(s, { what: 'lunch with Mum', to: 'Wednesday' }));
+  assert.equal(A.move.verify(s, { what: 'lunch with Mum', to: 'Wednesday' }), true);
   assert.equal(C.line(C.event(s, 'lunch-mum')), 'Lunch with Mum, Wednesday at one.');
   assert.deepEqual(C.place(s), { where: 'Calendar, Wednesday', item: 'Lunch with Mum', n: 1, of: 1, next: 'move' });
 });
@@ -59,12 +59,12 @@ test('add and invite verify on the app truth', () => {
   assert.equal(C.add(s, { title: '', day: 'Monday', time: '10:00' }), null);
   assert.equal(C.add(s, { title: 'Haircut', day: 'Mon', time: '10am' }), null);
   C.add(s, { title: 'Haircut', day: 'Mon', time: '10:00' });
-  assert.ok(A.add.verify(s, { title: 'Haircut', day: 'Monday', time: '10:00' }));
+  assert.equal(A.add.verify(s, { title: 'Haircut', day: 'Monday', time: '10:00' }), true);
   C.move(s, 'lunch-mum', 'Wednesday');
   assert.equal(A.invite.readback(s, { what: 'lunch with Mum', who: 'Mum' }), 'Send Mum an invite: Lunch with Mum, Wednesday at one.');
-  assert.equal(A.invite.verify(s, { what: 'lunch with Mum', who: 'Mum' }), false);
+  assert.notEqual(A.invite.verify(s, { what: 'lunch with Mum', who: 'Mum' }), true);
   assert.ok(C.invite(s, 'lunch-mum', 'mum'));
-  assert.ok(A.invite.verify(s, { what: 'lunch with Mum', who: 'Mum' }));
+  assert.equal(A.invite.verify(s, { what: 'lunch with Mum', who: 'Mum' }), true);
   assert.equal(C.invite(s, 'lunch-mum', 'Bob'), false, 'only people in the phone');
 });
 

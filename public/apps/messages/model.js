@@ -58,7 +58,7 @@ export function readItems(s) {
 
 export function startReading(s) {
   const items = readItems(s);
-  s.reading = { chat: s.open, at: 0, of: items.length };
+  s.reading = { chat: s.open, at: 0, of: items.length, items: items.map((x) => x.text) };
   const c = chatOf(s);
   if (c) c.unread = 0;
   return items;

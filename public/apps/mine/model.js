@@ -16,7 +16,7 @@ const norm = (t) => String(t || '').trim().toLowerCase().replace(/^(my|the)\s+/,
 export const find = (s, name) => s.workflows.find((w) => norm(w.name) === norm(name)) || null;
 
 const NAMES = { mum: 'Mum', sam: 'Sam', samira: 'Samira' };
-const who = (p) => NAMES[p.id] || p.who || 'the chat';
+const who = (p) => (p.who === '$who' ? 'someone' : NAMES[p.id] || p.who || 'the chat');
 const WORDS = {
   'messages.openChat': (p) => `open ${who(p)}'s chat`,
   'messages.read': () => 'read the new message',

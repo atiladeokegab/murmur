@@ -1,73 +1,84 @@
-// Mine on the Murmur SDK (spec §3.3, §3.5): your workflows, each read in plain words; run, explain, delete.
-// The store is the agent layer's (the toolkit skill registry): os.workflows { list(), remove(name), run(name) }.
-// Without it (tests, before the agent lands) Mine keeps its seed in memory.
+// Mine on the Murmur SDK (os/contract.md; spec §3.5): your workflows, each read in plain words; run, explain, delete.
+// The store is the agent's (public/agent/workflows.js, saved as toolkit skills). The shell hands it over as
+// os.workflows { all(), remove(name) } and os.hear(text). Without them (tests, before wiring) Mine keeps its seed.
 import * as Mi from './model.js';
 
 let s = Mi.fresh();
-let root = null, os = null;
+let root = null, os = null, body = null;
 const q = (sel) => root && root.querySelector(sel);
-const describeOf = (st) => os?.registry?.get?.(st.app)?.actions?.[st.action]?.describe || '';
-const gateOf = (st) => os?.registry?.get?.(st.app)?.actions?.[st.action]?.gate || null;
+const named = (p) => Mi.find(s, p.name);
+// A saved skill's recipe.actions are { tool, app, action, params, gate }; Mine only needs app, action, params.
+const fromSkill = (w) => ({ name: w.name, steps: (w.recipe?.actions || w.steps || []).map(({ app, action, params, gate }) => ({ app, action, params: params || {}, gate: gate || null })) });
 
 async function refresh() {
-  if (os?.workflows?.list) {
-    try { s.workflows = await os.workflows.list(); } catch { /* keep what we had; the list is re-read next time */ }
+  if (os?.workflows?.all) {
+    try { s.workflows = (await os.workflows.all()).map(fromSkill); } catch { /* keep the last list; it is re-read on the next open */ }
   }
   render();
 }
 
-const named = (p) => Mi.find(s, p.name);
-
 const app = {
   id: 'mine',
   name: 'Mine',
-  seed() { s = Mi.fresh(); render(); },
-  reset() { s = Mi.fresh(); refresh(); },
+  async mount(r, o) {
+    root = r; os = o;
+    root.append(el('h2', { id: 'mine-h' }, 'Mine'), body = el('div', { className: 'app-body' }));
+    // The bus only nudges a re-read of the store after a save; what Mine shows still comes from the store.
+    os.bus?.on?.('memory', (e) => { if (e.workflow) refresh(); });
+    await refresh();
+  },
+  async seed() { if (!os?.workflows) s.workflows = s.workflows.length ? s.workflows : Mi.SEED(); await refresh(); },
+  async reset() { s = Mi.fresh(os?.workflows ? [] : Mi.SEED()); await refresh(); },
   state: () => structuredClone(s),
   read: () => Mi.read(s),
   place: () => Mi.place(s),
-  mount(el, osApi) { root = el; os = osApi; refresh(); },
   refresh,
 
   actions: {
     explain: {
-      describe: "Reading what's in it",
+      describe: 'Read the steps of a saved workflow in plain words',
+      doing: "Reading what's in it",
       params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
       gate: null,
-      hint: 'Each saved workflow is a heading; What is in it is the first button under it',
+      hint: "Each saved workflow is a heading; What's in it is the first button after its steps",
       async run(p, ctx) {
+        await refresh();
         const w = named(p);
-        if (!w) return { fail: `You have nothing saved as ${p.name}.` };
+        if (!w) throw new Error(`You have nothing saved as ${p.name}.`);
         await ctx.tap(q(`[data-explain="${w.name}"]`));
-        return { say: Mi.explain(w, describeOf) };
+        await ctx.say(Mi.explain(w));
       },
-      verify: (st, p) => !!Mi.find(st, p.name) && st.explained === Mi.find(st, p.name).name,
+      verify: (st, p) => (!!Mi.find(st, p.name) && st.explained === Mi.find(st, p.name).name) || `Nothing saved as ${p.name}.`,
     },
     run: {
-      describe: 'Running it',
+      describe: 'Run a saved workflow, step by step; its sends still ask first',
+      doing: 'Running it',
       params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
       gate: null, // each step keeps its own gate when it runs
-      hint: 'Run it is the second button under the workflow',
+      hint: 'Run is the second button after the steps',
       async run(p, ctx) {
+        await refresh();
         const w = named(p);
-        if (!w) return { fail: `You have nothing saved as ${p.name}.` };
+        if (!w) throw new Error(`You have nothing saved as ${p.name}.`);
         await ctx.tap(q(`[data-run="${w.name}"]`));
       },
-      verify: (st, p) => !!Mi.find(st, p.name) && st.lastRun === Mi.find(st, p.name).name,
+      verify: (st, p) => (!!Mi.find(st, p.name) && st.lastRun === Mi.find(st, p.name).name) || `${p.name} didn't start.`,
     },
     delete: {
-      describe: 'Deleting it',
+      describe: 'Delete a saved workflow and its tile',
+      doing: 'Deleting it',
       params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
       gate: 'delete',
-      hint: 'Delete is the last button under the workflow; I ask first',
+      hint: 'Delete is the last button after the steps; I ask first',
       readback: (st, p = {}) => { const w = Mi.find(st, p.name); return w ? `Delete ${w.name}? ${Mi.explain(w)}` : `Delete ${p.name}?`; },
       async run(p, ctx) {
+        await refresh();
         const w = named(p);
-        if (!w) return { fail: `You have nothing saved as ${p.name}.` };
+        if (!w) throw new Error(`You have nothing saved as ${p.name}.`);
         await ctx.tap(q(`[data-delete="${w.name}"]`));
         await removing;
       },
-      verify: (st, p) => !!String(p.name || '').trim() && !Mi.find(st, p.name),
+      verify: (st, p) => (!!String(p.name || '').trim() && !Mi.find(st, p.name)) || 'It is still there.',
     },
   },
 };
@@ -75,34 +86,42 @@ export default app;
 
 // ---------- the screen ----------
 let removing = Promise.resolve();
-function h(tag, props = {}, ...kids) {
-  const n = Object.assign(document.createElement(tag), props);
-  for (const k of kids.flat()) if (k != null && k !== false) n.append(k);
+function el(tag, props = {}, ...kids) {
+  const n = root.ownerDocument.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k.startsWith('aria-') || k.startsWith('data-') || k === 'for') n.setAttribute(k, String(v));
+    else if (k === 'onclick') n.addEventListener('click', v);
+    else n[k] = v;
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(typeof k === 'number' ? String(k) : k);
   return n;
 }
-const button = (text, props = {}) => h('button', { type: 'button', className: 'app-btn', ...props }, text);
+const button = (text, props = {}) => el('button', { type: 'button', className: 'app-btn', ...props }, text);
 
 function render() {
-  if (!root || typeof document === 'undefined') return;
-  root.replaceChildren(h('section', { className: 'app', ariaLabel: 'Mine' },
-    h('h2', { className: 'app-h' }, 'Mine'),
-    h('p', { className: 'app-place' }, Mi.read(s)),
-    s.workflows.map((w) => h('section', { className: 'app-card', ariaLabel: w.name },
-      h('h3', { className: 'app-h3' }, w.name),
-      h('ol', { className: 'app-sentences', ariaLabel: `${w.name}, step by step` },
-        w.steps.map((st, i) => h('li', { tabIndex: 0 }, h('span', { className: 'sr' }, `Step ${i + 1} of ${w.steps.length}: `), Mi.stepWords(st, describeOf(st))))),
-      button(`What's in ${w.name}`, { dataset: { explain: w.name }, onclick: () => { s.selected = s.explained = w.name; os?.say?.(Mi.explain(w, describeOf)); } }),
-      button(`Run ${w.name}`, { dataset: { run: w.name }, className: 'app-btn primary', onclick: () => {
-        s.selected = s.lastRun = w.name;
-        os?.workflows?.run?.(w.name);
+  if (!body) return;
+  body.replaceChildren(
+    el('p', { className: 'app-place' }, Mi.read(s)),
+    ...s.workflows.map((w) => el('div', { className: 'app-card' },
+      el('h3', { className: 'app-h3' }, w.name),
+      el('ol', { className: 'app-sentences', 'aria-label': `${w.name}, step by step` },
+        w.steps.map((st, i) => el('li', { tabIndex: 0 }, el('span', { className: 'sr' }, `Step ${i + 1} of ${w.steps.length}: `), Mi.stepWords(st)))),
+      button(`What's in ${w.name}`, { 'data-explain': w.name, onclick: (e) => {
+        s.selected = s.explained = w.name; render();
+        if (e.isTrusted) os.say?.(Mi.explain(w));
       } }),
-      button(`Delete ${w.name}`, { dataset: { delete: w.name }, onclick: () => { removing = onDelete(w); } }),
+      button(`Run ${w.name}`, { 'data-run': w.name, className: 'app-btn primary', onclick: () => {
+        s.selected = s.lastRun = w.name; render();
+        os?.hear?.(`run ${w.name}`); // the agent runs it as its own task, gates included
+      } }),
+      button(`Delete ${w.name}`, { 'data-delete': w.name, onclick: () => { removing = remove(w); } }),
     )),
-  ));
+  );
 }
 
-async function onDelete(w) {
-  if (os?.confirm && !(await os.confirm({ gate: 'delete', readback: app.actions.delete.readback(s, { name: w.name }) }))) return;
+// A person's own tap on Delete is their yes (contract §7); the agent is gated by the runner before it taps.
+async function remove(w) {
   if (os?.workflows?.remove) { try { await os.workflows.remove(w.name); } catch { return; } }
   Mi.remove(s, w.name);
   render();

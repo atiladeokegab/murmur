@@ -27,15 +27,15 @@ test('the demo beat: read the last page, stop, where am I, carry on', () => {
   W.startLastPage(s);
   assert.equal(s.chapter, 1);
   assert.equal(s.sentence, 10, 'the last page starts at sentence 11');
-  assert.ok(A.readLastPage.verify(s));
+  assert.equal(A.readLastPage.verify(s), true);
   s.sentence = 13; // the reader stopped here
   assert.equal(W.where(s), 'Chapter 2, sentence 14 of 30, the part about the station.');
   assert.deepEqual(W.place(s), { where: 'Chapter 2, Platform Four', item: 'sentence', n: 14, of: 30, next: 'carryOn', say: W.where(s) });
   s.lastSaid = W.where(s);
-  assert.ok(A.where.verify(s));
+  assert.equal(A.where.verify(s), true);
   W.startCarryOn(s);
   assert.equal(s.readFrom, 13, 'carry on resumes the sentence you stopped in');
-  assert.ok(A.carryOn.verify(s));
+  assert.equal(A.carryOn.verify(s), true);
 });
 
 test('where am I: every part, and a new chapter', () => {
@@ -51,17 +51,17 @@ test('where am I: every part, and a new chapter', () => {
 test('dictate, change and new chapter verify on the app truth', () => {
   const s = W.fresh();
   W.newChapter(s, 'Leeds');
-  assert.ok(A.newChapter.verify(s, { title: 'Leeds' }));
-  assert.equal(A.newChapter.verify(s, { title: 'York' }), false);
+  assert.equal(A.newChapter.verify(s, { title: 'Leeds' }), true);
+  assert.notEqual(A.newChapter.verify(s, { title: 'York' }), true);
   assert.equal(W.dictate(s, '  '), false);
   W.dictate(s, 'The hotel was cold.');
-  assert.ok(A.dictate.verify(s, { text: 'The hotel was cold.' }));
-  assert.equal(A.newChapter.verify(s, {}), false, 'not empty any more');
+  assert.equal(A.dictate.verify(s, { text: 'The hotel was cold.' }), true);
+  assert.notEqual(A.newChapter.verify(s, {}), true, 'not empty any more');
   W.dictate(s, 'I slept in my coat.');
   assert.equal(W.current(s).text, 'The hotel was cold. I slept in my coat.');
   assert.ok(W.change(s, 'cold', 'freezing'));
   assert.equal(s.sentence, 0, 'the change moves you to the edited sentence');
-  assert.ok(A.change.verify(s, { from: 'cold', to: 'freezing' }));
+  assert.equal(A.change.verify(s, { from: 'cold', to: 'freezing' }), true);
   assert.equal(sentences(W.current(s).text)[0], 'The hotel was freezing.');
   assert.equal(W.change(s, 'banana', 'x'), false);
 });
@@ -78,7 +78,7 @@ test('change prefers the sentence you are in', () => {
 test('open chapter bounds', () => {
   const s = W.fresh();
   assert.ok(W.openChapter(s, 1));
-  assert.ok(A.openChapter.verify(s, { n: 1 }));
+  assert.equal(A.openChapter.verify(s, { n: 1 }), true);
   assert.equal(W.openChapter(s, 3), false);
   assert.equal(W.openChapter(s, 0), false);
 });

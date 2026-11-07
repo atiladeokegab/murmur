@@ -31,33 +31,34 @@ test('"Sam" is ambiguous: ask, never pick', () => {
   assert.deepEqual(M.resolve(s, { who: 'mum' }), { id: 'mum' });
   assert.deepEqual(M.resolve(s, { id: 'sam' }), { id: 'sam' });
   assert.match(M.resolve(s, { who: 'Bob' }).none, /no chat with Bob/);
-  assert.equal(A.openChat.verify({ ...s, open: 'sam' }, { who: 'Sam' }), false, 'an ambiguous name never verifies');
+  assert.equal(A.openChat.verify({ ...s, open: 'samira' }, { who: 'Sam' }), true, 'after the person chose, either is right');
+  assert.notEqual(A.openChat.verify({ ...s, open: 'mum' }, { who: 'Sam' }), true);
 });
 
 test('the race: open Mum, read, reply, change Tuesday to Wednesday, send', () => {
   const s = M.fresh();
   M.open(s, 'mum');
-  assert.ok(A.openChat.verify(s, { who: 'Mum' }));
-  assert.equal(A.read.verify(s), false, 'not read yet');
+  assert.equal(A.openChat.verify(s, { who: 'Mum' }), true);
+  assert.notEqual(A.read.verify(s), true, 'not read yet');
   const items = M.startReading(s);
   assert.deepEqual(items.map((i) => i.text), ['Lunch on Tuesday?'], 'one item per sentence, the unread one');
-  assert.ok(A.read.verify(s));
+  assert.equal(A.read.verify(s), true);
   assert.deepEqual(M.place(s), { where: "Mum's chat", item: "Mum's message", n: 1, of: 1, next: 'reply' });
 
   M.setDraft(s, "Tuesday's fine.");
-  assert.ok(A.reply.verify(s, { text: "Tuesday's fine." }));
+  assert.equal(A.reply.verify(s, { text: "Tuesday's fine." }), true);
   assert.equal(s.changed, null);
 
   M.setDraft(s, "Wednesday's fine.");
   assert.deepEqual(s.changed, { sentence: 0, word: 0, from: "Tuesday's", to: "Wednesday's" });
-  assert.ok(A.replace.verify(s, { from: 'Tuesday', to: 'Wednesday' }));
-  assert.equal(A.replace.verify(s, { from: 'Tuesday', to: 'Thursday' }), false);
+  assert.equal(A.replace.verify(s, { from: 'Tuesday', to: 'Wednesday' }), true);
+  assert.notEqual(A.replace.verify(s, { from: 'Tuesday', to: 'Thursday' }), true);
   assert.deepEqual(M.place(s), { where: "Mum's chat", item: 'your reply', n: 1, of: 1, next: 'send' });
 
   assert.equal(A.send.readback(s), "Send to Mum: Wednesday's fine.");
-  assert.equal(A.send.verify(s), false, 'not sent yet');
+  assert.notEqual(A.send.verify(s), true, 'not sent yet');
   assert.ok(M.send(s));
-  assert.ok(A.send.verify(s));
+  assert.equal(A.send.verify(s), true);
   assert.equal(M.chatOf(s).messages.at(-1).text, "Wednesday's fine.");
   assert.equal(M.read(s), `Mum's chat, 4 messages, the last from you "Wednesday's fine.". Sent.`);
 });
@@ -66,12 +67,12 @@ test('Vertical 1: text Sam I am ten minutes late', () => {
   const s = M.fresh();
   const r = M.resolve(s, { who: 'Sam' });
   M.open(s, r.ask.choices[0].params.id);
-  assert.ok(A.openChat.verify(s, { id: 'sam' }));
+  assert.equal(A.openChat.verify(s, { id: 'sam' }), true);
   M.setDraft(s, "I'm ten minutes late.");
-  assert.ok(A.reply.verify(s, { text: "I'm ten minutes late." }));
+  assert.equal(A.reply.verify(s, { text: "I'm ten minutes late." }), true);
   assert.equal(A.send.readback(s), "Send to Sam: I'm ten minutes late.");
   M.send(s);
-  assert.ok(A.send.verify(s));
+  assert.equal(A.send.verify(s), true);
   assert.deepEqual(s.lastSent, { to: 'sam', text: "I'm ten minutes late." });
   assert.equal(M.chatOf(s, 'mum').messages.length, 3, 'Mum untouched');
 });
@@ -88,7 +89,7 @@ test('send refuses an empty draft and no open chat', () => {
   assert.equal(M.send(s), false);
   M.open(s, 'mum');
   assert.equal(M.send(s), false);
-  assert.equal(A.send.verify(s), false);
+  assert.notEqual(A.send.verify(s), true);
 });
 
 test('seed and reset bring the demo data back', () => {

@@ -15,7 +15,13 @@ export const fresh = () => ({
 });
 
 const norm = (t) => String(t || '').trim().toLowerCase();
-export const dayOf = (d) => DAYS.find((x) => norm(x) === norm(d) || norm(x).slice(0, 3) === norm(d).slice(0, 3)) || null;
+/** "Wed", "wednesday", "today" or "tomorrow" (with the state's today) to "Wednesday"; null when unknown. */
+export function dayOf(d, today = 'Saturday') {
+  const w = norm(d);
+  if (w === 'today') return today;
+  if (w === 'tomorrow') return DAYS[(DAYS.indexOf(today) + 1) % 7];
+  return DAYS.find((x) => norm(x) === w || (w.length >= 3 && norm(x).startsWith(w))) || null;
+}
 
 const NUM = ['twelve', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven'];
 /** "13:00" → "one", "09:30" → "half past nine", "10:15" → "quarter past ten", "19:45" → "quarter to eight". */
@@ -32,7 +38,7 @@ export const byDay = (s, day) => s.events.filter((e) => e.day === day).sort((a, 
 export const line = (e) => `${e.title}, ${e.day} at ${spokenTime(e.time)}.`;
 
 export function whatsOn(s, day = s.today) {
-  const d = dayOf(day);
+  const d = dayOf(day, s.today);
   if (!d) return `I don't know ${day}.`;
   const list = byDay(s, d);
   const when = d === s.today ? 'Today' : d;
@@ -58,8 +64,8 @@ export function resolve(s, p = {}) {
 export const event = (s, id) => s.events.find((e) => e.id === id) || null;
 export const clash = (s, day, time, id) => s.events.find((e) => e.id !== id && e.day === day && e.time === time) || null;
 
-export function add(s, { title, day, time }) {
-  const d = dayOf(day);
+export function add(s, { title, day, time = '12:00' }) {
+  const d = dayOf(day, s.today);
   if (!String(title || '').trim() || !d || !/^\d{2}:\d{2}$/.test(time || '')) return null;
   const id = norm(title).replace(/[^a-z0-9]+/g, '-') + '-' + d.slice(0, 3).toLowerCase();
   const e = { id, title: String(title).trim(), day: d, time, with: [], invited: [] };
@@ -70,7 +76,7 @@ export function add(s, { title, day, time }) {
 
 /** Move an event to another day (same time unless given). Returns the sentence to say, or { fail }. */
 export function move(s, id, to, time) {
-  const e = event(s, id), d = dayOf(to);
+  const e = event(s, id), d = dayOf(to, s.today);
   if (!e || !d) return { fail: `I don't know ${to}.` };
   const t = time || e.time;
   const c = clash(s, d, t, id);

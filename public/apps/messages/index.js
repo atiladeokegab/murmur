@@ -1,164 +1,188 @@
-// Messages on the Murmur SDK (spec §3.3). The agent presses the same controls a person does.
+// Messages on the Murmur SDK (os/contract.md). The agent presses the same controls a person does.
 import * as M from './model.js';
 import { replaceWord, sentences } from '../../lib/notes.js';
 
 let s = M.fresh();
-let root = null, os = null;
+let root = null, os = null, body = null;
+let items = []; // the <li> of the message being read, for the amber highlight
 const esc = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const q = (sel) => root && root.querySelector(sel);
+const save = () => os?.kv?.set('state', s);
+
+/** Reads what the Read button started, one sentence at a time, the current one in amber. */
+async function speakItems(say) {
+  const list = s.reading?.items || [];
+  for (let i = 0; i < list.length; i++) {
+    s.reading.at = i;
+    items.forEach((li, k) => { li.className = k === i ? 'is-current' : ''; });
+    await say(list[i]);
+  }
+}
 
 const app = {
   id: 'messages',
   name: 'Messages',
-  seed() { s = M.fresh(); render(); },
-  reset() { s = M.fresh(); render(); },
+  async mount(r, o) {
+    root = r; os = o;
+    const saved = await os.kv?.get('state');
+    if (saved?.chats) s = saved;
+    root.append(el('h2', { id: 'messages-h' }, 'Messages'), body = el('div', { className: 'app-body' }));
+    render();
+  },
+  async seed() { if (!s?.chats) s = M.fresh(); await save(); render(); },
+  async reset() { s = M.fresh(); await save(); render(); },
   state: () => structuredClone(s),
   read: () => M.read(s),
   place: () => M.place(s),
-  mount(el, osApi) { root = el; os = osApi; render(); },
 
   actions: {
     openChat: {
-      describe: 'Opening the chat',
-      params: { type: 'object', properties: { who: { type: 'string' }, id: { type: 'string' } } },
+      describe: 'Open the chat with a person',
+      doing: 'Opening the chat',
+      params: { type: 'object', properties: { who: { type: 'string', description: 'The name as said' }, id: { type: 'string', enum: ['mum', 'sam', 'samira'] } } },
       gate: null,
-      hint: 'Your chats are buttons under the Messages heading, newest first',
+      hint: 'Your chats are buttons under the Messages heading',
       async run(p, ctx) {
-        const r = M.resolve(s, p);
-        if (r.ask) return { ask: r.ask };
-        if (r.none) return { fail: r.none };
-        await ctx.tap(q(`[data-chat="${r.id}"]`));
+        let r = M.resolve(s, p);
+        if (r.ask) {
+          const pick = await ctx.choose(r.ask.question, r.ask.choices.map((c) => ({ label: c.label, id: c.params.id })));
+          if (!pick) throw new Error('No one chosen.');
+          r = { id: pick.id };
+        }
+        if (r.none) throw new Error(r.none);
+        if (s.open && s.open !== r.id) await ctx.tap(q('#msg-back'));
+        if (s.open !== r.id) await ctx.tap(q(`[data-chat="${r.id}"]`));
       },
-      verify: (st, p) => { const r = M.resolve(st, p); return !!r.id && st.open === r.id; },
+      verify: (st, p) => {
+        const ok = p.id ? [p.id] : M.candidates(st, p.who).map((c) => c.id);
+        return (!!st.open && ok.includes(st.open)) || `The chat with ${p.who || p.id} didn't open.`;
+      },
     },
     read: {
-      describe: 'Reading',
+      describe: 'Read the new message in the open chat, sentence by sentence',
+      doing: 'Reading',
       params: { type: 'object', properties: {} },
       gate: null,
-      hint: 'Read it is the first button in the chat; each sentence is its own item after it',
-      async run(p, ctx) { await ctx.tap(q('#msg-read')); await reading; },
-      verify: (st) => !!st.reading && st.reading.chat === st.open,
+      hint: 'Read is the first button in the chat; each sentence is its own item after the chat',
+      async run(p, ctx) {
+        await ctx.tap(q('#msg-read'));
+        await speakItems((t) => ctx.say(t));
+      },
+      verify: (st) => (!!st.open && st.reading?.chat === st.open) || 'Nothing was read.',
     },
     reply: {
-      describe: 'Writing your reply',
+      describe: 'Write a reply in the open chat',
+      doing: 'Writing your reply',
       params: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       gate: null,
-      hint: 'The reply box is under the last message',
+      hint: 'The reply box is after the chat, with Send right under it',
       async run(p, ctx) { const box = q('#msg-draft'); await ctx.tap(box); await ctx.type(box, p.text); },
-      verify: (st, p) => !!st.open && st.draft === p.text,
+      verify: (st, p) => (!!st.open && st.draft === p.text) || 'The reply box did not take it.',
     },
     replace: {
-      describe: 'Changing a word',
+      describe: 'Change one word in the reply to another',
+      doing: 'Changing the word',
       params: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] },
       gate: null,
       hint: 'Change the word in the reply box; the changed word is underlined',
       async run(p, ctx) {
         const r = replaceWord(s.draft, p.from, p.to);
-        if (!r.changed) return { fail: `I can't find ${p.from} in your reply.` };
+        if (!r.changed) throw new Error(`I can't find ${p.from} in your reply.`);
         const box = q('#msg-draft');
         await ctx.tap(box);
         await ctx.type(box, r.text);
-        return { say: sentences(r.text)[r.index] };
+        await ctx.say(sentences(r.text)[r.index]);
       },
-      verify: (st, p) => !!st.changed && new RegExp(`\\b${esc(p.to)}\\b`, 'i').test(st.changed.to)
-        && new RegExp(`\\b${esc(p.from)}\\b`, 'i').test(st.changed.from),
+      verify: (st, p) => (!!st.changed && new RegExp(`\\b${esc(p.to)}\\b`, 'i').test(st.changed.to)
+        && new RegExp(`\\b${esc(p.from)}\\b`, 'i').test(st.changed.from)) || `${p.from} wasn't changed.`,
     },
     send: {
-      describe: 'Sending',
+      describe: 'Send the reply',
+      doing: 'Sending',
       params: { type: 'object', properties: {} },
       gate: 'send',
       hint: 'Send is the button right after the reply box',
-      readback: (st) => `Send to ${M.chatOf(st)?.name}: ${st.draft}`,
+      readback: (st) => `Send to ${M.chatOf(st)?.name || 'no one'}: ${st.draft || 'nothing yet'}`,
       async run(p, ctx) { await ctx.tap(q('#msg-send')); },
-      verify: (st) => st.lastSent?.text === st.draft && st.lastSent.to === st.open,
+      verify: (st) => (!!st.draft && st.lastSent?.text === st.draft && st.lastSent.to === st.open) || 'It did not send.',
     },
   },
 };
 export default app;
 
 // ---------- the screen ----------
-let reading = Promise.resolve();
-function h(tag, props = {}, ...kids) {
-  const n = Object.assign(document.createElement(tag), props);
-  for (const k of kids.flat()) if (k != null && k !== false) n.append(k);
+function el(tag, props = {}, ...kids) {
+  const n = root.ownerDocument.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k.startsWith('aria-') || k.startsWith('data-') || k === 'for') n.setAttribute(k, String(v));
+    else if (k === 'onclick') n.addEventListener('click', v);
+    else n[k] = v;
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(typeof k === 'number' ? String(k) : k);
   return n;
 }
-const button = (text, props = {}) => h('button', { type: 'button', className: 'app-btn', ...props }, text);
+const button = (text, props = {}) => el('button', { type: 'button', className: 'app-btn', ...props }, text);
 
 function render() {
-  if (!root || typeof document === 'undefined') return;
+  if (!body) return;
   const c = M.chatOf(s);
-  root.replaceChildren(c ? chatView(c) : listView());
+  body.replaceChildren(c ? chatView(c) : listView());
 }
 
 function listView() {
-  return h('section', { className: 'app', ariaLabel: 'Messages' },
-    h('h2', { className: 'app-h' }, 'Messages'),
-    h('ul', { className: 'app-list' }, s.chats.map((c) => h('li', {},
-      button('', { dataset: { chat: c.id }, onclick: () => { M.open(s, c.id); render(); os?.focus?.('#msg-read'); } },
-        h('span', { className: 'app-title' }, c.name),
-        h('span', { className: 'app-why' }, (c.unread ? 'New: ' : '') + c.messages.at(-1).text))))));
+  return el('ul', { className: 'app-list', 'aria-label': 'Your chats' }, s.chats.map((c) => el('li', {},
+    button(`${c.name}. ${c.unread ? 'New: ' : ''}${c.messages.at(-1).text}`, { 'data-chat': c.id, onclick: () => { M.open(s, c.id); save(); render(); } }))));
 }
 
-function sentenceList(label, text, { changed = null, current = -1, id } = {}) {
-  const all = sentences(text);
-  return h('ol', { className: 'app-sentences', ariaLabel: label, id }, all.map((t, i) => {
-    const li = h('li', { tabIndex: 0, className: i === current ? 'is-current' : '' });
-    const name = `Sentence ${i + 1} of ${all.length}${changed && changed.sentence === i ? ', changed' : ''}`;
-    li.append(h('span', { className: 'sr' }, name + ': '));
-    if (changed && changed.sentence === i) {
+function sentenceList(label, all, { changed = null, current = -1, keep = false } = {}) {
+  const lis = all.map((t, i) => {
+    const li = el('li', { tabIndex: 0, className: i === current ? 'is-current' : '' });
+    const isChanged = changed && changed.sentence === i;
+    li.append(el('span', { className: 'sr' }, `Sentence ${i + 1} of ${all.length}${isChanged ? ', changed' : ''}: `));
+    if (isChanged) {
       const words = t.split(/\s+/);
-      words.forEach((w, k) => li.append(k === changed.word ? h('strong', { className: 'app-changed' }, w) : w, k < words.length - 1 ? ' ' : ''));
+      words.forEach((w, k) => li.append(k === changed.word ? el('mark', { className: 'changed' }, w) : w, k < words.length - 1 ? ' ' : ''));
     } else li.append(t);
     return li;
-  }));
+  });
+  if (keep) items = lis;
+  return el('ol', { className: 'app-sentences', 'aria-label': label }, lis);
 }
 
 function chatView(c) {
-  const items = M.readItems(s);
+  const who = M.possessive(c.name);
   const at = s.reading && s.reading.chat === c.id ? s.reading.at : -1;
-  const box = h('textarea', { id: 'msg-draft', className: 'app-field', rows: 3, value: M.sent(s) ? '' : s.draft });
-  box.addEventListener('input', () => { M.setDraft(s, box.value); renderDraft(); });
-  return h('section', { className: 'app', ariaLabel: `${M.possessive(c.name)} chat` },
-    h('h2', { className: 'app-h' }, `${M.possessive(c.name)} chat`),
-    button('Back to your chats', { className: 'app-btn quiet', onclick: () => { s.open = null; render(); } }),
-    button(`Read ${M.possessive(c.name)} message`, { id: 'msg-read', onclick: () => { reading = readAloud(); } }),
-    h('h3', { className: 'app-h3' }, 'The chat'),
-    h('ol', { className: 'app-chat' }, c.messages.map((m) => h('li', { className: m.from === 'me' ? 'me' : 'them' },
-      h('span', { className: 'app-who' }, m.from === 'me' ? 'You' : c.name), ' ', m.text))),
-    h('h3', { className: 'app-h3' }, `${possessive(c.name)} message, sentence by sentence`),
-    sentenceList(`${M.possessive(c.name)} message`, items.map((x) => x.text).join(' '), { current: at, id: 'msg-items' }),
-    h('h3', { className: 'app-h3', id: 'msg-reply-h' }, 'Your reply'),
-    h('div', { id: 'msg-reply' }, draftView()),
-    h('label', { htmlFor: 'msg-draft', className: 'app-label' }, 'Your reply, edit it here'),
+  const text = s.reading && s.reading.chat === c.id ? s.reading.items : [];
+  const box = el('textarea', { id: 'msg-draft', className: 'app-field', rows: 3 });
+  box.value = M.sent(s) ? '' : s.draft;
+  box.addEventListener('input', () => { M.setDraft(s, box.value); save(); renderDraft(); });
+  return el('div', {},
+    el('h3', { className: 'app-h3' }, `${who} chat`),
+    button(`Read ${who} message`, { id: 'msg-read', onclick: (e) => {
+      // A person's tap reads aloud here; the agent's tap only starts it, and its run reads through ctx.say.
+      M.startReading(s); save(); render();
+      if (e.isTrusted) speakItems(async (t) => os.say?.(t)).catch(() => {});
+    } }),
+    el('ol', { className: 'app-chat', 'aria-label': 'The chat' }, c.messages.map((m) => el('li', { className: m.from === 'me' ? 'me' : 'them' },
+      el('span', { className: 'app-who' }, m.from === 'me' ? 'You: ' : `${c.name}: `), m.text))),
+    text.length ? el('h4', { className: 'app-h3' }, `${who} message, sentence by sentence`) : null,
+    text.length ? sentenceList(`${who} message`, text, { current: at, keep: true }) : null,
+    el('h4', { className: 'app-h3' }, 'Your reply'),
+    el('div', { id: 'msg-reply' }, draftView()),
+    el('label', { for: 'msg-draft', className: 'app-label' }, 'Your reply, edit it here'),
     box,
-    button(M.sent(s) ? 'Sent' : 'Send', { id: 'msg-send', className: 'app-btn primary', onclick: onSend }),
+    button(M.sent(s) ? 'Sent' : 'Send', { id: 'msg-send', className: 'app-btn primary', onclick: () => {
+      // A person's own tap on Send is their yes (contract §7); the agent is gated by the runner before it taps.
+      if (M.send(s)) { save(); render(); }
+    } }),
+    button('Back to your chats', { id: 'msg-back', onclick: () => { s.open = null; save(); render(); } }),
   );
 }
-const possessive = M.possessive;
 
 function draftView() {
-  if (M.sent(s)) return h('p', { className: 'app-done' }, `Sent: ${s.lastSent.text}`);
-  if (!s.draft) return h('p', { className: 'app-why' }, 'No reply yet.');
-  return sentenceList('Your reply', s.draft, { changed: s.changed });
+  if (M.sent(s)) return el('p', { className: 'app-done' }, `Sent: ${s.lastSent.text}`);
+  if (!s.draft) return el('p', { className: 'app-why' }, 'No reply yet.');
+  return sentenceList('Your reply', sentences(s.draft), { changed: s.changed });
 }
-function renderDraft() { const n = q('#msg-reply'); if (n) n.replaceChildren(draftView()); }
-
-async function readAloud() {
-  const items = M.startReading(s);
-  render();
-  for (let i = 0; i < items.length; i++) {
-    s.reading.at = i;
-    q('#msg-items li.is-current')?.classList.remove('is-current');
-    q(`#msg-items li:nth-child(${i + 1})`)?.classList.add('is-current');
-    if (await os?.say?.(items[i].text) === false) break; // false: the person said stop
-  }
-}
-
-async function onSend() {
-  if (M.sent(s) || !s.draft.trim()) return;
-  // A person's own tap asks first too; the runner has already asked when the agent taps (os.confirm resolves true).
-  if (os?.confirm && !(await os.confirm({ gate: 'send', readback: app.actions.send.readback(s) }))) return;
-  M.send(s);
-  render();
-}
+function renderDraft() { q('#msg-reply')?.replaceChildren(draftView()); }
