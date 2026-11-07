@@ -97,6 +97,9 @@ const LINES = [
   ['Take that back', word('undo'), true],
   ['Undo the last thing', [['undo', {}]], true],
   ['Go back', word('undo'), true],
+  ['Undo the last thing I did', [['undo', {}]], true, 'blind probe'],
+  ["No, I didn't mean that", [['undo', {}]], true, 'blind probe'],
+  ['Start over', [['stop', {}]], true, 'blind probe'],
 
   ['Yes', word('confirm', 'yes'), true, '', GATE],
   ['Yes please', word('confirm', 'yes'), true, '', GATE],
@@ -170,4 +173,17 @@ test('paraphrase: the sweep has at least 90 lines; the hit rate and misses are i
   t.diagnostic(`hit rate ${LINES.length - missed.length} of ${LINES.length}`);
   for (const m of missed) t.diagnostic(`miss: ${m}`);
   assert.ok(LINES.length - missed.length >= LINES.filter((l) => l[2]).length);
+});
+
+test('"No, I didn\'t mean that" undoes the last change, end to end', async () => {
+  const { createAgent } = await import('../public/agent/index.js');
+  const { createToolkit } = await import('../public/vendor/toolkit/index.js');
+  const { phone, memoryKV } = await import('./agent-fixtures.js');
+  const p = await phone();
+  const agent = createAgent({ registry: p.registry, bus: p.bus, ctxFor: p.ctxFor, librarian: createToolkit({ kv: memoryKV() }).librarian,
+    agency: () => 'just', planOpts: { offline: true }, speak: async () => {} });
+  await agent.hear('Make the text bigger');
+  assert.equal(p.state('look').size, 150);
+  await agent.hear("No, I didn't mean that");
+  assert.equal(p.state('look').size, 100);
 });

@@ -238,7 +238,8 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:turn |switch )?(?:the )?(?:sounds?|haptics|vibrations?|sounds? and (?:haptics|vibrations?))\s+(on|off)$/i)) ||
       (m = t.match(/^(?:turn|switch)\s+(on|off)\s+(?:the )?(?:sounds?|haptics|vibrations?)/i))) return task([{ tool: 'sound', params: { on: m[1].toLowerCase() === 'on' } }]);
   if (/^(?:mute|be quiet with the sounds|no (?:more )?sounds)$/i.test(t)) return task([{ tool: 'sound', params: { on: false } }]);
-  if (/^undo (?:the )?last (?:thing|change|step)$/i.test(t)) return task([{ tool: 'undo', params: {} }]);
+  if (/^undo (?:the )?last (?:thing|change|step)(?: (?:i|you) did)?$|^no,? i didn'?t mean (?:that|it)$/i.test(t)) return task([{ tool: 'undo', params: {} }]);
+  if (/^(?:start (?:over|again)|let'?s start again)$/i.test(t)) return task([{ tool: 'stop', params: {} }]);
 
   // Your look: every setting is a step on its visible row.
   if (apps.some((a) => a.id === 'look')) {

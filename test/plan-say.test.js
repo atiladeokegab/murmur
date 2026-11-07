@@ -78,7 +78,7 @@ test('end to end: "get a price", "the station" quotes the taxi', async () => {
 
 // build-calendar's blind probe: wrong plans pre-empt Gemini, so they go first.
 test('a bare "start" or "do" is not a routine unless one has that name', () => {
-  for (const u of ['start over']) assert.match(tool(u), /^I can't do that one yet/, u);
+  assert.equal(tool('start over'), 'stop{}', 'start over stops, never a routine');
   assert.notEqual(tool('start a new note').split('{')[0], 'run_workflow');
   assert.equal(tool('run my morning', null, { workflows: ['My morning'] }), 'run_workflow{"name":"my morning"}');
 });
