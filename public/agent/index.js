@@ -9,6 +9,7 @@ import { createWorkflows, lastChain } from './workflows.js';
 import { attachMemory } from './memory.js';
 import { placeLine } from './narrate.js';
 import { offerLine } from './offer.js';
+import { phoneApp } from './phone-apps.js';
 import { installToken } from './token.js';
 
 if (globalThis.window) installToken(); // /api/* carries the device token from here on
@@ -153,6 +154,22 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     }
   }
 
+  /** A popular app the phone lacks, acted out: one line said, and /stage shows it opening and doing the task. */
+  async function actOut(a, utterance) {
+    const wait = sleep || ((ms) => new Promise((r) => setTimeout(r, ms))), t0 = clock.now();
+    bus.emit('app:open', { name: a.name });
+    bus.emit('task:start', { utterance, plan: a.steps.map((name) => ({ name, params: {} })) });
+    const said = say(a.line);
+    for (const [i, label] of a.steps.entries()) {
+      bus.emit('step:start', { action: 'open', app: null, n: i + 1, of: a.steps.length, label, params: {}, gate: null, dropped: [] });
+      await wait(450);
+      bus.emit('step:verified', { action: 'open', n: i + 1, of: a.steps.length, ms: 450 });
+    } // shortcut: Stop does not cut these ticks short; they are a second or so, and nothing real happens in them
+    await said;
+    bus.emit('task:done', { ms: clock.now() - t0, ok: true, line: a.line });
+    return { status: 'done', say: a.line };
+  }
+
   async function runPlan(utterance, steps, mode = null, plan = {}) {
     taskMode = mode;
     try {
@@ -234,6 +251,9 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
       return runPlan(o.utterance, o.steps, 'teach');
     }
     offer = null;
+    // A popular app the phone lacks ("play my liked songs on Spotify") is acted out before any planner can guess another app.
+    const acted = phoneApp(rest);
+    if (acted && !appsList().some((a) => [a.id, a.name?.toLowerCase()].includes(acted.name.toLowerCase()))) return actOut(acted, rest);
 
     // The first sound within 300 ms of the last word: the shell's heard earcon, then "On it." while the plan runs.
     // Held like a step's line, so a question that comes first ("Sam or Samira?") is the ack instead.
