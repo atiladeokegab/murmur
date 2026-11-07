@@ -51,6 +51,8 @@ saveLook();
 const status = $('#say');
 const caps = QUIET ? {} : await fetch('/health').then((r) => r.json()).catch(() => ({}));
 let token = 0, lastLine = '', listening = false;
+// Hands-free (the lead's ask): after the first tap, the mic reopens each time Murmur has finished speaking.
+let handsFree = false, speaking = 0, busy = 0, printing = 0, rearmTimer = null;
 const readerSpeaks = () => look.speaker === 'reader';
 // Screen reader mode: TalkBack and VoiceOver take the taps, so a Talk button comes first in the reading order.
 function applySpeaker() { status.setAttribute('aria-live', readerSpeaks() ? 'polite' : 'off'); $('#talk-first').hidden = !readerSpeaks(); }
@@ -62,6 +64,10 @@ const wait = (ms, signal) => new Promise((res) => {
 });
 /** Say one sentence. Settles true when it has been said, false if Stop cut it off. */
 function speak(text, signal) {
+  speaking++;
+  return speakNow(text, signal).finally(() => { if (!--speaking) rearm(); });
+}
+function speakNow(text, signal) {
   text = String(text || '');
   show(text);
   if (signal?.aborted) return Promise.resolve(false);
@@ -381,7 +387,12 @@ function sheetConfirm({ gate, readback, grace = true }) {
   });
 }
 // Every pay, hand or agent: the fingerprint or no pay (gate.js). The spoken or tapped yes never stands alone.
-const fingerprint = (signal) => checkFingerprint({ passkey: { has: passkey.hasPasskey, available: passkey.available, confirm: passkey.confirm }, say: (t) => speak(t, personal.signal), signal });
+const fingerprint = (signal) => {
+  printing++; // the mic stays shut while the fingerprint prompt is up: that touch is the pay rule
+  const r = checkFingerprint({ passkey: { has: passkey.hasPasskey, available: passkey.available, confirm: passkey.confirm }, say: (t) => speak(t, personal.signal), signal });
+  Promise.resolve(r).finally(() => { printing--; rearm(); }).catch(() => {});
+  return r;
+};
 function sheetChoose({ question, choices }) {
   return new Promise((resolve) => {
     showSheet('choose', { question, choices }, (v) => { pending = null; closeSheet(); resolve(Number.isInteger(v) ? v : null); });
@@ -398,10 +409,19 @@ const talk = $('#talk'), talkLabel = $('#talk-label'), typed = $('#typed');
 const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, heard = '', silence = null, still = null;
 function showTyped(reason) { typed.hidden = false; if (reason) talkLabel.textContent = reason; $('#typed-text').focus(); }
-function setListening(on) { listening = on; talk.setAttribute('aria-pressed', String(on)); talkLabel.textContent = on ? 'Listening. Tap anywhere to finish' : 'Tap anywhere to talk'; }
-function summon() {
-  if (listening) { endTalk(); return; }
-  hush(); audioOut(); ding('summon');
+function setListening(on) { listening = on; talk.setAttribute('aria-pressed', String(on)); talkLabel.textContent = handsFree ? 'Listening' : on ? 'Listening. Tap anywhere to finish' : 'Tap anywhere to talk'; }
+// Reopen the mic once Murmur is quiet: not mid-task (unless a sheet waits for a spoken answer), never during a fingerprint.
+function rearm(delay = 350, quiet = false) {
+  clearTimeout(rearmTimer);
+  rearmTimer = setTimeout(() => {
+    if (handsFree && !listening && !speaking && !printing && (!busy || pending) && document.visibilityState !== 'hidden') summon({ auto: true, quiet });
+  }, delay);
+}
+function summon(o) {
+  const auto = o?.auto === true;
+  if (listening) { if (!auto) endTalk(); return; }
+  if (!auto) handsFree = true; // a tap, Space or long press: the browser's one gesture turns hands-free on
+  hush(); audioOut(); if (!o?.quiet) ding('summon');
   if (!Rec) { showTyped(); return; }
   heard = '';
   rec = new Rec(); rec.lang = 'en-GB'; rec.interimResults = true; rec.continuous = true;
@@ -411,8 +431,11 @@ function summon() {
     clearTimeout(silence); silence = setTimeout(endTalk, 600);
     clearTimeout(still); still = setTimeout(() => agent?.prefetch?.(heard.trim()), 400); // plan while they finish
   };
-  rec.onerror = (e) => { if (/not-allowed/.test(e.error)) showTyped("Murmur can't hear you: allow the microphone"); };
-  rec.onend = () => { clearTimeout(silence); setListening(false); if (heard.trim()) hear(heard.trim(), 'voice'); };
+  rec.onerror = (e) => {
+    if (!/no-speech|aborted/.test(e.error)) handsFree = false; // a mic that can't open must not loop
+    if (/not-allowed/.test(e.error)) showTyped("Murmur can't hear you: allow the microphone");
+  };
+  rec.onend = () => { clearTimeout(silence); setListening(false); if (heard.trim()) hear(heard.trim(), 'voice'); else rearm(300, true); }; // silence: listen again, no ding
   try { rec.start(); setListening(true); show('Listening'); } catch { showTyped(); }
 }
 function endTalk() { clearTimeout(silence); try { rec?.stop(); } catch { /* already stopped */ } }
@@ -438,10 +461,17 @@ function think() {
   let n = 0;
   thinking = setInterval(() => { if (++n > 12) stopThinking(); else if (!QUIET) play(PULSE); }, 600);
 }
+const ENDS_HANDS_FREE = /^(?:ok(?:ay)?,? )?(?:stop|good ?bye|bye|be quiet|quiet|shush|stop listening)\b/i;
 function hear(text, path) {
   ding('heard');
   lastUtterance = text;
-  if (agent) { think(); agent.hear(text, { path }); return; }
+  if (ENDS_HANDS_FREE.test(text.trim())) { handsFree = false; setListening(listening); }
+  if (/^(?:ok(?:ay)?,? )?(?:good ?bye|bye)\b/i.test(text.trim())) { speak('Bye for now. Tap anywhere when you need me.', personal.signal); return; }
+  if (agent) {
+    think(); busy++;
+    Promise.resolve(agent.hear(text, { path })).finally(() => { busy--; rearm(); }).catch((e) => console.error(e));
+    return;
+  }
   // No agent on this build: a choice sheet still takes a spoken name ("Samira").
   if (pending?.kind === 'choose') {
     const i = pending.choices.findIndex((c) => new RegExp(`\\b${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text));
@@ -499,7 +529,7 @@ function setNoLook(on) {
   look.nolook = on; saveLook();
   nl.hidden = !on;
   document.documentElement.classList.toggle('no-look', on);
-  if (on) speak('No-look mode. Tap anywhere and tell me what you need. Swipe down to stop.', personal.signal);
+  if (on) speak(handsFree ? 'No-look mode. Just tell me what you need. Say stop, or swipe down, to stop.' : 'No-look mode. Tap anywhere and tell me what you need. Swipe down to stop.', personal.signal);
   else { speak('No-look mode is off.', personal.signal); $('#board .tile')?.focus(); }
 }
 $('#nolook-exit').addEventListener('click', () => setNoLook(false));
