@@ -4,7 +4,11 @@
 import { mountApp } from './load.js';
 import { appKv } from './kv.js';
 import { browserKV } from '../ports/browser-kv.js';
-import BUILT_IN from '../apps/apps.js';   // what came with the phone: never the saved list, which a page can write
+import BUILT_IN from '../apps/apps.js';   // names a plug-in may never take, even before that app is on this phone
+// Removable means installApp itself registered this very app object. Never the saved list, which a page can write:
+// a forged {id:'hello'|'phone'|'look'} row cannot make a built-in, or anything the shell registers, removable.
+const ADDED = new WeakSet();
+const added = (o, id) => ADDED.has(o.registry.get(id));
 
 export const PLUGINS = new URL('../plugins/', import.meta.url);   // /plugins/ in the browser
 const AREA = 'os.plugins';
@@ -69,6 +73,7 @@ export async function installApp(url, o) {
   checkGates(app);
   if (BUILT_IN.includes(app.id)) throw new Error(`app ${app.id}: that name belongs to an app that comes with the phone`);
   registry.register(app);                    // the built-in rules: id, fields, gates; throws on an id collision
+  ADDED.add(app);
   let root, kv;
   try {
     kv = appKv(app.id, port(o));
@@ -87,6 +92,7 @@ export async function installApp(url, o) {
     }
   } catch (e) {
     registry.unregister(app.id);
+    ADDED.delete(app);
     (root ?? host.querySelector?.(`#app-${app.id}`))?.remove?.();   // a mount that threw left its section behind
     throw e;
   }
@@ -96,8 +102,9 @@ export async function installApp(url, o) {
 /** Remove a plug-in: its tools, its section, its kv data and its place in the installed list. Built-in apps are refused. */
 export async function uninstallApp(id, o) {
   const list = await installed(o);
-  if (BUILT_IN.includes(id) || !list.some((x) => x.id === id)) throw new Error(`${id} is not an added app.`);
+  if (!added(o, id) || !list.some((x) => x.id === id)) throw new Error(`${id} is not an added app.`);
   await port(o).set(AREA, 'installed', list.filter((x) => x.id !== id));   // first: if the save fails, nothing changed
+  ADDED.delete(o.registry.get(id));
   o.registry.unregister(id);
   o.host?.querySelector(`#app-${id}`)?.remove?.();
   const kv = appKv(id, port(o));   // its data goes with it: a reinstall starts clean
@@ -111,7 +118,7 @@ export async function uninstallApp(id, o) {
 export async function removeApp(id, o, confirm = o.confirm) {
   const app = o.registry.get(id);
   if (!app) return { ok: false, id, say: "That app isn't on your phone." };
-  if (BUILT_IN.includes(id) || !(await installed(o)).some((x) => x.id === id)) return { ok: false, id, say: `${app.name} came with the phone, so it stays.` };
+  if (!added(o, id) || !(await installed(o)).some((x) => x.id === id)) return { ok: false, id, say: `${app.name} came with the phone, so it stays.` };
   if ((await confirm({ app: id, gate: 'delete', readback: `Remove ${app.name} from your phone?` })) !== true) return { ok: false, id, cancelled: true, say: 'Kept it.' };
   try { await uninstallApp(id, o); } catch (e) {
     return e.removed ? { ok: true, id, say: `Removed ${app.name}, but some of its data could not be cleared.` } : { ok: false, id, say: `I couldn't remove ${app.name}. It is still on your phone.` };

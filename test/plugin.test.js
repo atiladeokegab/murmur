@@ -421,3 +421,26 @@ test('Hello: Send always asks, even on a hand tap; a No, or no confirm on the mo
   await tap(r, 'On my way');
   assert.deepEqual(hello.state().sent, ['On my way']);
 });
+
+test('review: forged phone and look rows cannot remove the shell\'s own apps or wipe their data', async () => {
+  const storage = fakeStorage();
+  storage.setItem('murmur:os.plugins:installed', JSON.stringify([{ id: 'phone', path: 'taxi/index.js' }, { id: 'look', path: 'grocer/index.js' }]));
+  const p = await phone({ storage });
+  const { createPhone } = await import('../public/os/phone.js');
+  const f = () => false;
+  p.registry.register(createPhone({ stop: f, where: f, noLook: f, isNoLook: f, sound: f, isSound: f }));   // as the shell does
+  p.registry.register((await import('../public/apps/look/index.js')).default);
+  for (const id of ['phone', 'look']) await p.plug.port.set(`app.${id}`, 'mine', 'keep me');
+  let asked = 0;
+  const yes = async () => { asked++; return true; };
+  for (const [id, name] of [['phone', 'Phone'], ['look', 'Your look']]) {
+    const app = p.registry.get(id);
+    assert.equal((await removeApp(id, p.plug, yes)).say, `${app.name} came with the phone, so it stays.`, id);
+    assert.equal((await removeByName(app.name, p.plug, yes)).say, `${app.name} came with the phone, so it stays.`, name);
+    await assert.rejects(uninstallApp(id, p.plug), /not an added app/);
+    assert.ok(p.registry.get(id), `${id} still registered`);
+    assert.equal(await p.plug.port.get(`app.${id}`, 'mine'), 'keep me', `${id} data kept`);
+  }
+  assert.equal(asked, 0, 'never asked');
+  assert.ok(p.names().includes('taxi__book') && p.names().includes('grocer__order'), 'the modules the rows point at still load');
+});
