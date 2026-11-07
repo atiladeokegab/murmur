@@ -96,7 +96,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
         const ok = await builtin(step, task);
         if (ok === false) {
           reason = 'Not done.'; task.bus.emit('step:failed', { action: step.tool, n, of, reason }); status = 'failed';
-          failed = { utterance, steps: steps.slice(i) }; line = "That didn't work. Try again, or stop."; break;
+          failed = { utterance, steps: steps.slice(i) }; line = "That didn't work. Say it another way, or stop."; break;
         }
         task.bus.emit('step:verified', { action: step.tool, n, of, ms: clock.now() - s0 });
         doneSteps.push(step); more = '';
@@ -140,7 +140,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
         else {
           status = 'failed'; reason = r.reason;
           failed = { utterance, steps: steps.slice(i) };
-          line = `${r.reason} Try again, I'll do it, or stop.`;
+          line = `${r.reason} Say it another way, or stop.`;
         }
         break;
       }

@@ -138,7 +138,7 @@ test('a failed verify stops the task, with no tick, and offers the way out', asy
   assert.equal(out.status, 'failed');
   assert.ok(!s.ev('step:verified').some((e) => e.action === 'messages__reply'));
   assert.ok(s.ev('step:failed').some((e) => e.action === 'messages__reply'));
-  assert.equal(out.line, "The reply box did not take it. Try again, I'll do it, or stop.");
+  assert.equal(out.line, "The reply box did not take it. Say it another way, or stop.");
   assert.equal(s.ev('task:done')[0].ok, false);
   assert.equal(s.state('messages').draft, '');
 });

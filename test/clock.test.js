@@ -66,7 +66,6 @@ test('clock: set a 10 minute timer, how long is left, and it ends with the earco
   assert.equal(dings, 1);
   assert.equal(p.said().at(-1), "Time's up. Your 10 minute timer is done.");
   assert.equal(p.s().timer, null);
-  assert.equal((await p.run('clock__setTimer', { length: 'soon' })).ok, false, 'not a length');
 });
 
 test('clock: cancel says what it cancelled, and the earcon never fires', async () => {
@@ -98,4 +97,27 @@ test('clock: every say phrase plans to its own clock__ tool', async () => {
   }
   assert.deepEqual(demoPlan('Set a timer for 10 minutes', apps).plan[0].params, { length: '10 minutes' });
   assert.deepEqual(demoPlan('Wake me at 7', apps).plan[0].params, { time: '7' });
+});
+
+test('clock: spoken times and lengths parse; nothing heard is 7 am or 10 minutes, said back, never "try again"', async () => {
+  for (const x of ['7 a.m. tomorrow morning', 'seven a.m.', '7am', "7 o'clock", 'at 7', 'seven in the morning']) assert.deepEqual(timeOf(x), { h: 7, m: 0 }, x);
+  assert.deepEqual(timeOf('6:30 p.m.'), { h: 18, m: 30 });
+  for (const x of ['two minute', '2-minute', '2 minutes']) assert.equal(lengthOf(x), 120000, x);
+  const p = await phone();
+  assert.equal((await p.run('clock__setAlarm', { time: 'tomorrow morning' })).ok, true);
+  assert.equal(p.said().at(-1), 'Alarm set for 7 am.');
+  assert.equal((await p.run('clock__setTimer', { length: 'calendar' })).ok, true);
+  assert.match(p.said().at(-1), /10 minute/);
+  await p.run('clock__cancelTimer', {});
+  assert.equal((await p.run('clock__setTimer', {})).ok, true, 'no length said is 10 minutes');
+  const apps = describeRegistry(p.registry);
+  const plan = (t) => demoPlan(t, apps).plan.map((x) => [x.tool, x.params]);
+  // Speech recognition's own spellings reach the right tool with a time or length the clock can read.
+  for (const t of ['Set an alarm at 7 a.m. tomorrow morning', 'alarm at seven a.m.']) {
+    const [[tool, ps]] = plan(t); assert.equal(tool, 'clock__setAlarm', t); assert.deepEqual(timeOf(ps.time), { h: 7, m: 0 }, t);
+  }
+  for (const [t, ms] of [['Set up a two minute reminder', 120000], ['a 2-minute reminder', 120000], ['remind me in ten minutes', 600000]]) {
+    const [[tool, ps]] = plan(t); assert.equal(tool, 'clock__setTimer', t); assert.equal(lengthOf(ps.length), ms, t);
+  }
+  assert.equal(plan('set a calendar reminder')[0][0], 'clock__setTimer');
 });
