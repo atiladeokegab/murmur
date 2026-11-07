@@ -1,0 +1,56 @@
+{
+  "balance": 124050,
+  "payees": [
+    {
+      "id": "mum",
+      "name": "Mum"
+    },
+    {
+      "id": "sam",
+      "name": "Sam"
+    },
+    {
+      "id": "landlord",
+      "name": "Landlord"
+    }
+  ],
+  "transactions": [
+    {
+      "id": "t1",
+      "name": "Landlord",
+      "pence": -85000,
+      "when": "Monday",
+      "note": "Rent"
+    },
+    {
+      "id": "t2",
+      "name": "Green Street Grocer",
+      "pence": -1240,
+      "when": "Yesterday",
+      "note": ""
+    },
+    {
+      "id": "t3",
+      "name": "Sam",
+      "pence": 1500,
+      "when": "Today",
+      "note": "Pizza"
+    },
+    {
+      "id": "t4",
+      "name": "Corner Café",
+      "pence": -385,
+      "when": "Today",
+      "note": ""
+    }
+  ],
+  "screen": "home",
+  "lastPaid": null,
+  "cardFrozen": false,
+  "draft": {
+    "mode": "pay",
+    "to": [],
+    "amount": "",
+    "note": ""
+  }
+}

@@ -11,4 +11,5 @@ export default [
   'places',
   'weather',
   'clock',
+  'bank',
 ];
