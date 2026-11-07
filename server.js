@@ -69,6 +69,7 @@ export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
     if (url.pathname === '/health') return send(res, 200, { ok: true, provider: PROVIDER, live: (!!KEY || !!LIVE_URL) && !process.env.MURMUR_NO_LIVE, tts: !!KEY });
+    if (url.pathname.startsWith('/api/bus') && !relay.allowed(req, url)) return send(res, 403, { error: 'forbidden' });
     if (url.pathname === '/api/bus/stream' && req.method === 'GET') return relay.stream(req, res);
     const handler = api[`${req.method} ${url.pathname}`];
     if (handler) return send(res, 200, await handler(await readJson(req)));

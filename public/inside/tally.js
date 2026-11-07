@@ -25,7 +25,7 @@ export function createTally() {
         if (e.provider === 'gemini') t.modelCalls++; // the contract has no model-call event; only an optional provider tag
         break;
       case 'step:start':
-        step = { action: e.action, app: e.app ?? null, label: e.label ?? '', params: e.params ?? {}, gate: e.gate ?? null,
+        step = { action: e.action, app: e.app ?? null, task: e.task ?? null, label: e.label ?? '', params: e.params ?? {}, gate: e.gate ?? null,
           n: e.n ?? null, of: e.of ?? null, control: null, result: 'running', ms: null, reason: null, yes: false };
         cols.Actions.push(step);
         if (e.dropped?.length) {
@@ -38,8 +38,8 @@ export function createTally() {
         break;
       case 'confirm':
         t.asked++;
-        // Only a yes for this step's own gate, after its step:start, lets a gated step through.
-        if (step && step.gate && e.gate === step.gate && e.result === true) step.yes = true;
+        // Only a yes for this step's own gate, app and task, after its step:start, lets a gated step through.
+        if (step && step.gate && e.gate === step.gate && e.result === true && e.app === step.app && (e.task ?? null) === step.task) step.yes = true;
         cols.Asked.push({ app: e.app ?? null, gate: e.gate ?? null, readback: e.readback ?? '', result: e.result ?? null });
         break;
       case 'step:verified':

@@ -12,6 +12,7 @@ const ROUTES = {
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9:]+/g, ' ').trim();
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
+const SIM = 'Simulated fares for the demo. Nothing is booked or charged.';
 const sentence = (f) => `${f.airline} at ${f.spoken} from ${f.airport}, ${f.stops ? f.hours : `direct, ${f.hours}`}, ${money(f.price)}.`;
 
 // "9:40", "the 9:40", "940", "nine forty", "the second", "2" -> a flight in the results.
@@ -68,6 +69,7 @@ export function createTravel() {
       ui.btn('newSearch', 'New search', on.newSearch));
     else if (s.view === 'flight') kids.push(E('p', {}, sentence(sel())), ui.btn('hold', 'Hold this flight', on.hold, { main: true }), ui.btn('back', 'Back to the flights', on.back));
     else kids.push(E('p', {}, app.read()), ui.btn('back', 'Back to the flights', on.back));
+    if (s.view !== 'held') kids.push(E('p', { className: 'm-app-sim' }, SIM));
     swap(body, kids);
   }
 
@@ -82,7 +84,7 @@ export function createTravel() {
     read() {
       if (s.view === 'held') return `Held: ${s.held.airline}, ${cap(s.held.day)} at ${s.held.spoken}, for 24 hours. Nothing is charged.`;
       if (s.view === 'flight') return sentence(sel());
-      if (s.view === 'results') return `Three flights ${cap(s.query.day)}. ${s.results.map(sentence).join(' ')}`;
+      if (s.view === 'results') return `Three flights ${cap(s.query.day)}. ${s.results.map(sentence).join(' ')} ${SIM}`;
       return 'Travel. Ask for flights from London to Lisbon.';
     },
     place() {

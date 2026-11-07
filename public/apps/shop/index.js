@@ -31,6 +31,8 @@ function shopOf(q) {
   if (!n) return 'demo-cafe';
   return Object.keys(SHOPS).find((id) => norm(SHOPS[id].name).includes(n) || n.includes(norm(SHOPS[id].name).split(' ')[0])) || null;
 }
+// A named shop must be one we know: an unknown one finds nothing rather than falling back to every shop.
+const itemFor = (p) => { const shop = p.shop ? shopOf(p.shop) : null; return p.shop && !shop ? null : findItem(p.item, shop); };
 function findItem(q, inShop) {
   const n = norm(q);
   for (const shop of inShop ? [inShop] : Object.keys(SHOPS))
@@ -175,12 +177,12 @@ export function createShop({ now = () => Date.now() } = {}) {
         gate: null,
         hint: 'Each item has its own Add button, after its price',
         async run(p, ctx) {
-          const f = findItem(p.item, p.shop ? shopOf(p.shop) : null);
-          if (!f) throw new Error(`I can't find ${p.item} in the shops.`);
+          const f = itemFor(p);
+          if (!f) throw new Error(`I can't find ${p.item} in Shop.`);
           await toShop(ctx);
           await tap(ctx, 'add', `${f.shop}/${f.id}`);
         },
-        verify(st, p) { const f = findItem(p.item, p.shop ? shopOf(p.shop) : null); return (!!f && st.basket.some((l) => l.shop === f.shop && l.id === f.id)) || `${p.item} is not in the basket.`; },
+        verify(st, p) { const f = itemFor(p); return (!!f && st.basket.some((l) => l.shop === f.shop && l.id === f.id)) || `${p.item} is not in the basket.`; },
       },
       pay: {
         describe: 'Pay for the basket', doing: 'Paying for your order',

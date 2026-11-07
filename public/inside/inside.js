@@ -90,7 +90,8 @@ function restart() {
 restart();
 
 let pending = false;
-const src = new EventSource('/api/bus/stream');
+const t = new URLSearchParams(location.search).get('t'); // /inside?t=TOKEN when the server sets MURMUR_TOKEN
+const src = new EventSource(`/api/bus/stream${t ? `?t=${encodeURIComponent(t)}` : ''}`);
 // The relay replays its whole ring on every connect, so start the model over or a reconnect counts everything twice.
 src.onopen = () => { restart(); document.body.dataset.link = 'on'; $('link').textContent = 'Joined to the phone'; };
 src.onerror = () => { document.body.dataset.link = 'off'; $('link').textContent = 'Lost the phone. Reconnecting.'; };

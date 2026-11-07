@@ -58,6 +58,9 @@ test('reorder, add, and failures in words', async () => {
   assert.ok((await run('shop__addToBasket', { item: 'croissant' })).ok);
   assert.deepEqual(app.state().basket.map((l) => l.id), ['croissant'], 'one shop per basket');
   assert.match((await run('shop__addToBasket', { item: 'caviar' })).reason, /can't find caviar/);
+  const before = app.state().basket.length;
+  assert.match((await run('shop__addToBasket', { item: 'croissant', shop: 'Unknown Café' })).reason, /^I can't find croissant in Shop\.$/, 'an unknown shop is not the Demo Café');
+  assert.equal(app.state().basket.length, before, 'nothing added');
   assert.match((await run('shop__orderUsual', { shop: 'the bank' })).reason, /don't know that shop/);
   await app.reset();
   assert.equal((await run('shop__pay')).ok, false);

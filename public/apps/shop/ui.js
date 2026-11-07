@@ -67,6 +67,7 @@ export const CSS = `
 .m-app .m-app-place { color: var(--c-quiet); }
 .m-app-btn { min-height: var(--h-link); min-width: var(--h-link); padding: var(--pad-tile); font: inherit; font-weight: 700; color: var(--c-ink); background: var(--c-board); border: var(--bw-talk) solid var(--c-quiet); border-radius: var(--r-btn); cursor: pointer; }
 .m-app-btn:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-off); }
+.m-app-sim { color: var(--c-quiet); font-size: var(--fs-hint); }
 .m-app-main { background: var(--c-accent); color: var(--c-on-accent); border-color: var(--c-accent); }
 .m-app-body [tabindex="-1"]:focus { outline: none; }
 /* 400% zoom: one control per line, full width, so no label breaks mid-word or runs off the screen. */

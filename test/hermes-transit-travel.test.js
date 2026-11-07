@@ -39,6 +39,7 @@ test('Travel: three flights in three sentences, book the 9:40 through the pay ga
   const { run, asked } = await phone([app], { answers: [true] });
   assert.ok((await run('travel__findFlights', { from: 'London', to: 'Lisbon', day: 'Friday' })).ok);
   assert.match(app.read(), /^Three flights Friday\. Northline at six fifty-five.*Tagus Air at nine forty.*Atlantica at two twenty/);
+  assert.match(app.read(), /Simulated fares for the demo\. Nothing is booked or charged\.$/, 'static fares say so');
   assert.ok((await run('travel__pick', { flight: 'the 9:40' })).ok);
   assert.ok((await run('travel__hold')).ok);
   assert.deepEqual(asked.map((q) => [q.gate, q.readback]), [['pay', 'Tagus Air, Friday at nine forty from Heathrow to Lisbon, £88, held for 24 hours.']]);
