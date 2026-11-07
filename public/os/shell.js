@@ -50,6 +50,8 @@ saveLook();
 // ---------- one voice: Murmur speaks, or the screen reader reads the one status region ----------
 const status = $('#say');
 const caps = /[?&]quiet\b/.test(location.search) ? {} : await fetch('/health').then((r) => r.json()).catch(() => ({}));
+// GPT live (the lead, 7 Nov): OpenAI's voice when the server has the key, or ?voice=gpt; any failure falls back for good.
+let gpt = null, gptOn = false, gptBroken = !(caps.gpt || /[?&]voice=gpt\b/.test(location.search)), collect = null;
 let token = 0, lastLine = '', listening = false;
 // Hands-free (the lead's ask): after the first tap, the mic reopens each time Murmur has finished speaking.
 let handsFree = false, speaking = 0, busy = 0, printing = 0, rearmTimer = null;
@@ -57,7 +59,7 @@ const readerSpeaks = () => look.speaker === 'reader';
 // Screen reader mode: TalkBack and VoiceOver take the taps, so a Talk button comes first in the reading order.
 function applySpeaker() { status.setAttribute('aria-live', readerSpeaks() ? 'polite' : 'off'); $('#talk-first').hidden = !readerSpeaks(); }
 function show(text) { status.textContent = text; if (text) lastLine = text; }
-function hush() { token++; stopAudio(); try { speechSynthesis.cancel(); } catch { /* no speech */ } }
+function hush() { token++; gpt?.hush(); stopAudio(); try { speechSynthesis.cancel(); } catch { /* no speech */ } }
 const wait = (ms, signal) => new Promise((res) => {
   const t = setTimeout(() => res(true), ms);
   signal?.addEventListener('abort', () => { clearTimeout(t); res(false); }, { once: true });
@@ -71,6 +73,7 @@ function speakNow(text, signal) {
   text = String(text || '');
   show(text);
   if (signal?.aborted) return Promise.resolve(false);
+  if (gptOn) { if (collect) collect.push(text); else if (text) gpt.say(text); return Promise.resolve(true); } // GPT says it, in its voice
   // Barge-in: while the mic is open nothing new is voiced (shown only), so the queue drains and the mic never hears Murmur
   if (QUIET || !text || listening) return Promise.resolve(true);
   if (readerSpeaks()) return wait(Math.min(4000, 600 + text.length * 55), signal); // give TalkBack time to read it
@@ -426,8 +429,27 @@ function rearm(delay = 350, quiet = false) {
     if (Rec && handsFree && !listening && !speaking && !printing && (!busy || pending) && document.visibilityState !== 'hidden') summon({ auto: true, quiet });
   }, delay);
 }
+async function startGpt() {
+  if (gptOn) { gpt.close(); gptOn = false; setListening(false); return; } // a second tap hangs up
+  const { createGpt, toUtterance } = await import('../voice/gpt.js');
+  gpt ||= createGpt({
+    onCaption: (t) => show(t),
+    onTool: async (name, args) => { // the apps run through the agent, so /stage shows them; its lines come back for GPT to say
+      const said = toUtterance(name, args);
+      if (!said) return { say: "Done. I've set that up for you." };
+      const lines = collect = [];
+      try { await Promise.race([hear(said, 'voice'), new Promise((r) => setTimeout(r, 5000))]); } // a gate waits for a yes: return its question
+      finally { collect = null; }
+      return { say: lines.filter((t) => t && t !== 'On it.').join(' ') || 'Done.' };
+    },
+  });
+  try { show('Connecting'); await gpt.start(); gptOn = true; setListening(true); show('Listening'); }
+  catch (e) { console.warn('GPT live unavailable, using the usual voice', e.message); gptBroken = true; gpt.close(); summon(); }
+}
 function summon(o) {
   const auto = o?.auto === true;
+  if (!gptBroken && !auto) { startGpt(); return; }
+  if (gptOn) return; // GPT owns the mic: no browser recogniser alongside it
   if (listening) { if (!auto) endTalk(); return; }
   if (!auto) { handsFree = true; quietRuns = 0; } // a tap, Space or long press: the browser's one gesture turns hands-free on
   hush(); audioOut(); if (!o?.quiet) ding('summon');
@@ -485,7 +507,7 @@ function hear(text, path) {
   if (/^(?:ok(?:ay)?,? )?(?:good ?bye|bye)\b/i.test(text.trim())) { speak('Bye for now. Tap anywhere when you need me.', personal.signal); return; }
   if (agent) {
     think(); busy++;
-    Promise.resolve(agent.hear(text, { path })).finally(() => { busy--; rearm(); }).catch((e) => console.error(e));
+    return Promise.resolve(agent.hear(text, { path })).finally(() => { busy--; rearm(); }).catch((e) => console.error(e));
     return;
   }
   // No agent on this build: a choice sheet still takes a spoken name ("Samira").

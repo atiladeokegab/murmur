@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as demo from './lib/demo.js';
 import * as gemini from './lib/gemini.js';
+import * as openai from './lib/openai.js';
 import * as relay from './lib/relay.js';
 import * as eleven from './lib/eleven.js';
 import * as agent from './lib/agent/planner.js';
@@ -13,6 +14,7 @@ import { createGuard } from './lib/guard.js';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const KEY = process.env.GEMINI_API_KEY || '';
 const PROVIDER = KEY ? 'gemini' : 'demo';
+const OPENAI = process.env.OPENAI_API_KEY || ''; // GPT live is on only with this key; never logged
 const ELEVEN = process.env.ELEVENLABS_API_KEY || '';
 const ELEVEN_DAILY_CHARS = Number(process.env.ELEVENLABS_DAILY_CHARS) || 60000; // the URL is public: cap what ElevenLabs can bill
 const LIVE_URL = process.env.MURMUR_LIVE_URL || ''; // test only: point the browser at a fake Live server
@@ -61,6 +63,11 @@ const api = {
     if (!KEY || process.env.MURMUR_NO_LIVE) throw Object.assign(new Error('live unavailable'), { status: 503 });
     try { return await gemini.liveToken(KEY); }
     catch (e) { console.warn(`[live] token failed (${String(e.message).slice(0, 40)})`); throw Object.assign(new Error('live unavailable'), { status: 503 }); }
+  },
+  async 'POST /api/openai-session'() {
+    if (!OPENAI) throw Object.assign(new Error('gpt live unavailable'), { status: 503 });
+    try { return await openai.session(OPENAI); }
+    catch (e) { console.warn(`[gpt] session failed (${String(e.message).slice(0, 40)})`); throw Object.assign(new Error('gpt live unavailable'), { status: 503 }); }
   },
   async 'POST /api/tts'(body) {
     return speakLine(String(body.text || '').slice(0, 400));
@@ -123,7 +130,7 @@ const guard = createGuard();
 export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
-    if (url.pathname === '/health') return send(res, 200, { ok: true, provider: PROVIDER, live: (!!KEY || !!LIVE_URL) && !process.env.MURMUR_NO_LIVE, tts: !!KEY || !!ELEVEN });
+    if (url.pathname === '/health') return send(res, 200, { ok: true, provider: PROVIDER, live: (!!KEY || !!LIVE_URL) && !process.env.MURMUR_NO_LIVE, tts: !!KEY || !!ELEVEN, gpt: !!OPENAI });
     if (url.pathname.startsWith('/api/bus') && !relay.allowed(req, url)) return send(res, 403, { error: 'forbidden' });
     if (url.pathname === '/api/bus/stream' && req.method === 'GET') return relay.stream(req, res, relay.roomOf(url) || 'stage');
     // The phone forwards every bus event: same-origin checked above, no model behind it, so it skips the rate limit and the daily cap.
