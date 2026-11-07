@@ -85,14 +85,14 @@ already knows are planned on the phone and never leave it. The closest prior
 work is Apple's App Intents and Android's App Actions; Murmur makes that kind of declared action the only way
 an app can be driven, by a person or the agent.
 
-Measured on our demo lines (9 lines, 27 runs, on 7 Nov 2026):
+Measured on 7 Nov 2026 in headless Chromium, three runs per line, on main and on the live app:
 
 | | |
 |---|---|
-| Screenshots sent off the phone | **0** |
-| Model calls to plan | **0**. Every demo line was planned on the phone; a phrase Murmur doesn't know goes to Gemini |
-| Traffic off the phone | only the spoken text sent to the voice service, 1.5 to 3.7 KB a task; none with the phone's own voice |
-| Time to "On it." | **3 to 6 ms** after the words reach the phone |
+| Screenshots sent off the phone | **0**, in every run |
+| Model calls to plan the demo lines | **0**. "Text Sam", "What's on today", "Make the text bigger" and "Stop" are planned on the phone |
+| When the model is needed | one call of about 9.6 KB of text: the list of apps and what they can do. No image |
+| Time to "On it." | **1 to 6 ms** after the words reach the phone |
 
 ## How it works
 
