@@ -68,9 +68,11 @@ const app = {
       if (!(os?.confirm && await os.confirm({ gate: 'delete', readback: `Cancel your taxi to ${booking.name}?` }))) return;
       note = `Cancelled your taxi to ${booking.name}. You were not charged.`;
       booking = null;
+      const had = root.ownerDocument.activeElement === cancelBtn;
       await save(); render();
+      if (had) toBox.focus();   // Cancel is now disabled: don't leave focus on it
     });
-    line = el('p', { id: 'taxi-line', className: 'app-done' });
+    line = el('p', { id: 'taxi-line', className: 'app-done', role: 'status' });   // a hand tap's result is announced
     trip = el('p', { id: 'taxi-trip', className: 'app-why' });
     root.append(
       el('h2', { id: 'taxi-h', textContent: 'Northline Taxis' }),
