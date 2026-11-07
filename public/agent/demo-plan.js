@@ -278,6 +278,8 @@ function plan(said, apps, context, dry) {
   if ((m = raw.match(/^(?:tell|message|text)\s+(\w+)[:]\s+([\s\S]+)$/i))) return msg(m[1], m[2], true);
   if ((m = t.match(/^(?:send|text)\s+(\w+)\s+a\s+(?:message|text|note)\s+(?:saying|that|to say)?\s*(.+)$/i)) ||
       (m = t.match(/^(?:send|write)\s+(?:a\s+)?(?:message|text|note)\s+to\s+(\w+)\s+(?:saying|that|to say)\s*(.+)$/i))) return msg(m[1], m[2], true);
+  // After a Calendar move with someone, a bare "tell Mum" says what moved (the move's done line suggests it).
+  if ((m = t.match(/^(?:tell|text|message|let)\s+(\w+)(?:\s+know)?$/i)) && context.moved) return msg(m[1], `${context.moved.what} is now on ${context.moved.day} at ${context.moved.time}.`, true);
   if ((m = t.match(/^(?:send|write)\s+(?:a\s+)?(?:message|text|note)\s+to\s+(\w+)$/i))) return msg(m[1], '', true);
   if ((m = t.match(/^write\s+to\s+(?!(?:my|the|a|an)\b)(\w+)(?:[,:]?\s+(.{2,}))?$/i))) return msg(m[1], m[2] || '', true); // a person, not the Writer
   if ((m = t.match(/^let\s+(\w+)\s+know\s+(?:that\s+)?(.{2,})$/i))) return msg(m[1], m[2], true);

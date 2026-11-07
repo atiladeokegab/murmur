@@ -66,7 +66,7 @@ test('calendar: "Move lunch with Mum to Wednesday" is free, moved, verified, off
   const p = await phone();
   const r = await p.run('calendar__move', { event: 'lunch with Mum', day: 'Wednesday' });
   assert.deepEqual(r.ok, true, r.reason);
-  assert.deepEqual(p.said().slice(-2), ["Wednesday's free.", 'Moved. Tell Mum?']);
+  assert.deepEqual(p.said().slice(-2), ["Wednesday's free.", 'Moved to Wednesday. To let Mum know, say "tell Mum".']);
   assert.equal(ev(p.s(), 'lunch').day, 'Wednesday');
   assert.deepEqual(p.s().lastMoved, { id: 'lunch', from: 'Tuesday', to: 'Wednesday', time: '12:30' });
   assert.equal(p.last('step:verified').action, 'calendar__move');

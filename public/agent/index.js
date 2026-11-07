@@ -38,6 +38,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {}, onStop = () => {}, onCut = () => {} }) {
   const appsList = () => (Array.isArray(registry) ? registry : typeof registry?.list === 'function' ? registry.list() : Object.values(registry || {}));
   const app = (id) => (typeof registry?.get === 'function' ? registry.get(id) : appsList().find((a) => a.id === id));
+  let movedAt = null; // when this agent last moved a Calendar event; a send or 2 minutes ends "tell Mum" about it
   let lastSaid = '', lastMore = ''; // lastMore: the last result's longer answer ("tell me more")
   // One voice, one line at a time: each line waits for the one before, so steps can act while a line is spoken.
   // Stop empties the queue (gen moves on), so nothing queued is said after it.
@@ -156,6 +157,8 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     taskMode = mode;
     try {
       const r = await runner.run({ utterance, steps, plan });
+      if (steps.some((x) => x.tool === 'messages__send')) movedAt = null;
+      if (r.status === 'done' && steps.some((x) => x.tool === 'calendar__move')) movedAt = clock.now();
       lastMore = r.more || '';
       if (lastMore && answers() === 'detailed') await say(lastMore);
       return r;
@@ -260,7 +263,13 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   let early = null;
   const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
   let slotAsk = null; // "get a price": the words a slot question ("Where to?") waits to finish
-  async function contextNow() { return { app: current(), ...(slotAsk ? { asked: slotAsk } : {}), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [] }; }
+  async function contextNow() {
+    // the last Calendar move with someone, so "tell Mum" can say what moved
+    const fresh = movedAt != null && clock.now() - movedAt < 120000;
+    const cal = fresh && app('calendar')?.state?.(), mv = cal?.lastMoved, ev = mv && cal.events?.find((e) => e.id === mv.id);
+    const moved = ev?.with ? { what: ev.title.replace(/\s+with\s+.+$/i, ''), with: ev.with, day: mv.to, time: mv.time } : null;
+    return { app: current(), ...(slotAsk ? { asked: slotAsk } : {}), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [], ...(moved ? { moved } : {}) };
+  }
   async function planFor(text) {
     const context = await contextNow();
     if (early && early.text === norm(text) && early.app === context.app) { const e = early; early = null; return e.plan; }
