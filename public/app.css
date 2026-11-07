@@ -191,7 +191,9 @@ li.now + li { border-top: 0; }
 /* ---------- talk bar ---------- */
 footer { flex: none; container: bar / inline-size; padding: 8px var(--gutter) max(12px, env(safe-area-inset-bottom)); background: var(--c-page); border-top: 1px solid var(--c-slat); }
 footer > * { width: min(100%, var(--w-column)); margin-inline: auto; }
-.say { display: flex; gap: 0.5rem; align-items: baseline; margin-top: 0; margin-bottom: 0.5rem; padding: 0 1rem; min-height: 1.4em; font-size: var(--fs-say); max-height: 5.6em; overflow-y: auto; }
+.say { display: flex; gap: 0.5rem; align-items: baseline; margin-top: 0; margin-bottom: 0.5rem; padding: 0 1rem; min-height: 1.4em; font-size: var(--fs-say); max-height: min(5.6em, 14svh); overflow-y: auto; }
+/* Big text: the talk bar keeps to its job, so the screen above it still has room to read and scroll. */
+@container bar (max-width: 22em) { .talk .hint { display: none; } .talk { min-height: var(--h-link); padding-block: 0.4rem; } }
 .say #say { min-width: 0; }
 .say .who { color: var(--c-accent); font-weight: 700; white-space: nowrap; }
 .say #say:not(:empty)::before { content: "\201C"; }
@@ -221,11 +223,13 @@ footer > * { width: min(100%, var(--w-column)); margin-inline: auto; }
 /* ---------- ask-first sheet and reader ---------- */
 dialog {
   /* Not modal: the talk bar stays live under it, so you can talk to a note or a reply. The menu goes inert. */
-  position: fixed; inset: var(--gutter) 0 auto 0; z-index: 5; margin: 0 auto; padding: 0;
-  width: min(100% - 2 * var(--gutter), var(--w-column)); max-height: calc(100svh - var(--footer-h, 160px) - 2 * var(--gutter)); overflow-y: auto;
+  /* It rises from the talk bar, under the work panel, so the place line, the step and Stop stay in sight. */
+  position: fixed; inset: auto 0 calc(var(--footer-h, 160px) + var(--gutter)) 0; z-index: 5; margin: 0 auto; padding: 0;
+  width: min(100% - 2 * var(--gutter), var(--w-column)); overflow-y: auto;
+  max-height: max(40svh, calc(100svh - var(--footer-h, 160px) - var(--work-h, 0px) - 2 * var(--gutter)));
   border: var(--bw-talk) solid var(--c-accent); border-radius: var(--r-sheet); background: var(--c-sheet); color: var(--c-ink);
 }
-body:has(dialog[open]) main { opacity: var(--o-behind); }
+body:has(dialog[open]) :is(#board-view, #apps) { opacity: var(--o-behind); }
 dialog::backdrop { background: var(--c-scrim); }
 .sheet { display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem; }
 .sheet h2 { margin: 0; font-size: var(--fs-sheet-h); line-height: 1.15; }
@@ -329,13 +333,20 @@ dialog { container: sheet / inline-size; }
   position: fixed; left: 0; top: 0; z-index: 20; pointer-events: none; box-sizing: border-box;
   width: var(--w); height: var(--h); transform: translate(var(--x), var(--y));
   border: var(--ring) solid var(--c-focus); border-radius: var(--r-btn);
-  transition: transform var(--t-glide) ease-out, width var(--t-glide) ease-out, height var(--t-glide) ease-out;
+  transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), width 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 280ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 160ms ease-out; /* shortcut: literal until design's motion tokens land */
 }
 .agent-cursor[hidden] { display: none; }
-@media (prefers-reduced-motion: reduce) { .agent-cursor { transition: none; } }
+.agent-cursor[data-press] { animation: press 180ms ease-out; }
+@keyframes press { 40% { scale: 0.92; } }
+@media (prefers-reduced-motion: reduce) {
+  /* No glide: the ring fades out where it was and in where it lands. */
+  .agent-cursor { transition: opacity 120ms linear; }
+  .agent-cursor[data-press] { animation: none; }
+}
 
 /* ---------- the work panel: where you are, the step now, Stop, the Done line (os/shell.js) ---------- */
-.work { padding: clamp(10px, 2.4vh, 20px) var(--gutter) 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.work { position: sticky; top: 0; z-index: 2; background: var(--c-page); padding: clamp(10px, 2.4vh, 20px) var(--gutter) 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .work .place { margin: 0; font-size: var(--fs-place); color: var(--c-quiet); }
 .work .step { margin: 0; font: 700 var(--fs-step)/1.05 var(--f-read); color: var(--c-accent); }
 .stop {

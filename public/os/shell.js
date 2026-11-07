@@ -223,6 +223,7 @@ function renderPanel() {
     u.hidden = !p.done.undo;
     if (p.done.undo) u.setAttribute('aria-label', `${p.done.line} Undo ${p.done.undo.label || ''}`.trim());
   }
+  $('#lines').hidden = !p.on; // once done, the ticks are the record; the sentences would repeat them
   $('#lines').replaceChildren(...p.lines.map((t, i) => el('li', {}, el('span', { className: 'sr', textContent: `Sentence ${i + 1} of ${p.lines.length}: ` }), t)));
   $('#ticks').replaceChildren(...p.ticks.map((t) => el('li', { className: t.ok ? 'ok' : 'no' },
     el('span', { className: 'sr', textContent: t.ok ? 'Done: ' : 'Failed: ' }), t.label)));
@@ -236,6 +237,8 @@ bus.on('*', (name, e) => {
   if (name === 'task:done') {
     drop('task');
     ding(e.ok ? 'done' : 'stopped');
+    cursor.hide();
+    if (panel.done?.line) show(panel.done.line); // the strip says where it ended, not the last question
     renderPanel();
     clearTimeout(undoTimer);
     if (e.undo) {
@@ -261,13 +264,15 @@ let opener = null;
 function openSheet(kids, focusEl) {
   if (!dialog.open) opener = document.activeElement;
   sheetBody.replaceChildren(...kids);
-  if (!dialog.open) { dialog.show(); $('main').inert = true; push('sheet'); }
+  if (!dialog.open) { dialog.show(); behind(true); push('sheet'); }
   focusEl.focus();
 }
+// Under the sheet the board and the app go inert and dim; the work panel stays live, so Stop still works.
+const behind = (on) => { for (const n of [$('#board-view'), appsEl]) n.inert = on; };
 function closeSheet() {
   if (!dialog.open) return;
   dialog.close();
-  $('main').inert = false;
+  behind(false);
   drop('sheet');
   (opener?.isConnected ? opener : $('#stop:not([hidden])') || $('#board .tile'))?.focus();
 }
@@ -320,7 +325,7 @@ function sheetConfirm({ gate, readback }) {
       closeSheet(); resolve(v === true);
       return true;
     });
-    speak(`${readback}. ${VERB[gate] || 'Yes'}?`, personal.signal);
+    speak(`${String(readback || '').replace(/[.!?\s]+$/, '')}. ${VERB[gate] || 'Yes'}?`, personal.signal);
   });
 }
 async function fingerprintUsable() { return passkey.hasPasskey() || await passkey.available(); }
@@ -554,8 +559,10 @@ try {
 }
 
 // ---------- start ----------
-new ResizeObserver(([e]) => document.documentElement.style.setProperty('--footer-h', `${Math.ceil(e.borderBoxSize[0].blockSize)}px`))
-  .observe(document.querySelector('footer'));
+for (const [sel, v] of [['footer', '--footer-h'], ['#work', '--work-h']]) {
+  new ResizeObserver(([e]) => document.documentElement.style.setProperty(v, `${Math.ceil(e.borderBoxSize[0]?.blockSize || 0)}px`))
+    .observe(document.querySelector(sel));
+}
 applySpeaker();
 renderBoard(); renderPanel();
 if (look.nolook) { nl.hidden = false; document.documentElement.classList.add('no-look'); }
