@@ -15,7 +15,7 @@ test('the app object has the §3.3 shape; delete asks first', () => {
 
 test('steps in plain words', () => {
   const s = Mi.fresh();
-  assert.equal(Mi.read(s), 'Mine, 1 saved: My morning.');
+  assert.equal(Mi.read(s), '1 saved: My morning.');
   assert.equal(Mi.explain(Mi.find(s, 'my morning')), "My morning: say what's on today, then open Mum's chat, then read the new message.");
   const reply = { name: 'Reply to Mum', steps: [
     { app: 'messages', action: 'openChat', params: { id: 'mum' } },
@@ -27,7 +27,7 @@ test('steps in plain words', () => {
   assert.ok(Mi.gated(reply));
   assert.equal(Mi.stepWords({ app: 'shop', action: 'pay', params: {} }, 'Paying for your usual'), 'paying for your usual');
   assert.equal(Mi.explain({ name: 'Empty', steps: [] }), 'Empty has no steps yet.');
-  assert.equal(Mi.read(Mi.fresh([])), 'Mine. Nothing saved yet. Do something once, then say "save that as" and a name.');
+  assert.equal(Mi.read(Mi.fresh([])), 'Nothing saved yet. Do something once, then say "save that as" and a name.');
 });
 
 test('find, explain and delete verify on the app truth', () => {

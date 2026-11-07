@@ -133,7 +133,7 @@ const app = {
 
   read() {
     const p = cur();
-    if (!p) return view === 'nearby' ? nearbyLine(places) : `Places: ${places.map((x) => x.name).join(', ')}.`;
+    if (!p) return view === 'nearby' ? nearbyLine(places) : `${places.map((x) => x.name).join(', ')}.`;
     return `${cap(p.name)}. ${view === 'route' ? routeLine(p) : view === 'hours' ? hoursLine(p) : farLine(p)}`;
   },
   place() {
