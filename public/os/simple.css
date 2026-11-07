@@ -6,18 +6,36 @@ footer { position: fixed !important; inset: 0 !important; display: flex !importa
 .talk { order: 1 !important; width: min(68vw, 16rem) !important; height: min(68vw, 16rem) !important; min-height: 0 !important; border-radius: 50% !important; padding: 0 !important; justify-content: center !important; flex-direction: column !important; gap: 0.5rem !important; }
 .talk svg { width: 38% !important; height: 38% !important; }
 .talk .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-/* The orb (the lead, 7 Nov): the talk button as a full-screen voice orb. --level and data-orb come from os/orb.js. */
-footer { cursor: pointer; height: 100dvh !important; max-height: none !important; }
-.talk { --level: 0; --orb-hi: #E9E3FF; --orb: #7B61FF; --orb-deep: #24135F; --orb-glow: rgb(123 97 255 / 0.45);
-  position: relative !important; flex: none !important; width: min(78vw, 58vh, 22rem) !important; height: auto !important; aspect-ratio: 1 / 1 !important; border: 0 !important;
-  background: radial-gradient(circle at 34% 28%, var(--orb-hi) 0%, var(--orb) 40%, var(--orb-deep) 100%) !important;
+/* The orb (the lead, 7 Nov): a cloudy sky inside a ball on a black screen. --level and data-orb come from os/orb.js. */
+footer { cursor: pointer; height: 100dvh !important; max-height: none !important; background: #000 !important; gap: 1.75rem !important; }
+.say, .welcome-caption { color: #D4D4D8 !important; }
+.welcome-caption { order: 3 !important; max-width: 22em !important; text-align: center !important; font-size: 0.95rem !important; margin: 0 !important; }
+.say { font-size: 0.95rem !important; line-height: 1.4 !important; min-height: 4em !important; }
+.say .who { display: block !important; color: #FAFAFA !important; font-size: 1.15rem !important; font-weight: 600; margin-bottom: 0.25rem; }
+.talk { --level: 0; position: relative !important; overflow: hidden !important; flex: none !important; width: min(72vw, 52vh, 20rem) !important; height: auto !important; aspect-ratio: 1 / 1 !important; border: 0 !important;
+  background: linear-gradient(180deg, #2F8FE8 0%, #5BB0F2 38%, #A9D6F7 66%, #EEF6FC 100%) !important;
   color: transparent !important; scale: calc(1 + var(--level) * 0.3); transition: scale 90ms linear, box-shadow 90ms linear;
-  box-shadow: 0 0 calc(2rem + var(--level) * 7rem) var(--orb-glow), inset 0 -1.5rem 3rem rgb(0 0 0 / 0.3) !important; }
+  box-shadow: 0 0 calc(1.5rem + var(--level) * 6rem) rgb(120 190 245 / 0.35), inset 0 0 2.5rem rgb(255 255 255 / 0.25) !important; }
+/* the clouds: soft white puffs, lower half, drifting slowly sideways */
+.talk::before { content: ''; position: absolute; inset: 0 -50% 0 -50%; pointer-events: none;
+  background:
+    radial-gradient(28% 16% at 22% 70%, rgb(255 255 255 / 0.95), transparent 70%),
+    radial-gradient(24% 14% at 46% 78%, rgb(255 255 255 / 0.9), transparent 70%),
+    radial-gradient(30% 18% at 70% 66%, rgb(255 255 255 / 0.85), transparent 70%),
+    radial-gradient(22% 12% at 88% 82%, rgb(255 255 255 / 0.9), transparent 70%),
+    radial-gradient(40% 22% at 50% 96%, #fff, transparent 75%),
+    radial-gradient(18% 9% at 34% 52%, rgb(255 255 255 / 0.5), transparent 70%),
+    radial-gradient(16% 8% at 78% 46%, rgb(255 255 255 / 0.4), transparent 70%);
+  filter: blur(6px); animation: orb-clouds 40s linear infinite alternate; }
+/* a soft highlight, so it reads as a sphere */
+.talk::after { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(60% 45% at 35% 22%, rgb(255 255 255 / 0.28), transparent 70%), radial-gradient(circle at 50% 50%, transparent 62%, rgb(0 40 90 / 0.25) 100%); }
 .talk svg { display: none !important; }
-.talk:focus-visible { outline: var(--ring) solid var(--c-focus) !important; outline-offset: 0.75rem !important; }
-.talk[data-orb="idle"] { animation: orb-breathe 4.5s ease-in-out infinite; }
-.talk[data-orb="listening"] { animation: orb-breathe 1.6s ease-in-out infinite; }
+.talk:focus-visible { outline: var(--ring) solid #FAFAFA !important; outline-offset: 0.75rem !important; overflow: visible !important; }
+.talk[data-orb="idle"] { animation: orb-breathe 5s ease-in-out infinite; }
+.talk[data-orb="listening"] { animation: orb-breathe 1.8s ease-in-out infinite; }
 .talk[data-orb="speaking"] { animation: orb-speak 0.7s ease-in-out infinite; }
-@keyframes orb-breathe { 50% { transform: scale(1.05); filter: brightness(1.08); } }
-@keyframes orb-speak { 50% { transform: scale(1.03); filter: brightness(1.15); } }
-@media (prefers-reduced-motion: reduce) { .talk { animation: none !important; transition: none !important; } }
+@keyframes orb-clouds { to { transform: translateX(-30%); } }
+@keyframes orb-breathe { 50% { transform: scale(1.04); filter: brightness(1.06); } }
+@keyframes orb-speak { 50% { transform: scale(1.03); filter: brightness(1.12); } }
+@media (prefers-reduced-motion: reduce) { .talk, .talk::before { animation: none !important; transition: none !important; } }

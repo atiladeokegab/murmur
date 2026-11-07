@@ -53,7 +53,7 @@ const status = $('#say');
 const caps = /[?&]quiet\b/.test(location.search) ? {} : await fetch('/health').then((r) => r.json()).catch(() => ({}));
 // GPT live (the lead, 7 Nov): OpenAI's voice by default when the server has the key, or ?voice=gpt; ?voice=old keeps the old path.
 // Any failure falls back for good.
-let gpt = null, gptOn = false, gptBroken = /[?&]voice=old\b/.test(location.search) || !(caps.gpt || /[?&]voice=gpt\b/.test(location.search)), collect = null;
+let gpt = null, gptOn = false, gptGen = 0, gptBroken = /[?&]voice=old\b/.test(location.search) || !(caps.gpt || /[?&]voice=gpt\b/.test(location.search)), collect = null;
 let token = 0, lastLine = '', listening = false;
 // Hands-free (the lead's ask): after the first tap, the mic reopens each time Murmur has finished speaking.
 let handsFree = false, speaking = 0, busy = 0, printing = 0, rearmTimer = null;
@@ -431,8 +431,16 @@ function rearm(delay = 350, quiet = false) {
     if (Rec && handsFree && !listening && !speaking && !printing && (!busy || pending) && document.visibilityState !== 'hidden') summon({ auto: true, quiet });
   }, delay);
 }
+/** Hang up GPT live: the mic, the call and the pressed Talk. Stop and a second tap both land here. */
+function hangUp() {
+  const was = gptOn || gptGen % 2 === 1;
+  if (gptGen % 2 === 1) gptGen++; // a connect in flight is now stale
+  gpt?.close(); gptOn = false;
+  if (was) setListening(false);
+}
 async function startGpt() {
-  if (gptOn) { gpt.close(); gptOn = false; setListening(false); return; } // a second tap hangs up
+  if (gptOn || gptGen % 2 === 1) { hangUp(); return; } // a second tap, even while connecting, hangs up: one session at a time
+  const my = ++gptGen; // odd while connecting
   const { createGpt, toUtterance } = await import('../voice/gpt.js');
   gpt ||= createGpt({
     onCaption: (t) => show(t),
@@ -446,8 +454,8 @@ async function startGpt() {
       return { say: lines.filter((t) => t && t !== 'On it.').join(' ') || 'Done.' };
     },
   });
-  try { show('Connecting'); await gpt.start(); gptOn = true; setListening(true); show('Listening'); }
-  catch (e) { console.warn('GPT live unavailable, using the usual voice', e.message); gptBroken = true; gpt.close(); summon(); }
+  try { show('Connecting'); await gpt.start(); if (my !== gptGen) return gpt.close(); gptGen++; gptOn = true; setListening(true); show('Listening'); }
+  catch (e) { if (my !== gptGen) return; gptGen++; console.warn('GPT live unavailable, using the usual voice', e.message); gptBroken = true; gpt.close(); summon(); }
 }
 function summon(o) {
   const auto = o?.auto === true;
@@ -532,6 +540,7 @@ function stopAll() {
   handsFree = false; clearTimeout(rearmTimer); clearTimeout(silence);
   if (rec) { const r = rec; rec = null; r.onend = r.onresult = r.onerror = null; try { r.abort(); } catch { /* already stopped */ } setListening(false); }
   personal.abort(); personal = new AbortController();
+  hangUp(); // Stop hangs up GPT live too: mic off, call closed, Talk unpressed (Prometheus 16:47)
   hush();
   if (pending) answerSheet(pending.kind === 'confirm' ? false : null);
   agent?.stop?.();
