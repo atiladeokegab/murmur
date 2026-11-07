@@ -228,6 +228,17 @@ function plan(said, apps, context, dry) {
   if (/^(?:pay|check ?out)$/i.test(t)) return task([step('shop', ['pay', 'checkout'])]);
   if (/^(?:track|where'?s) my order$/i.test(t)) return task([step('shop', ['track'])]);
 
+  // Places (read-only). "Directions to" stays Transit's while Transit is on the phone.
+  if (apps.some((a) => a.id === 'places')) {
+    const at = (names, said) => task([step('places', names, said ? { place: clean(said.trim()) } : {})]);
+    if ((m = t.match(/^how far(?: away)? is\s+(.+?)(?:\s+from here)?$/i))) return at(['howFar'], m[1]);
+    if ((m = t.match(/^(?:what'?s |what is |tell me )?(?:the )?(?:route|way|walking route)\s+to\s+(.+)$/i)) ||
+        ((m = t.match(/^directions\s+to\s+(.+)$/i)) && !apps.some((a) => a.id === 'transit'))) return at(['route'], m[1]);
+    if (/^(?:what'?s|what is|anything) (?:nearby|near (?:me|here)|around here)$/i.test(t)) return at(['nearby']);
+    if ((m = t.match(/^is\s+(.+?)\s+open(?: now| today)?$/i)) || (m = t.match(/^when (?:does|do)\s+(.+?)\s+(?:open|close)$/i)) ||
+        (m = t.match(/^(?:what are )?(?:the )?opening (?:hours|times) (?:for|of|at)\s+(.+)$/i))) return at(['hours'], m[1]);
+  }
+
   // Transit
   if ((m = t.match(/\bnext bus(?:\s+to\s+(?:the\s+)?([a-z' ]+?))?(?:,|\s+and\b|$)/i)) || /^bus to work$/i.test(t)) {
     return task([step('transit', ['nextBus', 'next', 'bus'], m?.[1] ? { place: cap(m[1].trim()) } : {})]);
