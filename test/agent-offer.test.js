@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { hear } from '../public/agent/words.js';
-import { offerLine, asSaid, OFFER_MAX } from '../public/agent/offer.js';
+import { offerLine, asSaid, spokenAs, OFFER_MAX } from '../public/agent/offer.js';
 import { createAgent } from '../public/agent/index.js';
 import { createToolkit } from '../public/vendor/toolkit/index.js';
 import { phone, memoryKV } from './agent-fixtures.js';
@@ -27,20 +27,36 @@ test('"what can I do", "what can I say", "help" and "options" are reserved; insi
   }
 });
 
-test('every app offers at most four of its own actions, in its own order, as a person would say them', () => {
+test('every app offers at most four of its own actions, in its own order, in its own words', () => {
   for (const app of APPS) {
+    let st; try { st = app.state?.(); } catch { /* not mounted: say falls back */ }
+    const said = Object.values(app.actions).map((x) => spokenAs(x, st)).filter(Boolean);
     const line = offerLine(APPS, app.id);
-    const said = Object.values(app.actions).map((x) => asSaid(x.describe)).slice(0, OFFER_MAX);
     assert.match(line, /^Here you can: .+\. Or say go home\.$/, app.id);
     let at = 0;
-    for (const s of said) { const i = line.indexOf(s, at); assert.ok(i > at - 1, `${app.id}: "${s}" in order in "${line}"`); at = i + s.length; }
-    const fifth = Object.values(app.actions)[OFFER_MAX];
-    if (fifth) assert.ok(!line.includes(asSaid(fifth.describe)), `${app.id}: at most ${OFFER_MAX}`);
+    for (const w of said.slice(0, OFFER_MAX)) { const i = line.indexOf(w, at); assert.ok(i >= at, `${app.id}: "${w}" in order in "${line}"`); at = i + w.length; }
+    if (said[OFFER_MAX]) assert.ok(!line.includes(`, ${said[OFFER_MAX]}`) && !line.includes(`or ${said[OFFER_MAX]}.`), `${app.id}: at most ${OFFER_MAX}`);
   }
-  assert.equal(offerLine(APPS, 'messages'),
-    'Here you can: open the chat with a person, read the new message, write a reply, or change one word in the reply to another. Or say go home.');
-  assert.equal(offerLine(APPS, 'hello'), 'Here you can: write a message to Sam or send the message to Sam. Or say go home.');
-  assert.equal(offerLine(APPS, 'calendar').slice(0, 45), "Here you can: what's on today, what's next in");
+  assert.equal(offerLine(APPS, 'hello'), 'Here you can: write to Sam or send it. Or say go home.');
+  assert.equal(offerLine(APPS, 'calendar'), "Here you can: what's on today, what's next, add an event, or move an event. Or say go home.");
+  assert.equal(offerLine(APPS, 'writer'), 'Here you can: open a chapter, read the last page, where am I, or carry on. Or say go home.');
+  assert.equal(offerLine(APPS, 'mine'), "Here you can: what's in a tile or remove a tile. Or say go home.");
+});
+
+test("an action's say wins over describe, follows the app's state, and '' leaves it out for now", async () => {
+  const p = await phone();
+  const m = p.registry.get('messages'), ctx = p.ctxFor(m, { bus: p.bus });
+  assert.equal(offerLine(p.registry.list(), 'messages'), 'Here you can: open a chat or read my messages. Or say go home.');
+  await m.actions.openChat.run({ id: 'mum' }, ctx);
+  assert.equal(offerLine(p.registry.list(), 'messages'), "Here you can: read Mum's message or reply to Mum. Or say go home.");
+  await m.actions.reply.run({ text: 'On my way' }, ctx);
+  assert.equal(offerLine(p.registry.list(), 'messages'), "Here you can: read Mum's message, reply to Mum, change a word, or send it. Or say go home.");
+  const odd = { id: 'odd', name: 'Odd', state: () => ({}), actions: {
+    a: { describe: 'Do the first thing, slowly', say: () => { throw new Error('boom'); } },
+    b: { describe: 'Do the second thing', say: 42 },
+    c: { describe: 'Do the third thing', say: null },
+    d: { describe: 'Do the fourth thing', say: 'do it my way' } } };
+  assert.equal(offerLine([odd], 'odd'), 'Here you can: do the first thing, do the second thing, or do it my way. Or say go home.', 'a throw or a non-string falls back; null leaves it out');
 });
 
 test('a plug-in gets its options for free, from the same declared actions the planner sees', () => {

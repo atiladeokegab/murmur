@@ -33,6 +33,8 @@ export default {
   actions: {
     reply: {
       describe: 'Reply to the open chat',   // imperative. The model's tool description and Teach me's words
+      say: (state) => 'reply to Mum',       // optional: how a person would ask, for "what can I do". A string or
+                                            //   (state) => string; '' leaves it out for now. Default: describe, shortened
       doing: 'Replying to Mum',             // REQUIRED. The step label: 2 to 5 words, present tense, shown and spoken as is
       params: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       gate: null,                           // null | 'send' | 'pay' | 'call' | 'delete'

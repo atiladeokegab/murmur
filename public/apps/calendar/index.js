@@ -329,6 +329,7 @@ const app = {
   actions: {
     whatsOn: {
       describe: "Say what's on today, or on a named day this week",
+      say: "what's on today",   // what a person would say (offer.js)
       doing: 'Reading your day',
       hint: 'The days are buttons under the heading. Pick one to hear it.',
       params: { type: 'object', properties: { day: dayParam } },
@@ -345,6 +346,7 @@ const app = {
     },
     next: {
       describe: "Say what's next in the calendar",
+      say: "what's next",
       doing: "Finding what's next",
       hint: "What's next is the first button under the heading.",
       params: { type: 'object', properties: {} },
@@ -357,6 +359,7 @@ const app = {
     },
     add: {
       describe: 'Add an event to the calendar',
+      say: 'add an event',
       doing: 'Adding to your calendar',
       hint: 'Add an event is the second button under the heading. Fill in what, day and time, then Save.',
       params: {
@@ -379,6 +382,7 @@ const app = {
     },
     move: {
       describe: 'Move an event to another day, and optionally another time',
+      say: 'move an event',
       doing: 'Moving an event',
       hint: 'Open the event, then Move is the second button, then pick the day',
       params: {
@@ -428,6 +432,7 @@ const app = {
     },
     invite: {
       describe: 'Send someone an invite to an event, or tell them its new time',
+      say: 'invite someone',
       doing: 'Sending an invite',
       gate: 'send',
       hint: 'Open the event, then Invite is the third button. Say who, then Send invite.',
