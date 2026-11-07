@@ -2,11 +2,15 @@
 // An in-memory graph answers at once; SurrealDB (embedded WASM, IndexedDB) loads after the phone is ready, keeps it
 // across reloads and takes every write. If it never loads, the memory graph is the whole thing and nothing breaks.
 
-// Never in the graph: health, or money (privacy floor). A match drops the whole relate.
+import { NO_GO } from './demo-plan.js';
+
+// A view of the Librarian, never a second memory (spec §3.4): it mirrors only what the Librarian keeps (your look,
+// a proposal you said Yes to), only while learning is on. Health, money and government never enter (refusal()'s list too).
 const HEALTH = /\b(health\w*|diabet\w*|pain\w*|medic\w*|diagnos\w*|symptom\w*|ill(?:ness)?|sick\w*|doctor|gp|nhs|prescri\w*|pills?|asthma|cancer|depress\w*|anxi\w*|therap\w*|hospital|blind\w*|sight|disab\w*|condition)\b/i;
-const MONEY = /\b(bank\w*|money|balance|account|card|pay\w*|salary|loan|debt|sort code|savings?)\b|[£$€]/i;
+const MONEY = /\b(bank\w*|money|balance|account|card|pay\w*|salary|loan|debt|sort code|savings?|\d+\s*(?:pounds?|quid|euros?|dollars?|pence|p))\b|[£$€]/i;
+const GOV = /\b(passport|benefits?|universal credit|pension|tax\w*|hmrc|council|dvla|visa|immigration|court|police|vote|voting)\b/i;
 export const EDGES = ['knows', 'prefers', 'usually', 'lives_at', 'goes_to'];
-export const allowed = (from, edge, to) => EDGES.includes(edge) && ![from, to].some((t) => HEALTH.test(t) || MONEY.test(t));
+export const graphAllowed = (from, edge, to) => EDGES.includes(edge) && ![from, to].some((t) => [HEALTH, MONEY, GOV, NO_GO].some((re) => re.test(t)));
 
 const LINE = {
   knows: (e) => `you text ${e.to}`, prefers: (e) => `you like ${e.to}`, usually: (e) => `you ${e.to}`,
@@ -27,8 +31,11 @@ export function sayAbout(edges) {
 export const lookPrefs = (look = {}) => [look.answers === 'detailed' ? 'long answers' : 'short answers', `text at ${look.size || 100}%`,
   look.speaker === 'reader' ? 'your screen reader speaking' : 'Murmur speaking'];
 
-/** @param {{ emit?(type, data) }} [bus]  gets `graph:relate` { from, edge, to } on every kept relate */
-export function createGraph({ bus } = {}) {
+/**
+ * @param {{ emit?(type, data) }} [bus]  gets `graph:relate` { from, edge, to } on every kept relate
+ * @param {() => Promise<boolean>|boolean} [learning]  the Librarian's learning switch; off means no write at all
+ */
+export function createGraph({ bus, learning = () => false } = {}) {
   const edges = new Map(); // `${from}|${edge}|${to}` -> { from, edge, to, weight }
   let db = null, engine = 'fallback';
   const key = (e) => `${e.from}|${e.edge}|${e.to}`;
@@ -42,10 +49,10 @@ export function createGraph({ bus } = {}) {
 
   return {
     get engine() { return engine; },
-    /** Remembers from -edge-> to; again strengthens it. Health, money and unknown edges are dropped. */
-    relate(from, edge, to) {
+    /** Remembers from -edge-> to; again strengthens it. Learning off, health, money, government and unknown edges: nothing. */
+    async relate(from, edge, to) {
       [from, to] = [String(from).trim(), String(to).trim()];
-      if (!from || !to || !allowed(from, edge, to)) return false;
+      if (!from || !to || !graphAllowed(from, edge, to) || !(await learning())) return false;
       const e = edges.get(key({ from, edge, to })) || { from, edge, to, weight: 0 };
       e.weight++;
       edges.set(key(e), e);
@@ -63,18 +70,17 @@ export function createGraph({ bus } = {}) {
       for (const e of gone) { edges.delete(key(e)); write((d) => d.query(`DELETE ${e.edge} WHERE in = $a AND out = $b`, { a: d.rid(e.from), b: d.rid(e.to) })); }
       return gone.length;
     },
-    /** Boot: the people, the invented places and your look. */
-    seed({ contacts = {}, look = {} } = {}) {
-      for (const c of Object.values(contacts).sort((a) => (a.name === 'Sam' ? -1 : 1))) this.relate('you', 'knows', c.name);
-      this.relate('Mum', 'lives_at', 'Elm Road');
-      for (const p of ['the station', 'the shopping centre']) this.relate('you', 'goes_to', p);
-      for (const p of lookPrefs(look)) this.relate('you', 'prefers', p);
+    /** Boot: your look, which the Librarian already keeps in your profile. */
+    async seed({ look = {} } = {}) { for (const p of lookPrefs(look)) await this.relate('you', 'prefers', p); },
+    /** The Librarian's own events: only a proposal you said Yes to becomes an edge. A send, a tap or a run never does. */
+    listen(on) {
+      on('memory', (e) => { if (e?.response?.id === 'first:transit' && e.response.answer === 'Yes') this.relate('you', 'usually', 'check the bus first in the morning'); });
     },
     /** A look change: the old preference goes, the new one is remembered. */
-    lookChanged(look) {
+    async lookChanged(look) {
       const now = lookPrefs(look);
       for (const e of this.about()) if (e.edge === 'prefers' && !now.includes(e.to)) this.forget(e.to);
-      for (const p of now) if (!edges.has(key({ from: 'you', edge: 'prefers', to: p }))) this.relate('you', 'prefers', p);
+      for (const p of now) if (!edges.has(key({ from: 'you', edge: 'prefers', to: p }))) await this.relate('you', 'prefers', p);
     },
     /** After ready: the real engine. Reads what IndexedDB kept, then writes through. Fails soft to the memory graph. */
     async load() {
@@ -86,7 +92,7 @@ export function createGraph({ bus } = {}) {
         d.rid = (t) => new RecordId('node', t);
         await d.query(['node', ...EDGES].map((t) => `DEFINE TABLE IF NOT EXISTS ${t}${t === 'node' ? '' : ' TYPE RELATION'};`).join(' '));
         const [kept] = await d.query(`SELECT edge, weight, in.name AS from, out.name AS to FROM ${EDGES.join(', ')}`);
-        for (const e of kept || []) if (allowed(e.from, e.edge, e.to)) edges.set(key(e), { from: e.from, edge: e.edge, to: e.to, weight: Math.max(Number(e.weight) || 1, edges.get(key(e))?.weight || 0) });
+        for (const e of kept || []) if (graphAllowed(e.from, e.edge, e.to)) edges.set(key(e), { from: e.from, edge: e.edge, to: e.to, weight: Math.max(Number(e.weight) || 1, edges.get(key(e))?.weight || 0) });
         for (const e of edges.values()) await store(d, e);
         db = d; engine = 'surreal';
       } catch (e) { console.info('[graph] engine fallback', e?.name || e, e?.message); }

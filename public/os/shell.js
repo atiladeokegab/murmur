@@ -506,16 +506,11 @@ const host = {
     no: () => answerSheet(pending?.kind === 'confirm' ? false : null), choose: (i) => answerSheet(i) },
   verbs: { stop: stopAll, where, again, takeOver },
 };
-let graph = null; // the personal graph; Murmur works the same without it
+let graph = null; // the personal graph: a view of the Librarian; Murmur works the same without it
 try {
-  const [{ createGraph }, { CONTACTS }] = await Promise.all([import('../agent/graph.js'), import('../lib/tiles.js')]);
-  graph = createGraph({ bus }); graph.seed({ contacts: CONTACTS, look });
-  bus.on('memory', (e) => { if (e?.response?.id === 'first:transit' && e.response.answer === 'Yes') graph.relate('you', 'usually', 'check the bus first in the morning'); });
-  bus.on('step:verified', (e) => {
-    const st = e?.app === 'messages' && /send$/.test(e.action) && registry.get('messages')?.state();
-    const to = st?.lastSent && st.chats?.find((c) => c.id === st.lastSent.to)?.name;
-    if (to) graph.relate('you', 'knows', to);
-  });
+  const { createGraph } = await import('../agent/graph.js');
+  graph = createGraph({ bus, learning: async () => !!librarian && !(await librarian.getProfile())?.memoryPaused });
+  await graph.seed({ look }); graph.listen((name, fn) => bus.on(name, fn));
 } catch (e) { console.info('[graph] off', e?.name); }
 try {
   const { createAgent } = await import('../agent/index.js');
@@ -547,7 +542,7 @@ renderBoard(); renderPanel();
 if (look.nolook) { nl.hidden = false; document.documentElement.classList.add('no-look'); }
 try {
   const { wireExtras } = await import('./wire.js');
-  await wireExtras({ bus, registry, speak, settings: look, save: () => { saveLook(); applySpeaker(); graph?.lookChanged(look); }, kv: port, appsEl,
+  await wireExtras({ bus, registry, speak, settings: look, save: () => { saveLook(); applySpeaker(); graph?.lookChanged(look).catch(() => {}); }, kv: port, appsEl,
     librarian, datastore, status, clockEl: $('#day'),
     board: { reset: resetAll, nextMorning: async () => { day++; store.set('day', day); await agent?.nextMorning?.(); renderBoard(); } },
     replay: async () => { const u = lastUtterance; await resetAll(); if (u) hear(u, 'replay'); }, stop: stopAll });

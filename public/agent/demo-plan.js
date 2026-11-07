@@ -58,7 +58,7 @@ function fill(action, slots) {
 }
 
 const DAY = '(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)';
-const NO_GO = /\b(bank|banking|balance|transfer (?:\w+ )?(?:money|funds|pounds|quid|euros|dollars)|account number|sort code|overdraft|doctor|gp|prescription|medication|diagnos\w*|nhs|benefits|universal credit|tax return|hmrc|passport|driving licence|council tax|savings|mortgage|loan|credit card|pin number|move (?:my |some )?money|barclays|hsbc|lloyds|natwest|santander|monzo|starling|nationwide|halifax|revolut)\b/i;
+export const NO_GO = /\b(bank|banking|balance|transfer (?:\w+ )?(?:money|funds|pounds|quid|euros|dollars)|account number|sort code|overdraft|doctor|gp|prescription|medication|diagnos\w*|nhs|benefits|universal credit|tax return|hmrc|passport|driving licence|council tax|savings|mortgage|loan|credit card|pin number|move (?:my |some )?money|barclays|hsbc|lloyds|natwest|santander|monzo|starling|nationwide|halifax|revolut)\b/i;
 const GARBLED = /\.\.\.|…|\[(?:unintelligible|inaudible|noise)\]|^\W*$/i;
 
 /**
