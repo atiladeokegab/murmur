@@ -138,7 +138,7 @@ function render() {
 
 function listView() {
   return el('ul', { className: 'app-list', 'aria-label': 'Your chats' }, s.chats.map((c) => el('li', { style: ROW },
-    button(`${c.name}. ${c.unread ? 'New: ' : ''}${c.messages.at(-1).text}`, { 'data-chat': c.id, onclick: () => { M.open(s, c.id); save(); render(); } }))));
+    button([el('b', { className: 'app-title' }, c.name), el('span', { className: 'sr' }, '.'), el('span', { className: 'app-why' }, ` ${c.unread ? 'New: ' : ''}${c.messages.at(-1).text}`)], { 'data-chat': c.id, onclick: () => { M.open(s, c.id); save(); render(); } }))));
 }
 
 function sentenceList(label, all, { changed = null, current = -1, keep = false } = {}) {

@@ -245,6 +245,10 @@ test("a person's own tap on Send or Delete asks first, with the readback; No sen
   await messages.reset();
   const tap = (sel) => doc.body.querySelector(sel).dispatchEvent({ type: 'click', isTrusted: true });
   const settle = () => new Promise((r) => setTimeout(r, 0));
+  const row = doc.body.querySelector('[data-chat="mum"]');
+  const [name, , why] = row.children;
+  assert.deepEqual([name.tagName.toLowerCase(), name.className, name.textContent, why.className], ['b', 'app-title', 'Mum', 'app-why'], 'the name is its own bold element, the preview muted');
+  assert.match(row.textContent, /^Mum\. New: .+/, 'the row still reads "Mum. New: ..."');
   tap('[data-chat="sam"]');
   const box = doc.body.querySelector('#msg-draft');
   box.value = "I'm ten minutes late."; box.dispatchEvent({ type: 'input' });
