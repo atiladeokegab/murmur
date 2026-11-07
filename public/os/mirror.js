@@ -35,19 +35,22 @@ export function frameOf(doc) {
 export function mirror({ doc, room, send, every = 150, beat = 5000, now = () => Date.now(), frame = frameOf }) {
   send ??= (f) => {
     try {
-      Promise.resolve(globalThis.fetch(`/api/bus?room=${encodeURIComponent(room)}`, { method: 'POST', headers: { 'content-type': 'application/json' },
+      return Promise.resolve(globalThis.fetch(`/api/bus?room=${encodeURIComponent(room)}`, { method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ type: 'mirror:frame', ...f }) })).catch(() => {});
     } catch {}
   };
-  let last = -Infinity, timer = null, prev = '';
+  let last = -Infinity, timer = null, prev = '', busy = false, again = false; // one POST in flight: slow wifi never reorders frames
   let quiet = 0; // last send time: an idle phone still sends one frame every `beat` ms, or the stage falls back to its own phone
   const shoot = (force = false) => {
-    timer = null; last = now();
+    timer = null;
+    if (busy) { again = true; return; }
+    last = now();
     let f;
     try { f = frame(doc); } catch { return; }
     if (f.html.length > MAX || (!force && f.html === prev && f.cx === shoot.cx && f.cy === shoot.cy && f.size === shoot.size)) return; // too big, or nothing moved
     prev = f.html; shoot.cx = f.cx; shoot.cy = f.cy; shoot.size = f.size; quiet = now();
-    send(f);
+    busy = true;
+    Promise.resolve(send(f)).catch(() => {}).finally(() => { busy = false; if (again) { again = false; soon(); } });
   };
   const soon = () => { if (!timer) timer = setTimeout(() => shoot(), Math.max(0, last + every - now())); };
   const win = doc.defaultView;
