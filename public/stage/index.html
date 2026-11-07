@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stage · Murmur OS</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/stage/stage.css">
+</head>
+<body class="stage">
+<header>
+  <h1>Murmur OS</h1>
+  <p id="now" role="status" aria-live="polite">Waiting for the phone.</p>
+</header>
+<main>
+  <div class="phone-col">
+    <p id="phone-label" class="phone-label">Waiting for the phone.</p>
+    <div id="phone" class="phone">
+      <iframe id="mirror-frame" title="Live from the phone" sandbox="allow-same-origin" tabindex="-1" hidden></iframe>
+      <iframe id="phone-frame" title="Murmur phone" allow="microphone; autoplay" hidden></iframe>
+      <span id="cursor" class="cursor" aria-hidden="true" hidden></span>
+    </div>
+  </div>
+  <iframe id="inside-frame" class="inside-frame" title="Inside: what Murmur is doing"></iframe>
+</main>
+<script type="module" src="/stage/stage.js"></script>
+</body>
+</html>

@@ -25,12 +25,15 @@ const ROW = {
     + `<p class="meta">${esc(r.action)}${params(r.params)}</p>`
     + `<p class="meta">verify: <span class="res">${esc(r.result)}</span>${ms(r.ms)}</p>`
     + `${r.control ? `<p class="pressed">pressed <q>${esc(r.control)}</q></p>` : ''}${r.reason ? `<p class="why">Didn't work: ${esc(r.reason)}</p>` : ''}`,
-  Asked: (r) => `<p class="read">${esc(r.readback)}</p><p class="answer ${r.result === true ? 'yes' : r.result === false ? 'no' : ''}"><b>${esc(r.gate)}</b> · ${yesNo(r.result)}</p>`,
+  Asked: (r) => `<p class="read">${esc(r.readback)}</p><p class="answer ${r.result === true ? 'yes' : r.result === false ? 'no' : ''}"><b>${esc(r.gate)}</b> · ${r.unasked ? 'not asked' : yesNo(r.result)}</p>`,
   // Every field, as key and value, so a judge sees there is no content in it.
   Memory: (r) => `<p class="kind">${esc(r.kind)}</p><dl class="fields">${Object.entries(r.fields).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(val(v))}</dd>`).join('')}</dl>`,
 };
 const LABELS = [['tasks', 'tasks'], ['verified', 'steps verified'], ['failed', 'steps failed'], ['asked', 'gates asked'], ['bypassed', 'gates bypassed'], ['modelCalls', 'model calls']];
 const $ = (id) => document.getElementById(id);
+
+// ?big or ?stage: the projector view (inside.css, html.big)
+if (/[?&](?:big|stage)\b/.test(location.search)) document.documentElement.classList.add('big');
 
 $('cols').innerHTML = COLUMNS.map((c) => `<section aria-labelledby="h-${c}"><h2 id="h-${c}"><span>${c}</span><span class="count" id="n-${c}">0</span></h2><ol id="c-${c}"></ol></section>`).join('');
 $('tally').innerHTML = LABELS.map(([k, l]) => `<div class="t-${k}"><dt>${l}</dt><dd id="t-${k}">0</dd></div>`).join('');
@@ -84,9 +87,10 @@ function draw() {
 function add(e) {
   const cols = model.columns(), before = Object.fromEntries(COLUMNS.map((c) => [c, cols[c].length]));
   model.add(e);
-  const n = model.tally().tasks + (e.type === 'heard' ? 1 : 0);
-  for (const c of COLUMNS) for (const r of cols[c].slice(before[c])) taskOf.set(r, n);
-  cur = Math.max(cur, n); // fold the last task the moment a new one is heard
+  const n = model.tally().tasks;
+  for (const c of COLUMNS) for (const r of cols[c].slice(before[c])) taskOf.set(r, n + (e.type === 'heard' ? 1 : 0));
+  // Fold the last task only when a new one starts: a heard "yes" to a pay sheet is still the current task.
+  cur = Math.max(cur, n);
 }
 
 function restart() {
@@ -107,6 +111,7 @@ src.onopen = () => { restart(); document.body.dataset.link = 'on'; $('link').tex
 src.onerror = () => { document.body.dataset.link = 'off'; $('link').textContent = 'Lost the phone. Reconnecting.'; };
 src.onmessage = (m) => {
   const e = JSON.parse(m.data);
+  if (e.type === 'mirror:frame') return; // the phone's screen is for /stage; Inside has no column for it
   if (e.type === 'reset') restart();
   add(e);
   if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; draw(); }); }
