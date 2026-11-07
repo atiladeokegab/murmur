@@ -15,6 +15,13 @@ const instrument = () => {
   const M = window.__magic = { sounds: [], frames: [], longtasks: [], shifts: [], cursor: [], blanks: 0, events: [] };
   const now = () => performance.now();
   const sound = (kind, start) => { const s = { kind, start, end: null }; M.sounds.push(s); return s; };
+  // Which line each TTS buffer says: /api/tts replies arrive in the order the shell plays them.
+  const tts = [], fetch0 = window.fetch;
+  window.fetch = async (u, o) => {
+    const r = await fetch0(u, o);
+    if (/\/api\/tts/.test(String(u?.url || u)) && r.ok) { try { tts.push(JSON.parse(o.body).text); } catch { /* not ours */ } }
+    return r;
+  };
   // Web Audio: earcon oscillators, and TTS buffers. Start is the scheduled time. A TTS buffer counts only from its
   // first to its last audible sample (padding is silence to a listener); a hush cuts it at the real 'ended'.
   for (const [proto, kind] of [[OscillatorNode.prototype, 'earcon'], [AudioBufferSourceNode.prototype, 'voice']]) {
@@ -27,6 +34,7 @@ const instrument = () => {
         let i = 0, j = ch.length - 1;
         while (i < ch.length && !loud(ch[i])) i++;
         while (j > i && !loud(ch[j])) j--;
+        if (this.buffer.duration > 0.05) s.text = tts.shift();
         Object.assign(s, { start: at + (i / rate) * 1000, audibleEnd: at + (j / rate) * 1000, raw: [at, at + this.buffer.duration * 1000] });
         this.addEventListener('ended', () => { s.end = Math.min(now(), s.audibleEnd); });
       } else this.addEventListener('ended', () => { s.end = now(); });
@@ -45,9 +53,9 @@ const instrument = () => {
     speechSynthesis.cancel = () => { for (const s of M.sounds) if (s.kind === 'webspeech-est' && s.end > now()) s.end = Math.max(s.start, now()); return cancel0(); };
     speechSynthesis.speak = (u) => {
       // shortcut: headless Chromium has no voices, so no start/end fires; count ~65 ms a character as sounding.
-      if (!speechSynthesis.getVoices().length) { const s = sound('webspeech-est', now() + 50); s.end = s.start + (u.text.length * 65) / (u.rate || 1); return speak0(u); }
+      if (!speechSynthesis.getVoices().length) { const s = sound('webspeech-est', now() + 50); s.text = u.text; s.end = s.start + (u.text.length * 65) / (u.rate || 1); return speak0(u); }
       let s = null;
-      u.addEventListener('start', () => { s = sound('webspeech', now()); });
+      u.addEventListener('start', () => { s = sound('webspeech', now()); s.text = u.text; });
       u.addEventListener('end', () => { if (s) s.end = now(); });
       return speak0(u);
     };
@@ -84,7 +92,10 @@ const drive = ({ SAY, REACT_MS }) => new Promise((resolve) => {
     const t = performance.now();
     if (sounding()) quietSince = t;
     const p = sheet.pending();
-    if (p && t - quietSince >= REACT_MS && t - (answered[p.kind] || 0) > 700) {
+    // A person answers once the question itself has been said, not in a pause between queued lines before it.
+    const key = String(p?.kind === 'choose' ? p.question : p?.readback || p?.question || '').slice(0, 12);
+    const heardIt = p && (M.sounds.some((s) => s.text?.includes(key) && s.end != null && s.end <= t) || t - p.at > 5000);
+    if (p && heardIt && t - quietSince >= REACT_MS && t - (answered[p.kind] || 0) > 700) {
       answered[p.kind] = t;
       const word = p.kind === 'choose' ? 'Sam' : 'yes';
       answers.push({ t, kind: p.kind, word, choices: p.choices });
@@ -130,7 +141,7 @@ export function score(raw) {
     sent: sentAt, fps, dropped, slow: slow.map((f) => ({ t: rel(f.t), ms: Math.round(f.d) })),
     longtasks: M.longtasks.filter((l) => l.t >= t0).map((l) => ({ t: rel(l.t), ms: Math.round(l.ms) })),
     cls, shifts: shifts.map((s) => ({ ...s, t: rel(s.t) })), jumps,
-    blanks: (M.blankAt || []).filter((t) => t >= t0).map(rel),
+    blanks: (M.blankAt || []).filter((t) => t >= t0).map(rel), t0,
     answers: answers.map((a) => ({ ...a, t: rel(a.t) })),
     events: M.events.map((e) => ({ ...e, t: rel(e.t) })), sounds,
   };
