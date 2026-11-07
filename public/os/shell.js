@@ -25,7 +25,7 @@ const QUIET = /[?&]quiet\b/.test(location.search); // the eval and the flows: no
 const look = Object.assign({ size: 100, theme: 'dark', rate: 1, speaker: 'murmur', agency: 'ask', planner: 'auto', nolook: false },
   store.get('look', {}));
 const saveLook = () => store.set('look', look);
-let agent = null; // set at the end, once every app has mounted (Mine reads os.workflows on mount)
+let agent = null; // declared before the mount loop: Mine reads os.workflows during seed()
 
 // ---------- the Librarian: Your look lives in the ability profile; Stop learning pauses memory ----------
 let librarian;
@@ -122,7 +122,6 @@ const port = browserKV({ prefix: 'murmur' });
 const appsEl = $('#apps');
 const roots = {}, kvs = {};
 let current = null, agentPress = false;
-let agent = null; // declared before the mount loop: Mine reads os.workflows during seed()
 let personal = new AbortController(); // the person's own reads (Read it); Stop aborts it too
 const cursor = createCursor(document);
 for (const app of registry.list()) {
