@@ -14,7 +14,7 @@ const tick = () => new Promise((r) => setImmediate(r));
 
 // One phone with only Bank on it. answers: the runner's ask-first sheet; hand: os.confirm for a person's own tap.
 // Like the shell (public/os/shell.js), os.confirm answers yes at once while the agent's ctx.tap is pressing.
-async function phone({ answers = [], hand = [], picks = [] } = {}) {
+async function phone({ answers = [], hand = [], picks = [], saved = null } = {}) {
   const doc = fakeDocument(), bus = createBus(), registry = createRegistry();
   registry.register(bank);
   const port = browserKV({ storage: fakeStorage(), prefix: 'murmur' });
@@ -26,8 +26,9 @@ async function phone({ answers = [], hand = [], picks = [] } = {}) {
     asked.push({ gate, readback, byHand: true });
     return hand.shift() ?? false;
   };
+  if (saved) await kv.set('state', saved);
   const root = await mountApp(bank, doc.body, { kv, bus, confirm, say: async (t) => { spoken.push(t); } });
-  await bank.reset();
+  if (!saved) await bank.reset();
   const ask = async ({ gate, readback }) => { asked.push({ gate, readback }); return answers.shift() ?? false; };
   const choose = async ({ choices }) => { const i = choices.indexOf(picks.shift()); return i < 0 ? null : i; };
   const ctxFor = (app) => {
@@ -37,10 +38,15 @@ async function phone({ answers = [], hand = [], picks = [] } = {}) {
     return ctx;
   };
   const run = (name, params = {}) => runAction({ registry, name: `bank__${name}`, params, bus, ctxFor });
+  // As the agent's runner does (public/agent/runner.js): a gated action's resolve first, then runAction; null is "Not paid."
+  const runResolved = async (name, params) => {
+    const p = await bank.actions[name].resolve(params, ctxFor(bank));
+    return p ? run(name, p) : { ok: false, cancelled: true, reason: 'Not paid.' };
+  };
   const said = () => bus.log.filter((e) => e.name === 'say').map((e) => e.payload?.text ?? e.text);
   const button = (text) => [...root.all()].find((n) => n.tagName === 'BUTTON' && controlName(n).startsWith(text));
   const press = async (text) => { const b = button(text); assert.ok(b, `no button "${text}"`); b.click(); await tick(); await tick(); };
-  return { root, bus, run, said, asked, taps, spoken, ctxFor, port, button, press, s: () => bank.state() };
+  return { root, bus, run, runResolved, said, asked, taps, spoken, ctxFor, port, button, press, s: () => bank.state() };
 }
 
 test('bank: on the board, seeded state is exactly state.example.json, field names pinned', async () => {
@@ -126,6 +132,40 @@ test('Sam is one payee now; two matching names still ask, and the early readback
   assert.equal(r.ask.question, 'Sam or Samira?');
   assert.deepEqual(r.ask.choices.map((c) => c.id), ['sam', 'samira']);
   assert.equal(M.readbackFor(s, ['Sam'], 2000), 'Pay Sam or Samira £20. From Murmur Bank.');
+});
+
+const withSamira = () => { const st = M.fresh(); st.payees.splice(2, 0, { id: 'samira', name: 'Samira' }); return st; };
+const questions = (bus) => bus.log.filter((e) => e.name === 'ask').map((e) => e.payload?.question ?? e.question);
+
+test('resolve before the gate: "Sam" with a Samira asks once, then one confirm reads the exact name', async () => {
+  const { runResolved, asked, bus, s } = await phone({ saved: withSamira(), answers: [true], picks: ['Samira'] });
+  const r = await runResolved('payPerson', { who: 'Sam', amount: 20 });
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual(questions(bus), ['Sam or Samira?']);
+  assert.deepEqual(asked.map((a) => a.readback), ['Pay Samira £20. From Murmur Bank.'], 'one confirm, no second ask inside run');
+  assert.deepEqual(s().lastPaid.to, ['samira']);
+  assert.equal(s().balance, 124050 - 2000);
+});
+
+test('resolve: no one chosen cancels before any confirm; an exact or unknown name asks nothing', async () => {
+  const none = await phone({ saved: withSamira(), answers: [true], picks: [] });
+  assert.deepEqual(await none.runResolved('payPerson', { who: 'Sam', amount: 20 }), { ok: false, cancelled: true, reason: 'Not paid.' });
+  assert.equal(none.asked.length, 0);
+  assert.equal(none.s().balance, 124050);
+
+  const seeded = await phone();
+  const x = bank.actions.payPerson;
+  assert.deepEqual(await x.resolve({ who: 'Sam', amount: 20 }, seeded.ctxFor(bank)), { who: 'Sam', amount: 20, id: 'sam' });
+  assert.deepEqual(await x.resolve({ who: 'Bob', amount: 20 }, seeded.ctxFor(bank)), { who: 'Bob', amount: 20 }, 'run then fails in words');
+  assert.equal(questions(seeded.bus).length, 0);
+});
+
+test('resolve for a split: each ambiguous name asked once, one confirm with every share', async () => {
+  const { runResolved, asked, s } = await phone({ saved: withSamira(), answers: [true], picks: ['Sam'] });
+  const r = await runResolved('splitBill', { who: ['Sam', 'Mum'], total: 30 });
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual(asked.map((a) => a.readback), ['Pay Sam £15 and Mum £15. From Murmur Bank.']);
+  assert.deepEqual(s().lastPaid.to, ['sam', 'mum']);
 });
 
 test('split £61.01 between Mum and Landlord: one gate, odd penny to the first', async () => {

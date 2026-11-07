@@ -17,10 +17,10 @@ async function toScreen(ctx, screen, opener) {
 }
 
 /** Each spoken name to one payee id; two matches ask, as in "Sam or Samira?". Returns { ids, asked }. */
-async function whoIs(ctx, whos) {
+async function whoIs(ctx, whos, settled = []) {
   const ids = []; let asked = false;
-  for (const w of whos) {
-    const r = M.resolve(s, w);
+  for (const [i, w] of whos.entries()) {
+    const r = M.resolve(s, w, settled[i]);
     if (r.none) throw new Error(r.none);
     let id = r.id;
     if (r.ask) {
@@ -46,10 +46,28 @@ async function fillAndPay(ctx, { ids, asked }, total, note) {
   if (why) throw new Error(why);
 }
 
-const paidTo = (st, whos) => {
+/**
+ * The runner calls this before the gate, on params not yet validated, so the one confirm names the exact person.
+ * null (no one chosen) cancels with "Not paid."; an unknown name passes through so run fails in words.
+ */
+async function settle(ctx, whos) {
+  const ids = [], names = [];
+  if (!Array.isArray(whos)) return { none: true };
+  for (const w of whos) {
+    const r = M.resolve(s, w);
+    if (r.none) return { none: true };
+    const pick = r.ask ? await ctx.choose(r.ask.question, r.ask.choices) : { label: M.payee(s, r.id).name, id: r.id };
+    if (!pick) return null;
+    ids.push(pick.id); names.push(pick.label);
+  }
+  return { ids, names };
+}
+const ID = { type: 'string', description: 'Leave out: the app sets it after asking who' };
+
+const paidTo = (st, whos, ids = []) => {
   const lp = st.lastPaid;
   if (!lp || lp.cancelled) return false;
-  return whos.length === lp.to.length && whos.every((w) => M.candidates(st, w).some((c) => lp.to.includes(c.id)));
+  return whos.length === lp.to.length && whos.every((w, i) => M.candidates(st, w, ids[i]).some((c) => lp.to.includes(c.id)));
 };
 
 const app = {
@@ -100,17 +118,19 @@ const app = {
         who: { type: 'string', description: 'The name as said: Mum, Sam or Landlord' },
         amount: { type: 'number', description: 'Pounds, for example 20 or 12.50' },
         note: { type: 'string', description: 'What it is for, if they said' },
+        id: ID,
       }, required: ['who', 'amount'] },
       gate: 'pay',
       hint: 'Pay someone is the third button; choose the person, write the amount, then Pay',
-      readback: (st, p) => M.readbackFor(st, [p.who], pence(p.amount)),
+      async resolve(p, ctx) { const r = await settle(ctx, [p.who]); return r && (r.none ? p : { ...p, who: r.names[0], id: r.ids[0] }); },
+      readback: (st, p) => M.readbackFor(st, [p.who], pence(p.amount), 'pay', [p.id]),
       async run(p, ctx) {
         if (!(pence(p.amount) > 0)) throw new Error('The amount must be more than nothing.');
-        const who = await whoIs(ctx, [p.who]);
+        const who = await whoIs(ctx, [p.who], [p.id]);
         await toScreen(ctx, 'pay', '#bank-pay-open');
         await fillAndPay(ctx, who, pence(p.amount), p.note);
       },
-      verify: (st, p) => (paidTo(st, [p.who]) && st.lastPaid.total === pence(p.amount)) || 'It did not pay.',
+      verify: (st, p) => (paidTo(st, [p.who], [p.id]) && st.lastPaid.total === pence(p.amount)) || 'It did not pay.',
     },
     splitBill: {
       describe: 'Split a bill total equally and pay each person their share',
@@ -118,18 +138,20 @@ const app = {
       params: { type: 'object', properties: {
         who: { type: 'array', items: { type: 'string' }, description: 'The names as said' },
         total: { type: 'number', description: 'The whole bill in pounds' },
+        ids: { type: 'array', items: ID },
       }, required: ['who', 'total'] },
       gate: 'pay',
       hint: 'Split a bill is the fourth button; choose everyone who shares it, write the total, then Pay',
-      readback: (st, p) => M.readbackFor(st, p.who, pence(p.total), 'split'),
+      async resolve(p, ctx) { const r = await settle(ctx, p.who); return r && (r.none ? p : { ...p, who: r.names, ids: r.ids }); },
+      readback: (st, p) => M.readbackFor(st, p.who, pence(p.total), 'split', p.ids),
       async run(p, ctx) {
         if (!p.who.length) throw new Error('Say who shares the bill.');
         if (!(pence(p.total) > 0)) throw new Error('The total must be more than nothing.');
-        const who = await whoIs(ctx, p.who);
+        const who = await whoIs(ctx, p.who, p.ids);
         await toScreen(ctx, 'split', '#bank-split-open');
         await fillAndPay(ctx, who, pence(p.total), '');
       },
-      verify: (st, p) => (paidTo(st, p.who) && st.lastPaid.total === pence(p.total)) || 'It did not pay everyone.',
+      verify: (st, p) => (paidTo(st, p.who, p.ids) && st.lastPaid.total === pence(p.total)) || 'It did not pay everyone.',
     },
     freezeCard: {
       describe: 'Freeze the bank card so nobody can use it',

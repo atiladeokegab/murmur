@@ -63,21 +63,22 @@ export function toPence(v) {
 const norm = (s) => String(s || '').trim().toLowerCase();
 export const payee = (s, id) => s.payees.find((p) => p.id === id) || null;
 /** Every payee a spoken name could mean; more than one means the caller must ask. */
-export function candidates(s, who) {
+export function candidates(s, who, id) {
+  if (id) return s.payees.filter((p) => p.id === id); // settled by an earlier ask
   const w = norm(who);
   if (!w) return [];
   return s.payees.filter((p) => norm(p.name).startsWith(w));
 }
 /** { id } or { ask: { question, choices } } or { none }. */
-export function resolve(s, who) {
-  const list = candidates(s, who);
+export function resolve(s, who, id) {
+  const list = candidates(s, who, id);
   if (list.length === 1) return { id: list[0].id };
   if (!list.length) return { none: `${who || 'That name'} isn't one of your payees.` };
   const names = list.map((p) => p.name);
   return { ask: { question: `${names.slice(0, -1).join(', ')} or ${names.at(-1)}?`, choices: list.map((p) => ({ label: p.name, id: p.id })) } };
 }
-const nameOf = (s, who) => {
-  const list = candidates(s, who);
+const nameOf = (s, who, id) => {
+  const list = candidates(s, who, id);
   return list.length ? list.map((p) => p.name).join(' or ') : who;
 };
 
@@ -97,9 +98,9 @@ const list = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs.at
 /** The exact words read before any money moves: "Pay Sam £20. From Murmur Bank." */
 export const readback = (plan) => `Pay ${list(plan.map((p) => `${p.name} ${shown(p.pence)}`))}. From Murmur Bank.`;
 /** The readback before the names are settled (the runner asks before run can ask "Sam or Samira?" when two names match). */
-export function readbackFor(s, whos, pence, mode = 'pay') {
+export function readbackFor(s, whos, pence, mode = 'pay', ids = []) {
   const each = mode === 'split' ? shares(pence, whos.length) : [pence];
-  return readback(whos.map((w, i) => ({ name: nameOf(s, w), pence: each[i] })));
+  return readback(whos.map((w, i) => ({ name: nameOf(s, w, ids[i]), pence: each[i] })));
 }
 
 // ---------- changes (the controls call these) ----------
