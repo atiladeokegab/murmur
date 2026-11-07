@@ -349,6 +349,7 @@ const app = {
   actions: {
     whatsOn: {
       describe: "Say what's on today, or on a named day this week",
+      say: "what's on today",   // what a person would say (offer.js)
       doing: 'Reading your day',
       hint: 'The days are buttons under the heading. Pick one to hear it.',
       params: { type: 'object', properties: { day: dayParam } },
@@ -366,6 +367,7 @@ const app = {
     },
     next: {
       describe: "Say what's next in the calendar",
+      say: "what's next",
       doing: "Finding what's next",
       hint: "What's next is the first button under the heading.",
       params: { type: 'object', properties: {} },
@@ -379,6 +381,7 @@ const app = {
     },
     add: {
       describe: 'Add an event to the calendar',
+      say: 'add an event on Friday',
       doing: 'Adding to your calendar',
       hint: 'Add an event is the second button under the heading. Fill in what, day and time, then Save.',
       params: {
@@ -401,6 +404,7 @@ const app = {
     },
     move: {
       describe: 'Move an event to another day, and optionally another time',
+      say: 'move lunch to Wednesday',
       doing: 'Moving an event',
       hint: 'Open the event, then Move is the second button, then pick the day',
       params: {
@@ -428,7 +432,8 @@ const app = {
           if (c?.label !== 'Move anyway') { await ctx.tap($('cal-keep')); throw new Error(`Not moved. ${e.title} stays on ${e.day}.`); }
           await ctx.tap($('cal-anyway'));
         }
-        await ctx.say(e.with ? `Moved. Tell ${e.with}?` : 'Moved.');
+        // A statement, never a question: no sheet is open, so a "yes" would go nowhere. "tell Mum" plans the message.
+        await ctx.say(e.with ? `Moved to ${to}. To let ${e.with} know, say "tell ${e.with}".` : `Moved to ${to}.`);
       },
       verify(s, p) {
         const m = s.lastMoved, d = dayOf(p.day, s.today);
@@ -450,6 +455,7 @@ const app = {
     },
     invite: {
       describe: 'Send someone an invite to an event, or tell them its new time',
+      say: 'invite Sam to lunch',
       doing: 'Sending an invite',
       gate: 'send',
       hint: 'Open the event, then Invite is the third button. Say who, then Send invite.',

@@ -45,6 +45,7 @@ const app = {
   actions: {
     openChapter: {
       describe: 'Open a chapter of the book by its number',
+      say: 'open chapter two',
       doing: 'Opening the chapter',
       params: { type: 'object', properties: { n: { type: 'integer', minimum: 1 } }, required: ['n'] },
       gate: null,
@@ -59,6 +60,7 @@ const app = {
     },
     readLastPage: {
       describe: 'Read the last page of the book aloud, sentence by sentence',
+      say: 'read the last page',
       doing: 'Reading the last page',
       params: { type: 'object', properties: {} },
       gate: null,
@@ -68,6 +70,7 @@ const app = {
     },
     where: {
       describe: 'Say where you are in the book: chapter, sentence and what that part is about',
+      say: 'where am I',
       doing: 'Finding your place',
       params: { type: 'object', properties: {} },
       gate: null,
@@ -77,6 +80,7 @@ const app = {
     },
     carryOn: {
       describe: 'Carry on reading from where you stopped',
+      say: 'carry on',
       doing: 'Carrying on',
       params: { type: 'object', properties: {} },
       gate: null,
@@ -87,6 +91,7 @@ const app = {
     },
     dictate: {
       describe: 'Add dictated sentences to the end of the open chapter',
+      say: 'write in the book',
       doing: 'Writing it down',
       params: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       gate: null,
@@ -101,6 +106,7 @@ const app = {
     },
     change: {
       describe: 'Change one word in the open chapter to another, nearest where you are',
+      say: 'change a word',
       doing: 'Changing the word',
       params: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] },
       gate: null,
@@ -119,6 +125,7 @@ const app = {
     },
     newChapter: {
       describe: 'Start a new, empty chapter at the end of the book',
+      say: 'new chapter',
       doing: 'Starting a new chapter',
       params: { type: 'object', properties: { title: { type: 'string' } } },
       gate: null,
