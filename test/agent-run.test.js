@@ -407,6 +407,14 @@ test('never "Done." after a refusal the app said, or a step that changed nothing
   assert.notEqual(r.line, '', 'a real change still ends on its line');
 });
 
+test('"Call Mum" with no calls app opens her chat and says so, never "Done."', async () => {
+  const s = await setup();
+  await s.agent.hear('Call Mum');
+  assert.equal(s.state('messages').currentChat, 'mum');
+  assert.ok(s.spoken.includes("I can't call yet. I've opened Mum's chat."), s.spoken.join(' | '));
+  assert.ok(!s.spoken.includes('Done.'), s.spoken.join(' | '));
+});
+
 test('a read-only task:done carries the live Undo with its own expiry, so the panel keeps the button', async () => {
   const s = await setup();
   await s.agent.runner.run({ utterance: 'write', steps: [{ tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Lunch.' } }] });

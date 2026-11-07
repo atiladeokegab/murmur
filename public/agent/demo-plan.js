@@ -304,6 +304,11 @@ function plan(said, apps, context, dry) {
       (m = t.match(/^read\s+(?:me\s+)?(?:my\s+|the\s+)?(?:latest\s+|last\s+|new\s+)?(?:messages?|texts?)\s+from\s+(\w+)$/i)) || (m = t.match(/^(?:open|show)\s+(\w+)'s\s+chat$/i))) {
     return task([step('messages', ['openChat', 'open'], { who: name(m[1]) }), step('messages', ['read'])]);
   }
+  // No phone app yet: "call Mum" opens Mum's chat and says so; an installed calls app gets its own plan.
+  if ((m = t.match(/^(?:call|ring|phone|video call)\s+(?!(?:a|an|the|my|me|it|them)\b)(\w+)(?:\s+(?:now|back|please))?$/i)) && !apps.some((a) => /call|phone/i.test(a.id))) {
+    const who = name(m[1]);
+    return task([step('messages', ['openChat', 'open'], { who }), { tool: 'say', params: { text: `I can't call yet. I've opened ${who}'s chat.` } }]);
+  }
   // "Reply to that message": no words to send yet, so ask, and the answer is the reply (drafted, never sent unasked).
   if (/^(?:reply|answer|respond)(?:\s+to\s+(?:that|this|the|it|her|him|them)(?:\s+(?:message|text|one))?)?$/i.test(t)) return { ...task([{ tool: 'ask', params: { question: 'What should I say?' } }]), asked: 'reply' };
   if ((m = raw.match(/^(?:reply|answer|respond)(?:\s+with)?[:,]?\s+(.+)$/i))) return task([step('messages', ['reply', 'draft'], { text: body(m[1].replace(/[.!?]+$/, '')) })]);

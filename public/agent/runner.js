@@ -155,7 +155,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
       const x = last.app && lastApp.actions[last.action];
       // Short words: the app's own done line, else "Sent." or "Done." (the app already said what it read).
       line = typeof x?.done === 'function' ? x.done(lastApp.state(), last.params)
-        : gatedRan ? `${PAST[gatedRan][0].toUpperCase()}${PAST[gatedRan].slice(1)}.` : CHANGES(last.action) && !task.spoke && [...before.values()].some(([b, was]) => snap(b) !== was) ? 'Done.' : ''; // a refusal or a no-op is never "Done."
+        : gatedRan ? `${PAST[gatedRan][0].toUpperCase()}${PAST[gatedRan].slice(1)}.` : last.app && CHANGES(last.action) && !task.spoke && [...before.values()].some(([b, was]) => snap(b) !== was) ? 'Done.' : ''; // a refusal or a no-op is never "Done."
     }
     const ms = clock.now() - t0;
     // A read-only, refused or No'd task keeps the last change undoable, still 8 s from that change.
