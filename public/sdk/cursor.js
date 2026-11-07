@@ -36,7 +36,7 @@ export function createCursor(doc = document) {
       ring.hidden = false;
       ring.style.opacity = '1';
       if (appearing) { ring.getBoundingClientRect(); ring.style.transition = ''; }
-      await wait(still() ? 40 : 80); // let the glide land before the press; the lead's bar: a pick or yes verified in under 100 ms
+      await wait(still() ? 40 : 150); // let the glide land before the press; 80 ms read as a teleport on a long move
       delete ring.dataset.press; ring.getBoundingClientRect(); ring.dataset.press = '';
     },
     hide() { if (ring) ring.hidden = true; target = null; },

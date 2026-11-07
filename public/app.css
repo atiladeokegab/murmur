@@ -345,8 +345,8 @@ dialog { container: sheet / inline-size; }
   position: fixed; left: 0; top: 0; z-index: 20; pointer-events: none; box-sizing: border-box;
   width: var(--w); height: var(--h); transform: translate(var(--x), var(--y));
   border: var(--ring) solid var(--c-focus); border-radius: var(--r-btn);
-  transition: transform 80ms cubic-bezier(0.2, 0.8, 0.2, 1), width 80ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    height 80ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 80ms ease-out; /* shortcut: literal until design's motion tokens land */
+  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1), width 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 150ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 100ms ease-out; /* shortcut: literal until design's motion tokens land */
 }
 .agent-cursor[hidden] { display: none; }
 /* the sheet asks first: the ring on the control behind it waits, it does not draw over the question */
