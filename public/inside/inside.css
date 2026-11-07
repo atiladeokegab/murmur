@@ -87,3 +87,16 @@ body.inside[data-link="on"] #link::before { background: var(--c-ink); }
   @keyframes turn { to { transform: rotate(1turn); } }
   @keyframes flip { 0% { transform: perspective(300px) rotateX(-88deg); opacity: .2 } 70% { transform: perspective(300px) rotateX(8deg) } 100% { transform: none; opacity: 1 } }
 }
+
+/* /inside?big (or ?stage): the projector view, read from the back of the room. One column, the live task only,
+   and the root at 25px so the smallest type (.8rem) is 20px. */
+html.big { font-size: 25px; }
+html.big body.inside { height: auto; overflow: visible; padding: 1rem 1.25rem; }
+html.big .inside header { grid-template-columns: minmax(0, 1fr); }
+html.big .inside #tally { grid-column: 1; grid-row: auto; justify-self: stretch; flex-wrap: wrap; }
+html.big .inside #tally div { min-width: 0; flex: 1 1 6rem; }
+html.big .inside #tally dt { white-space: normal; text-align: center; }
+html.big .inside main { grid-template-columns: minmax(0, 1fr); }
+html.big .inside section { max-height: none; }
+html.big .inside section > ol { overflow: visible; }
+html.big .inside li.old { display: none; } /* history lives on the laptop view; the room sees what is happening now */

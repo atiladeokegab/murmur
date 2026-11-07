@@ -32,6 +32,9 @@ const ROW = {
 const LABELS = [['tasks', 'tasks'], ['verified', 'steps verified'], ['failed', 'steps failed'], ['asked', 'gates asked'], ['bypassed', 'gates bypassed'], ['modelCalls', 'model calls']];
 const $ = (id) => document.getElementById(id);
 
+// ?big or ?stage: the projector view (inside.css, html.big)
+if (/[?&](?:big|stage)\b/.test(location.search)) document.documentElement.classList.add('big');
+
 $('cols').innerHTML = COLUMNS.map((c) => `<section aria-labelledby="h-${c}"><h2 id="h-${c}"><span>${c}</span><span class="count" id="n-${c}">0</span></h2><ol id="c-${c}"></ol></section>`).join('');
 $('tally').innerHTML = LABELS.map(([k, l]) => `<div class="t-${k}"><dt>${l}</dt><dd id="t-${k}">0</dd></div>`).join('');
 
