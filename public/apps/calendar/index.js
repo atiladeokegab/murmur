@@ -428,7 +428,8 @@ const app = {
           if (c?.label !== 'Move anyway') { await ctx.tap($('cal-keep')); throw new Error(`Not moved. ${e.title} stays on ${e.day}.`); }
           await ctx.tap($('cal-anyway'));
         }
-        await ctx.say(e.with ? `Moved. Tell ${e.with}?` : 'Moved.');
+        // A statement, never a question: no sheet is open, so a "yes" would go nowhere. "tell Mum" plans the message.
+        await ctx.say(e.with ? `Moved to ${to}. To let ${e.with} know, say "tell ${e.with}".` : `Moved to ${to}.`);
       },
       verify(s, p) {
         const m = s.lastMoved, d = dayOf(p.day, s.today);

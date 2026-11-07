@@ -136,3 +136,16 @@ test('3. Look\'s longer answer falls back to the default on a saved value that i
   assert.match(line, /colours, now match my phone/);
   assert.match(line, /who speaks, now murmur/);
 });
+
+test('a move with Mum ends on a statement, never a dead question, and "tell Mum" then plans a message about it', async () => {
+  const s = await setup();
+  await s.agent.hear('Move lunch to Friday');
+  const line = s.spoken.find((t) => t.startsWith('Moved'));
+  assert.equal(line, 'Moved to Friday. To let Mum know, say "tell Mum".');
+  assert.ok(!s.spoken.some((t) => /^Moved.*\?$/.test(t)), 'no question without a gate');
+  const said = s.agent.hear('tell Mum');
+  for (let i = 0; i < 200 && !s.agent.gates.current; i++) await tick();
+  assert.ok(s.agent.gates.current, 'the send gate opened');
+  await s.agent.yes(); await said;
+  assert.deepEqual(s.state('messages').lastSent, { to: 'mum', text: 'Lunch is now on Friday at 12:30.' });
+});

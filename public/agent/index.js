@@ -243,7 +243,12 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   // the plan when the final words and the open app match. Anything else plans afresh.
   let early = null;
   const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
-  async function contextNow() { return { app: current(), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [] }; }
+  async function contextNow() {
+    // the last Calendar move with someone, so "tell Mum" can say what moved
+    const cal = app('calendar')?.state?.(), mv = cal?.lastMoved, ev = mv && cal.events?.find((e) => e.id === mv.id);
+    const moved = ev?.with ? { what: ev.title.replace(/\s+with\s+.+$/i, ''), with: ev.with, day: mv.to, time: mv.time } : null;
+    return { app: current(), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [], ...(moved ? { moved } : {}) };
+  }
   async function planFor(text) {
     const context = await contextNow();
     if (early && early.text === norm(text) && early.app === context.app) { const e = early; early = null; return e.plan; }
