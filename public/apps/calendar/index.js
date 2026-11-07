@@ -2,11 +2,11 @@
 // One invented week. "Today" is fixed at Monday 09:00 so the demo and the eval always hear the same week.
 // The screen shows one thing at a time: a day's list, or one open event, or the add form.
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const TODAY = 'Monday', NOW = '09:00';
+const TODAY = 'Monday', TODAY_DATE = '2026-11-09', NOW = '09:00';
 const SEED = [
-  { id: 'lunch', title: 'Lunch with Mum', day: 'Tuesday', time: '12:30', mins: 60, with: 'Mum', invited: [] },
-  { id: 'bookclub', title: 'Book club', day: 'Thursday', time: '19:00', mins: 90, with: null, invited: [] },
-  { id: 'callsam', title: 'Call Sam', day: 'Friday', time: '19:00', mins: 30, with: 'Sam', invited: [] },
+  { id: 'lunch', title: 'Lunch with Mum', day: 'Tuesday', date: '2026-11-10', time: '12:30', mins: 60, with: 'Mum', invited: [] },
+  { id: 'bookclub', title: 'Book club', day: 'Thursday', date: '2026-11-12', time: '19:00', mins: 90, with: null, invited: [] },
+  { id: 'callsam', title: 'Call Sam', day: 'Friday', date: '2026-11-13', time: '19:00', mins: 30, with: 'Sam', invited: [] },
 ];
 
 let root = null, kv = null, osConfirm = null, osSay = null;
@@ -17,13 +17,57 @@ let before = null; // the last move's starting point, for undo
 let pressed = null; // the control just pressed: where a moved event takes off from
 let personal = false; // a person's own tap moves focus; the agent's taps leave it on Stop
 let clearing = null; // the clear action waits for the button's persistence result
+let targetDate = null;
 
 // ---------- plain helpers (pure: verify and readback use them on state) ----------
 const mins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const order = (a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || mins(a.time) - mins(b.time);
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const hasDate = (input) => /\d/.test(String(input ?? '')); // Weekday-only input never needs digits.
+function validDate(y, m, d) {
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d
+    ? date.toISOString().slice(0, 10) : null;
+}
+/** Absolute dates map to the fixed demo week; weekday-only dates stay in that same week. */
+export function dateOf(s, todayDate = TODAY_DATE) {
+  const raw = String(s ?? '').trim().toLowerCase();
+  const prefix = /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday),?\s+/i.exec(raw)?.[1];
+  const q = raw.replace(/^(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday),?\s+/i, '');
+  let y, m, d, hit;
+  if ((hit = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(q))) [, y, m, d] = hit.map(Number);
+  else if ((hit = /^(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)(?:\s+(\d{4}))?$/.exec(q))) {
+    d = Number(hit[1]); m = MONTHS.indexOf(hit[2]) + 1; y = Number(hit[3]) || Number(todayDate.slice(0, 4));
+  } else if ((hit = /^([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?$/.exec(q))) {
+    m = MONTHS.indexOf(hit[1]) + 1; d = Number(hit[2]); y = Number(hit[3]) || Number(todayDate.slice(0, 4));
+  } else return null;
+  if (m < 1 || m > 12) return null;
+  let result = validDate(y, m, d);
+  if (!result) return null;
+  if (!hit[3] && result < todayDate) result = validDate(y + 1, m, d);
+  if (prefix && DAYS[(new Date(`${result}T00:00:00Z`).getUTCDay() + 6) % 7].toLowerCase() !== prefix.toLowerCase()) return null;
+  return result;
+}
+export function dateForDay(day, todayDate = TODAY_DATE) {
+  const target = DAYS.findIndex((d) => d.toLowerCase() === String(day).toLowerCase());
+  if (target < 0) return null;
+  const start = new Date(`${todayDate}T00:00:00Z`);
+  const startDay = (start.getUTCDay() + 6) % 7; // Monday-first
+  return new Date(start.getTime() + ((target - startDay + 7) % 7) * 86400000).toISOString().slice(0, 10);
+}
+const eventDate = (input) => {
+  if (hasDate(input)) {
+    const date = dateOf(input);
+    return date && date >= TODAY_DATE && date <= dateForDay('Sunday') ? date : null;
+  }
+  return dateForDay(dayOf(input));
+};
 /** "today", "tomorrow", "wed", "Wednesday" -> "Wednesday"; null if not a day. */
 export function dayOf(s, today = TODAY) {
   const raw = String(s ?? '').trim().toLowerCase();
+  if (hasDate(raw) && !eventDate(raw)) return null;
+  const absolute = dateOf(raw);
+  if (absolute) return DAYS[(new Date(`${absolute}T00:00:00Z`).getUTCDay() + 6) % 7];
   // dictation leaves fillers in: "um Wednesday", "Wednesday please"
   const q = raw.replace(/[^a-z ]/g, ' ').replace(/\b(um+|uh+|erm?|please|on|this|the|like|so)\b/g, ' ').trim().replace(/\s+/g, ' ');
   if (!raw || q === 'today') return today;
@@ -33,6 +77,8 @@ export function dayOf(s, today = TODAY) {
 }
 /** "7pm", "7:30 pm", "19:00", "10" -> "HH:MM"; null if not a time. */
 export function timeOf(s) {
+  if (/^noon$/i.test(String(s ?? '').trim())) return '12:00';
+  if (/^midnight$/i.test(String(s ?? '').trim())) return '00:00';
   const m = /^\s*(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\s*$/i.exec(String(s ?? ''));
   if (!m) return null;
   let h = Number(m[1]); const mm = Number(m[2] ?? 0), pm = /^p/i.test(m[3] ?? '');
@@ -137,7 +183,7 @@ function show(day) { shown = day; open = null; picking = inviting = adding = fal
 function doMove(to, time) {
   const e = ev();
   lastMoved = { id: e.id, from: e.day, to, time };
-  e.day = to; e.time = time;
+  e.day = to; e.date = targetDate || dateForDay(to); e.time = time;
   events.sort(order);
   shown = to; picking = false; clash = null;
   status = `Moved to ${to} at ${spoken(time)}.`;
@@ -187,7 +233,7 @@ function addEvent() {
   if (status) return render('cal-status');
   let id = title.toLowerCase().replace(/[^a-z0-9]/g, '') || 'event', n = 2;
   while (events.some((e) => e.id === id)) id = id.replace(/\d*$/, '') + n++;
-  events.push({ id, title, day, time, mins: 60, with: null, invited: [] });
+  events.push({ id, title, day, date: eventDate(draft.day), time, mins: 60, with: null, invited: [] });
   events.sort(order);
   lastAdded = id; adding = false; shown = day; draft.title = draft.day = draft.time = '';
   status = `Added ${title} on ${day} at ${spoken(time)}.`;
@@ -332,7 +378,7 @@ const app = {
         btn('cal-add', 'Add an event', () => { adding = true; open = null; picking = inviting = false; clash = null; status = ''; render('cal-add-h'); })),
       el('div', { id: 'cal-days', className: 'cal-grid', role: 'group', 'aria-label': 'Days' }),
       el('div', { id: 'cal-body' }));
-    events = ((await kv.get('events')) || []).sort(order);
+    events = ((await kv.get('events')) || []).map((e) => ({ ...e, date: e.date || dateForDay(e.day) })).sort(order);
     render();
   },
 
@@ -426,7 +472,7 @@ const app = {
       },
       verify(s, p) {
         const e = s.events.find((x) => x.id === s.lastAdded);
-        return (e && e.title === p.title.trim() && e.day === dayOf(p.day, s.today) && e.time === timeOf(p.time)) || "The event isn't in the calendar.";
+        return (e && e.title === p.title.trim() && e.day === dayOf(p.day, s.today) && e.date === eventDate(p.day) && e.time === timeOf(p.time)) || "The event isn't in the calendar.";
       },
     },
     move: {
@@ -441,32 +487,39 @@ const app = {
         required: ['event', 'day'],
       },
       async run(p, ctx) {
-        const to = dayOf(p.day);
+        const to = dayOf(p.day), date = eventDate(p.day);
         if (!to) throw new Error(`I don't know the day ${p.day}.`);
+        if (!date) throw new Error(`I don't know the date ${p.day}.`);
         if (p.time && !timeOf(p.time)) throw new Error(`I don't know the time ${p.time}.`);
         const e = await pickOne(ctx, p.event);
         const time = timeOf(p.time) || e.time;
-        if (e.day === to && e.time === time) throw new Error(`${e.title} is already on ${to} at ${spoken(time)}.`);
-        before = { id: e.id, day: e.day, time: e.time };
+        if (e.day === to && e.date === date && e.time === time) throw new Error(`${e.title} is already on ${to} at ${spoken(time)}.`);
+        before = { id: e.id, day: e.day, date: e.date, time: e.time };
         await openEvent(ctx, e);
         await ctx.tap($('cal-move'));
-        if (p.time) { await ctx.tap($('cal-to-time')); await ctx.type($('cal-to-time'), time); }
-        const hit = clashes(events, e.id, to, time, e.mins);
-        if (!hit.length) await ctx.say(events.some((x) => x.day === to && x.id !== e.id) ? `${to} at ${spoken(time)} is free.` : `${to}'s free.`);
-        await ctx.tap($(`cal-to-${to}`));
-        if (clash) {
-          const c = await ctx.choose(clashLine(clash, e), [{ label: 'Move anyway' }, { label: `Keep it on ${e.day}` }]);
-          if (c?.label !== 'Move anyway') { await ctx.tap($('cal-keep')); throw new Error(`Not moved. ${e.title} stays on ${e.day}.`); }
-          await ctx.tap($('cal-anyway'));
-        }
-        // A statement, never a question: no sheet is open, so a "yes" would go nowhere. "tell Mum" plans the message.
-        await ctx.say(e.with ? `Moved to ${to}. To let ${e.with} know, say "tell ${e.with}".` : `Moved to ${to}.`);
+        targetDate = date;
+        try {
+          if (p.time) { await ctx.tap($('cal-to-time')); await ctx.type($('cal-to-time'), time); }
+          const hit = clashes(events, e.id, to, time, e.mins);
+          if (!hit.length) await ctx.say(events.some((x) => x.day === to && x.id !== e.id) ? `${to} at ${spoken(time)} is free.` : `${to}'s free.`);
+          await ctx.tap($(`cal-to-${to}`));
+          if (clash) {
+            const c = await ctx.choose(clashLine(clash, e), [{ label: 'Move anyway' }, { label: `Keep it on ${e.day}` }]);
+            if (c?.label !== 'Move anyway') { await ctx.tap($('cal-keep')); throw new Error(`Not moved. ${e.title} stays on ${e.day}.`); }
+            await ctx.tap($('cal-anyway'));
+          }
+          // A statement, never a question: no sheet is open, so a "yes" would go nowhere. "tell Mum" plans the message.
+          await ctx.say(e.with ? `Moved to ${to}. To let ${e.with} know, say "tell ${e.with}".` : `Moved to ${to}.`);
+        } finally { targetDate = null; }
       },
       verify(s, p) {
         const m = s.lastMoved, d = dayOf(p.day, s.today);
         const e = m && s.events.find((x) => x.id === m.id);
         if (!e || !matches(s.events, p.event).some((x) => x.id === e.id)) return 'Nothing was moved.';
         if (e.day !== d || m.to !== d) return `${e.title} is on ${e.day}, not ${d}.`;
+        if (hasDate(p.day) && !eventDate(p.day)) return 'That date is invalid or outside this demo week.';
+        const date = eventDate(p.day);
+        if (date && e.date !== date) return `${e.title} is on ${e.date}, not ${date}.`;
         return (!p.time || e.time === timeOf(p.time)) || `${e.title} is at ${spoken(e.time)}.`;
       },
       async undo(ctx) {
@@ -475,7 +528,8 @@ const app = {
         await openEvent(ctx, e);
         await ctx.tap($('cal-move'));
         await ctx.tap($('cal-to-time')); await ctx.type($('cal-to-time'), before.time);
-        await ctx.tap($(`cal-to-${before.day}`));
+        targetDate = before.date;
+        try { await ctx.tap($(`cal-to-${before.day}`)); } finally { targetDate = null; }
         if (clash) await ctx.tap($('cal-anyway'));
         before = null;
       },

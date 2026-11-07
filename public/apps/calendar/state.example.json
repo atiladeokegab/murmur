@@ -9,9 +9,9 @@
   "adding": false,
   "inviting": false,
   "events": [
-    { "id": "lunch", "title": "Lunch with Mum", "day": "Tuesday", "time": "12:30", "mins": 60, "with": "Mum", "invited": [] },
-    { "id": "bookclub", "title": "Book club", "day": "Thursday", "time": "19:00", "mins": 90, "with": null, "invited": [] },
-    { "id": "callsam", "title": "Call Sam", "day": "Friday", "time": "19:00", "mins": 30, "with": "Sam", "invited": [] }
+    { "id": "lunch", "title": "Lunch with Mum", "day": "Tuesday", "date": "2026-11-10", "time": "12:30", "mins": 60, "with": "Mum", "invited": [] },
+    { "id": "bookclub", "title": "Book club", "day": "Thursday", "date": "2026-11-12", "time": "19:00", "mins": 90, "with": null, "invited": [] },
+    { "id": "callsam", "title": "Call Sam", "day": "Friday", "date": "2026-11-13", "time": "19:00", "mins": 30, "with": "Sam", "invited": [] }
   ],
   "next": "lunch",
   "lastMoved": null,
