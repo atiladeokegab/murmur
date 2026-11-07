@@ -9,7 +9,7 @@ const SEED = [
   { id: 'callsam', title: 'Call Sam', day: 'Friday', time: '19:00', mins: 30, with: 'Sam', invited: [] },
 ];
 
-let root = null, kv = null;
+let root = null, kv = null, osConfirm = null;
 let events = [], shown = TODAY, open = null, picking = false, clash = null, adding = false, inviting = false;
 let lastMoved = null, lastAdded = null, lastInvite = null, status = '';
 let draft = { title: '', day: '', time: '', to: '', who: '' };
@@ -120,9 +120,19 @@ function addEvent() {
   status = `Added ${title} on ${day} at ${spoken(time)}.`;
   save(); render('cal-status');
 }
+const inviteLine = (e, who) => `Send ${who} an invite: ${e.title}, ${e.day} at ${spoken(e.time)}.`;
 function sendInvite() {
   const e = ev(), who = draft.who.trim();
   if (!who) { status = 'Say who to invite.'; return render('cal-status'); }
+  // A person's own tap gets the shell's ask-first sheet too; the agent's tap was already asked by the runner.
+  if (personal && osConfirm) {
+    return osConfirm({ gate: 'send', readback: inviteLine(e, who) }).then((ok) => {
+      if (ok) invited(e, who); else { status = 'Not sent.'; render('cal-status'); }
+    });
+  }
+  invited(e, who);
+}
+function invited(e, who) {
   if (!e.invited.some((w) => w.toLowerCase() === who.toLowerCase())) e.invited.push(who);
   lastInvite = { id: e.id, who }; inviting = false; draft.who = '';
   status = `Invite sent to ${who}.`;
@@ -192,7 +202,7 @@ const app = {
   name: 'Calendar',
 
   async mount(r, os) {
-    root = r; kv = os.kv;
+    root = r; kv = os.kv; osConfirm = os.confirm || null;
     // Tokens only (os/contract.md §2.1); the buttons reuse the shell's .choice.
     const style = el('style', { textContent: `#app-calendar{padding:0 var(--gutter)}#app-calendar ol{padding:0}
 #app-calendar li{padding:var(--ring) 0}#app-calendar label{display:block;margin-top:var(--ring)}
@@ -359,7 +369,7 @@ const app = {
       },
       readback(s, p) {
         const e = matches(s.events, p.event)[0];
-        return e ? `Send ${p.who} an invite: ${e.title}, ${e.day} at ${spoken(e.time)}.` : `There's nothing called ${p.event} this week.`;
+        return e ? inviteLine(e, p.who) : `There's nothing called ${p.event} this week.`;
       },
       async run(p, ctx) {
         const e = matches(events, p.event)[0]; // the same event the readback named
