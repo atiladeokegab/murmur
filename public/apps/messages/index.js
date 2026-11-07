@@ -179,11 +179,11 @@ function chatView(c) {
 
 // Send always asks, a person's own tap too: a mis-tap by someone who can't see is the risk. The shell's
 // confirm says yes at once when the agent pressed it (the runner already asked).
-// shortcut: with no os.confirm (agent test fixtures) only the runner's gate applies; fail closed once every fixture passes confirm.
+// No confirm on the mount, no send.
 let sending = Promise.resolve();
 async function sendAsked() {
   if (!s.draft || M.sent(s)) return;
-  const yes = os?.confirm ? await os.confirm({ gate: 'send', readback: app.actions.send.readback(s) }) : true;
+  const yes = os?.confirm ? await os.confirm({ gate: 'send', readback: app.actions.send.readback(s) }) : false;
   if (yes && M.send(s)) { save(); render(); }
 }
 
