@@ -511,7 +511,7 @@ try {
     os: { open: (id) => open(id), current: () => current, install },
     fingerprint: () => passkey.confirm(),
     agency: () => look.agency, answers: () => look.answers,
-    onGate: agentGate, onChoose: agentChoose,
+    onGate: agentGate, onChoose: agentChoose, onStop: hush,
   });
   // Mine mounted before the agent, on its own seed. Give the real store that first tile so Run My morning runs.
   // shortcut: reseeds whenever the store is empty (a deleted My morning returns on reload); fine for the demo
