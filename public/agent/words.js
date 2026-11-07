@@ -14,7 +14,8 @@ const PHRASES = {
 };
 // Confirm words open nothing by themselves: they only count while a gate is open (see hear()). Never ok or mm.
 const CONFIRM = { yes: ['yes', 'yes please', 'yes send it', 'yes do it', 'yes pay', 'yes call', 'yeah', 'yep', 'yup'],
-  send: ['send', 'send it', 'send that'], pay: ['pay', 'pay it', 'pay now'], call: ['call', 'call them', 'call now'] };
+  send: ['send', 'send it', 'send that'], pay: ['pay', 'pay it', 'pay now'], call: ['call', 'call them', 'call now'],
+  hold: ['hold', 'hold it', 'hold that', 'hold the flight', 'yes hold'] };
 const DENY = ['no', 'no thanks', "don't", "don't send it", 'not now', 'leave it', 'nope', 'nah'];
 const FILLER = new Set(['um', 'uh', 'er', 'erm', 'please', 'murmur', 'hey', 'now', 'okay', 'ok', 'so']);
 export const GATE_GRACE_MS = 500;
@@ -65,7 +66,8 @@ export function hear(text, { gate = null, now = Date.now() } = {}) {
     if (j < ws.length && ws[j] !== '.' && !matchAt(ws, j, table)) break;
     if (row.kind === 'confirm') {
       const early = now - gate.openedAt < GATE_GRACE_MS;
-      const fits = row.word === 'yes' || row.word === gate.gate; // "pay" cannot confirm a send
+      // "pay" cannot confirm a send; "hold" answers only a pay gate that holds ("... held for 24 hours. Hold?")
+      const fits = row.word === 'yes' || row.word === gate.gate || (row.word === 'hold' && gate.gate === 'pay' && /\b(hold|held)\b/i.test(gate.readback || ''));
       found.push(early ? { kind: 'ignored', reason: 'early' } : fits ? { kind: 'confirm', word: row.word } : { kind: 'ignored', reason: 'wrong-word' });
     } else found.push({ kind: row.kind });
     i = j;

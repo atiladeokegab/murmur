@@ -386,3 +386,18 @@ test('Ask me: a step line is never said once its step is done, and "Writing your
   await s.agent.hear("Read Mum's message");
   assert.ok(!s.spoken.slice(at).includes('Opening the chat'), 'its step was done before its turn');
 });
+
+test('a spoken "hold" answers "Hold?" and still checks the fingerprint; it never confirms a payment or a send', async () => {
+  const { hear } = await import('../public/agent/words.js');
+  let prints = 0;
+  const clock = { t: 0, now() { return this.t; } };
+  const g = createGates({ say: async () => {}, clock, fingerprint: async () => { prints++; return true; } });
+  const asked = g.ask({ gate: 'pay', readback: 'The 9:40 to Lisbon, £120, held for 24 hours.' });
+  clock.t = 1000;
+  assert.deepEqual(hear('hold', { gate: g.current, now: clock.t }).words, [{ kind: 'confirm', word: 'hold' }]);
+  await g.yes();
+  assert.equal(await asked, true); assert.equal(prints, 1, 'the pay fingerprint is kept');
+  const pay = { gate: 'pay', readback: 'Pay Sam £20. From Murmur Bank.', openedAt: 0 };
+  assert.equal(hear('hold', { gate: pay, now: 1000 }).words[0].kind, 'ignored');
+  assert.equal(hear('hold', { gate: { gate: 'send', readback: 'To Sam: late.', openedAt: 0 }, now: 1000 }).words[0].kind, 'ignored');
+});

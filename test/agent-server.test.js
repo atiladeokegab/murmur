@@ -154,3 +154,19 @@ test('a real bank is refused before the model is asked, even when the model woul
     assert.ok(!demoPlan('Text Sam then check my Barclays balance', apps).plan.some((x) => !x.tool.startsWith('messages__')), 'at most words sent, never a bank step');
   } finally { globalThis.fetch = realFetch; }
 });
+
+test('the client refuses before any provider too: a model that would plan a real bank is never asked', async () => {
+  const { planUtterance } = await import('../public/agent/planner.js');
+  let calls = 0;
+  const fetch = async () => { calls++; return { ok: true, json: async () => ({ kind: 'task', steps: [{ tool: 'bank__balance', params: {} }], provider: 'gemini' }) }; };
+  const bankApps = [...apps, { id: 'bank', name: 'Murmur Bank', actions: [{ name: 'balance', params: { type: 'object', properties: {} } }] }];
+  for (const u of ['Check my Barclays bank balance', 'Move GBP 20 from my current account to another account', 'Check my Chase balance', 'Open my TSB account']) {
+    const out = await planUtterance(u, bankApps, {}, { fetch });
+    assert.deepEqual([u, out.kind, out.steps.length], [u, 'refuse', 0]);
+  }
+  assert.equal(calls, 0);
+  const server = await plan({ key: '', utterance: 'Move GBP 20 from my current account to another account', apps: bankApps });
+  assert.equal(server.kind, 'refuse', 'money movement is refused, never a calendar move');
+  assert.equal((await planUtterance("What's my balance", bankApps, {}, { fetch })).steps[0].tool, 'bank__balance', 'the phone\'s own Bank still works');
+  assert.equal(calls, 0, 'and plans locally');
+});
