@@ -91,6 +91,7 @@ const app = {
         const box = q('#msg-draft');
         await ctx.tap(box);
         await ctx.type(box, r.text);
+        q('mark.changed')?.scrollIntoView?.({ block: 'center' });
         await ctx.say(sentences(r.text)[r.index]);
       },
       verify: (st, p) => (!!st.changed && new RegExp(`\\b${esc(p.to)}\\b`, 'i').test(st.changed.to)
@@ -102,7 +103,8 @@ const app = {
       params: { type: 'object', properties: {} },
       gate: 'send',
       hint: 'Send is the button right after the reply box',
-      readback: (st) => `Send to ${M.chatOf(st)?.name || 'no one'}: ${st.draft || 'nothing yet'}`,
+      readback: (st) => `Send '${String(st.draft || 'nothing yet').trim().replace(/[.!]+$/, '')}' to ${M.chatOf(st)?.name || 'no one'}?`,
+      done: () => (s.lastSent ? `Sent to ${M.chatOf(s, s.lastSent.to)?.name}.` : M.read(s)),
       async run(p, ctx) { await ctx.tap(q('#msg-send')); await sending; },
       verify: (st) => (!!st.draft && st.lastSent?.text === st.draft && st.lastSent.to === st.currentChat) || 'It did not send.',
     },
@@ -169,21 +171,23 @@ function chatView(c) {
     text.length ? el('h4', { className: 'app-h3' }, `${who} message, sentence by sentence`) : null,
     text.length ? sentenceList(`${who} message`, text, { current: at, keep: true }) : null,
     el('h4', { className: 'app-h3' }, 'Your reply'),
-    el('div', { id: 'msg-reply' }, draftView()),
     el('label', { for: 'msg-draft', className: 'app-label' }, 'Your reply, edit it here'),
     box,
     button(M.sent(s) ? 'Sent' : 'Send', { id: 'msg-send', className: 'app-btn primary', onclick: () => { sending = sendAsked(); } }),
     button('Back to your chats', { id: 'msg-back', onclick: () => { s.currentChat = null; save(); render(); } }),
+    // Last on the screen: it grows while you type, and nothing under it may move (layout shift).
+    el('h4', { className: 'app-h3' }, 'Your reply, sentence by sentence'),
+    el('div', { id: 'msg-reply' }, draftView()),
   );
 }
 
 // Send always asks, a person's own tap too: a mis-tap by someone who can't see is the risk. The shell's
 // confirm says yes at once when the agent pressed it (the runner already asked).
-// shortcut: with no os.confirm (agent test fixtures) only the runner's gate applies; fail closed once every fixture passes confirm.
+// No confirm on the mount, no send.
 let sending = Promise.resolve();
 async function sendAsked() {
   if (!s.draft || M.sent(s)) return;
-  const yes = os?.confirm ? await os.confirm({ gate: 'send', readback: app.actions.send.readback(s) }) : true;
+  const yes = os?.confirm ? await os.confirm({ gate: 'send', readback: app.actions.send.readback(s) }) : false;
   if (yes && M.send(s)) { save(); render(); }
 }
 

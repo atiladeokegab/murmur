@@ -50,8 +50,9 @@ test('Vertical 1: "Text Sam I\'m ten minutes late" asks Sam or Samira, writes, g
   assert.ok(r.ok, r.reason);
   r = await p.run('messages__send');
   assert.ok(r.ok, r.reason);
-  assert.deepEqual(p.asked.map((a) => [a.gate, a.readback]), [['send', "Send to Sam: I'm ten minutes late."]]);
+  assert.deepEqual(p.asked.map((a) => [a.gate, a.readback]), [['send', "Send 'I'm ten minutes late' to Sam?"]]);
   assert.deepEqual(messages.state().lastSent, { to: 'sam', text: "I'm ten minutes late." });
+  assert.equal(messages.actions.send.done(), 'Sent to Sam.', 'the short done line');
   assert.deepEqual(p.taps, ["Sam. New: Are you still coming to the quiz tonight? We start at seven.", 'Your reply, edit it here', 'Send']);
   const ev = p.bus.log.map((e) => e.name);
   assert.ok(ev.indexOf('confirm') < ev.lastIndexOf('step:verified'), 'asked before it sent');
@@ -86,7 +87,7 @@ test('the race: read Mum, reply, change Tuesday to Wednesday, send', async () =>
     assert.ok(r.ok, `${name}: ${r.reason}`);
   }
   assert.deepEqual(p.said, ['Lunch on Tuesday?', "Wednesday's fine."]);
-  assert.equal(p.asked[0].readback, "Send to Mum: Wednesday's fine.");
+  assert.equal(p.asked[0].readback, "Send 'Wednesday's fine' to Mum?");
   assert.equal(messages.state().chats[0].messages.at(-1).text, "Wednesday's fine.");
   assert.match(messages.read(), /Sent\.$/);
 });
@@ -245,7 +246,7 @@ test("a person's own tap on Send or Delete asks first, with the readback; No sen
   const box = doc.body.querySelector('#msg-draft');
   box.value = "I'm ten minutes late."; box.dispatchEvent({ type: 'input' });
   tap('#msg-send'); await settle();
-  assert.deepEqual(asked, [{ gate: 'send', readback: "Send to Sam: I'm ten minutes late." }]);
+  assert.deepEqual(asked, [{ gate: 'send', readback: "Send 'I'm ten minutes late' to Sam?" }]);
   assert.equal(messages.state().lastSent, null, 'No sends nothing');
   answer = true; tap('#msg-send'); await settle();
   assert.deepEqual(messages.state().lastSent, { to: 'sam', text: "I'm ten minutes late." });
@@ -257,4 +258,21 @@ test("a person's own tap on Send or Delete asks first, with the readback; No sen
   assert.equal(asked2[0].gate, 'delete');
   assert.match(asked2[0].readback, /^Delete My morning\?/);
   assert.equal(mine.state().workflows.length, 1, 'No deletes nothing');
+});
+
+test('a mount with no confirm sends nothing and deletes nothing, even on a tap', async () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const doc = fakeDocument();
+  await mountApp(messages, doc.body, { kv: null, bus: createBus(), say: async () => true });
+  await messages.reset();
+  const tap = (sel) => doc.body.querySelector(sel).dispatchEvent({ type: 'click', isTrusted: true });
+  tap('[data-chat="mum"]');
+  const box = doc.body.querySelector('#msg-draft'); box.value = 'See you then.'; box.dispatchEvent({ type: 'input' });
+  tap('#msg-send'); await settle();
+  assert.equal(messages.state().lastSent, null);
+  const doc2 = fakeDocument();
+  await mountApp(mine, doc2.body, { kv: null, bus: createBus(), say() {} });
+  await mine.reset();
+  doc2.body.querySelector('[data-delete="My morning"]').dispatchEvent({ type: 'click', isTrusted: true }); await settle();
+  assert.equal(mine.state().workflows.length, 1);
 });

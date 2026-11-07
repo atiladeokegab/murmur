@@ -49,8 +49,8 @@ const app = {
     bookBtn.addEventListener('click', async () => {
       const p = place(to);
       if (!p) { note = `I don't know ${to || 'that place'}. ${known}`; render(); return; }
-      // The person's own tap asks through the shell; when the agent pressed it, the runner already asked.
-      if (os.confirm && !(await os.confirm({ gate: 'pay', readback: `Book ${fare(p, when)}. Pay?` }))) return;
+      // The person's own tap asks through the shell (contract §7); the agent's press was already asked. No confirm, no booking.
+      if (!(os?.confirm && await os.confirm({ gate: 'pay', readback: `Book ${fare(p, when)}. Pay?` }))) return;
       booking = { name: p.name, price: p.price, eta: p.eta, when: when || null, ref: `NL${100 + p.price + p.eta}` };
       quote = p; note = '';
       await save(); render();
@@ -65,6 +65,7 @@ const app = {
     cancelBtn = el('button', { type: 'button', id: 'taxi-cancel', className: 'app-btn quiet', textContent: 'Cancel my taxi' });
     cancelBtn.addEventListener('click', async () => {
       if (!booking) return;
+      if (!(os?.confirm && await os.confirm({ gate: 'delete', readback: `Cancel your taxi to ${booking.name}?` }))) return;
       note = `Cancelled your taxi to ${booking.name}. You were not charged.`;
       booking = null;
       await save(); render();

@@ -115,6 +115,47 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:run|start|do)\s+(.+)$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'run_workflow', params: { name: m[1] } }]);
   if (/what do you (know|remember) about me/i.test(t)) return task([{ tool: 'recall', params: {} }]);
 
+  // The OS's own verbs
+  // Install: "install X", "add X app", or "Add Northline Taxis" (capitalised words: a name, not "a flat white").
+  if (((m = t.match(/^(?:install|download)\s+(?:the\s+)?(.+?)(?:\s+app)?$/i)) || (m = t.match(/^(?:add|get)\s+(?:the\s+)?(.+?)\s+app$/i)) ||
+       (m = t.match(/^(?:[Aa]dd|[Gg]et)\s+(?:the\s+)?([A-Z][\w'&]*(?:\s+[A-Z][\w'&]*)+)$/))) && !apps.some((a) => a.name.toLowerCase() === m[1].toLowerCase())) {
+    return task([{ tool: 'install_app', params: { name: m[1] } }]);
+  }
+  if (/^(?:what are |list |say )?(?:my |the )?(?:tiles|routines|workflows)$/i.test(t) || /^what (?:tiles|routines) do i have$/i.test(t)) return task([{ tool: 'list_workflows', params: {} }]);
+  if ((m = t.match(/^(?:remove|delete|forget)\s+(?:the\s+|my\s+)?(.+?)(?:\s+(?:tile|routine|workflow))?$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'remove_workflow', params: { name: m[1] } }]);
+  if (/^(?:go )?(?:home|back to (?:the )?(?:board|home))$|^(?:show|open) (?:the )?(?:board|home)$/i.test(t)) return task([{ tool: 'go_home', params: {} }]);
+  if ((m = t.match(/^(?:turn |switch )?(?:the )?(?:sounds?|haptics|vibrations?|sounds? and (?:haptics|vibrations?))\s+(on|off)$/i)) ||
+      (m = t.match(/^(?:turn|switch)\s+(on|off)\s+(?:the )?(?:sounds?|haptics|vibrations?)/i))) return task([{ tool: 'sound', params: { on: m[1].toLowerCase() === 'on' } }]);
+  if (/^(?:mute|be quiet with the sounds|no (?:more )?sounds)$/i.test(t)) return task([{ tool: 'sound', params: { on: false } }]);
+  if (/^undo (?:the )?last (?:thing|change|step)$/i.test(t)) return task([{ tool: 'undo', params: {} }]);
+
+  // Your look: every setting is a step on its visible row.
+  if (apps.some((a) => a.id === 'look')) {
+    const look = (names, slots) => task([step('look', names, slots)]);
+    if ((m = t.match(/^(?:set|make)\s+(?:the\s+)?text(?:\s+size)?\s+(?:to\s+)?(\d{3})\s*(?:%|percent)?$/i))) return look(['setText'], { percent: Number(m[1]) });
+    // Anchored, so content ("text Sam I'm speeding up", "tell Mum to turn off the light") never changes a setting.
+    const TXT = '(?:make |turn |set )?(?:the |my )?(?:text|writing|font|letters|words)(?: size)?';
+    const VOX = '(?:make |set )?(?:the |your )?(?:voice|speech|talking)';
+    if (new RegExp(`^${TXT} (?:bigger|larger|up)$|^(?:bigger|larger) text$|^zoom in$`, 'i').test(t)) return look(['textBigger']);
+    if (new RegExp(`^${TXT} (?:smaller|down)$|^smaller text$|^zoom out$`, 'i').test(t)) return look(['textSmaller']);
+    if (new RegExp(`^${VOX} (?:faster|quicker)$|^(?:speak|talk) (?:faster|quicker|more quickly)$|^speed up$`, 'i').test(t)) return look(['voiceFaster']);
+    if (new RegExp(`^${VOX} slower$|^(?:speak|talk) (?:slower|more slowly)$|^slow down$`, 'i').test(t)) return look(['voiceSlower']);
+    if ((m = t.match(/^(?:(?:switch|change|make|use|set|turn|go)(?:\s+(?:it|everything|the|screen|phone|colou?rs?|theme|to|into))*\s+)?(yellow on black|yellow|high contrast|dark|light|white|black)(?:\s+(?:mode|theme|colou?rs?))?$/i)) &&
+        (/^(?:switch|change|make|use|set|turn|go)\b/i.test(t) || /\s(?:mode|theme|colou?rs?)$|^yellow on black$|^high contrast$/i.test(t))) {
+      const c = m[1].toLowerCase(), colours = /yellow|contrast/.test(c) ? 'yellow' : /light|white/.test(c) ? 'light' : 'dark';
+      return look(['colours'], { colours });
+    }
+    if (/^(?:let |use |switch to )?(?:my |the )?(?:screen ?reader|talkback)(?: speak| talk)?$/i.test(t)) return look(['whoSpeaks'], { who: 'reader' });
+    if (/^(?:you speak|murmur speaks?|speak (?:to me )?again|talk to me again)$/i.test(t)) return look(['whoSpeaks'], { who: 'murmur' });
+    if (/^(?:just do it|do things? (?:for me|without asking)|stop asking)(?: from now on)?$/i.test(t)) return look(['howMuch'], { mode: 'just' });
+    if (/^(?:ask me(?: first)?(?: before you do things)?|always ask)$/i.test(t)) return look(['howMuch'], { mode: 'ask' });
+    if (/^teach me(?: (?:from now on|how to do things|instead))?$/i.test(t)) return look(['howMuch'], { mode: 'teach' });
+    if (/^(?:stop|pause|turn off) learning$|^don'?t learn\b/i.test(t)) return look(['learning'], { on: false });
+    if (/^(?:start|resume|turn on) learning(?: again)?$/i.test(t)) return look(['learning'], { on: true });
+    if (/^forget (?:that|it|the first thing)$/i.test(t)) return look(['forget']);
+    if (/^(?:open |show )?(?:my |your )?(?:look|settings)$/i.test(t)) return task([{ tool: 'open_app', params: { app: 'look' } }]);
+  }
+
   // Messages. "Draft" stops at the draft; "text", "message", "tell" go on to the send gate.
   const msg = (who, text, send) => {
     const steps = [step('messages', ['openChat', 'open'], { who: name(who) })];
@@ -189,9 +230,18 @@ function plan(said, apps, context, dry) {
     return task([step('transit', ['nextBus', 'next', 'bus'], m?.[1] ? { place: cap(m[1].trim()) } : {})]);
   }
   if ((m = t.match(/^(?:directions|take me|get me|get)\s+(?:to\s+)?(?:the\s+)?(.+)$/i))) return task([step('transit', ['directions', 'route'], { place: cap(m[1]) })]);
-  if (/when (?:should|do) i leave/i.test(t)) return task([step('transit', ['whenToLeave', 'leave'])]);
+  if ((m = t.match(/when (?:should|do|can) i leave(?:\s+(?:for|to)\s+(?:the\s+)?([a-z' ]+))?$/i))) return task([step('transit', ['whenToLeave', 'leave'], m[1] ? { place: cap(m[1].trim()) } : {})]);
+
+  // Taxi (a plug-in) and the Bank
+  if ((m = t.match(/^(?:book|get|call|order)\s+(?:me\s+)?(?:a\s+)?(?:taxi|cab)(?:\s+(?:to\s+)?(?:the\s+)?(.+))?$/i))) {
+    return task([step('taxi', ['book'], m[1] ? { to: m[1].toLowerCase() } : {})]);
+  }
+  if ((m = t.match(/^(?:pay|send)\s+(\w+)\s+(?:£\s*)?(\d+(?:\.\d\d)?|[a-z -]+?)(?:\s+(?:pounds?|quid))?$/i)) && money(m[2]) > 0) {
+    return task([step('bank', ['payPerson', 'pay'], { who: name(m[1]), amount: money(m[2]) })]);
+  }
 
   // Travel
+  if ((m = t.match(/^(?:pick|choose|take|book|hold)\s+(?:the\s+)?(\d{1,2}[:.]\d\d)(?:\s+(?:flight|one))?$/i))) return task([step('travel', ['hold', 'book', 'pick'], { flight: m[1].replace('.', ':') })]);
   if ((m = t.match(/^(?:find|search|look for)\s+(?:me\s+)?(?:a\s+)?flights?\s+(?:from\s+(\w+)\s+)?to\s+(\w+)(?:\s+(?:for|on)\s+(.+))?$/i))) {
     const slots = { place: cap(m[2]) };
     if (m[1]) slots.origin = cap(m[1]);
@@ -216,6 +266,19 @@ export function corrected(text) {
   const m = text.match(/^([\s\S]*?\b)(\w+)((?:\s+\w+)?)([.!?])\s+no,?\s+(?:the\s+|a\s+|an\s+)?(\w+)((?:\s+\w+)?)[.!?]?$/i);
   if (!m || m[3].trim().toLowerCase() !== m[6].trim().toLowerCase()) return text;
   return `${m[1]}${m[5]}${m[3]}${m[4]}`;
+}
+
+const UNITS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15,
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100, a: 1 };
+/** "20", "twenty", "twenty five", "a hundred" -> a number; 0 if it is not money words. */
+function money(s) {
+  if (/^\d/.test(s)) return Number(s);
+  let n = 0;
+  for (const w of s.toLowerCase().split(/[\s-]+/).filter((x) => x !== 'and')) {
+    if (!(w in UNITS)) return 0;
+    n = w === 'hundred' ? (n || 1) * 100 : n + UNITS[w];
+  }
+  return n;
 }
 
 const isWorkflow = (n, ctx) => (ctx.workflows || []).some((w) => w.toLowerCase() === n.toLowerCase());

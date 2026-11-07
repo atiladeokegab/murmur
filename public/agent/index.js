@@ -2,7 +2,7 @@
 // One entry point, agent.hear(text, { path }), for Live, Web Speech, the typed field and the eval alike.
 // Speech is a direct call to `speak`; the bus `say` event only records it (contract rev 2).
 import { hear as reserved } from './words.js';
-import { describeRegistry } from './plan.js';
+import { describeRegistry, WORD_TOOLS } from './plan.js';
 import { planUtterance } from './planner.js';
 import { createRunner, createGates } from './runner.js';
 import { createWorkflows, lastChain } from './workflows.js';
@@ -26,12 +26,26 @@ if (globalThis.window) installToken(); // /api/* carries the device token from h
  * @param {(step)=>'ask'|'just'|'teach'} [o.agency]
  * @param {(gate)=>boolean} [o.risky]  send/call need the fingerprint too (screen just locked, earphone out)
  */
+export const ACK = 'On it.';
+
 export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, fingerprint = async () => false,
   agency = () => 'ask', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
-  speak = async () => {}, onGate = () => {}, onChoose = () => {} }) {
+  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {} }) {
   const appsList = () => (Array.isArray(registry) ? registry : typeof registry?.list === 'function' ? registry.list() : Object.values(registry || {}));
   const app = (id) => (typeof registry?.get === 'function' ? registry.get(id) : appsList().find((a) => a.id === id));
   let lastSaid = '';
+  // One voice, one line at a time: each line waits for the one before, so steps can act while a line is spoken.
+  // Stop empties the queue (gen moves on), so nothing queued is said after it.
+  let chain = Promise.resolve(), gen = 0, pending = 0;
+  const speak = (text, signal) => {
+    const g = gen;
+    const go = () => (g !== gen || signal?.aborted ? false : rawSpeak(text, signal));
+    const p = pending ? chain.then(go) : Promise.resolve(go()); // nothing being said: start now, not a tick later
+    pending++;
+    chain = p.catch(() => {}).finally(() => { pending--; });
+    return p;
+  };
+  const hush = () => { gen++; };
   const say = (text) => { if (!text) return Promise.resolve(); lastSaid = text; bus.emit('say', { text }); return Promise.resolve(speak(text)).catch(() => {}); };
   const describeStep = (s) => {
     const x = s.app && app(s.app)?.actions?.[s.action];
@@ -74,7 +88,8 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   async function builtin(step) {
     const p = step.params || {};
     switch (step.tool) {
-      case 'open_app': if (!app(p.app)) return false; await os.open?.(p.app); lastApp = p.app; return true;
+      case 'open_app': if (!app(p.app)) return true; // model noise ("the board"): nothing to open, nothing failed
+ await os.open?.(p.app); lastApp = p.app; return true;
       case 'read_screen': { const a = app(current()); await say(a ? a.read() : "You're on the board."); return true; }
       case 'where': await where(); return true;
       case 'say': await say(p.text); return true;
@@ -92,6 +107,20 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
         say(`${w.text.replace(/\.$/, '')}. Saved as ${w.name}.`);
         return true;
       }
+      case 'list_workflows': {
+        const all = workflows ? (await workflows.all()).map((w) => w.name) : [];
+        await say(all.length ? `Your tiles: ${all.join(', ')}.` : 'No tiles yet. Do something, then say save that as a name.');
+        return true;
+      }
+      case 'remove_workflow': {
+        const w = workflows && (await workflows.all()).find((x) => x.name.toLowerCase() === String(p.name).toLowerCase());
+        if (!w) { await say(`There's no tile called ${p.name}.`); return false; }
+        if (!(await gates.ask({ gate: 'delete', readback: `Remove the ${w.name} tile.` }))) return false;
+        return workflows.remove(w.name);
+      }
+      case 'go_home': if (!os.home) return false; await os.home(); return true;
+      case 'sound': if (!os.sound) return false; await os.sound(!!p.on); await say(p.on ? 'Sounds on.' : 'Sounds off.'); return true;
+      case 'install_app': { const r = await os.install?.(p.name); await say(r?.say || "I can't add apps here."); return !!r?.ok; }
       case 'run_workflow': return false; // handled in hear(): it becomes its own task
       default: return false;
     }
@@ -116,7 +145,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
 
   async function reservedWord(w) {
     switch (w.kind) {
-      case 'stop': choice?.resolve(null); runner.stop(); return;
+      case 'stop': hush(); choice?.resolve(null); runner.stop(); return;
       case 'take_over': choice?.resolve(null); runner.takeOver(); return;
       case 'where': await where(); return;
       case 'undo': await runner.undo(); return;
@@ -168,8 +197,9 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     }
     offer = null;
 
-    const context = { app: current(), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [] };
-    const p = await plan(rest, describeRegistry(appsList()), context, planOpts);
+    // The first sound within 300 ms of the last word: the shell's heard earcon, then "On it." while the plan runs.
+    say(ACK);
+    const p = await planFor(rest);
     if (!p.steps.length) { say(p.say || p.dropped.find((d) => d.say)?.say || "I can't do that one yet."); return { status: p.kind === 'refuse' ? 'refused' : 'unknown', say: p.say }; }
     const unsaid = p.dropped.find((d) => d.say);
     if (unsaid) say(unsaid.say);
@@ -182,13 +212,44 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
       offer = { utterance: rest, steps: p.steps.map((s) => ({ ...s, complete: isComplete(s, reg) })) };
       return { status: 'taught', hints: lines };
     }
+    if (p.steps.length === 1 && WORD_TOOLS.has(p.steps[0].tool)) { await reservedWord({ kind: p.steps[0].tool }); return { status: 'reserved' }; }
     const wf = p.steps.find((s) => s.tool === 'run_workflow');
     if (wf) return runWorkflow(wf.params.name, rest);
-    return runPlan(rest, p.steps, null, { provider: p.provider, ...(p.model ? { model: p.model } : {}) });
+    return runPlan(rest, p.steps, null, { provider: p.provider, ...(p.model ? { model: p.model } : {}), ...(p.late ? { late: p.late } : {}) });
+  }
+
+  // Speculative planning: the shell calls prefetch(interim) once the words have held still ~400 ms; hear() reuses
+  // the plan when the final words and the open app match. Anything else plans afresh.
+  let early = null;
+  const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
+  async function contextNow() { return { app: current(), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [] }; }
+  async function planFor(text) {
+    const context = await contextNow();
+    if (early && early.text === norm(text) && early.app === context.app) { const e = early; early = null; return e.plan; }
+    early = null;
+    return plan(text, describeRegistry(appsList()), context, planOpts);
+  }
+  async function prefetch(text) {
+    const { rest } = reserved(text, { gate: gates.current, now: clock.now() });
+    if (!rest || gates.current || choice || question || offer || proposal || norm(rest) === early?.text) return;
+    const context = await contextNow();
+    const p = plan(rest, describeRegistry(appsList()), context, planOpts);
+    early = { text: norm(rest), app: context.app, plan: p };
+    p.catch(() => { if (early?.plan === p) early = null; });
+  }
+  /** At boot: wake the server and the model, and list the fixed lines the shell can turn into audio ahead of time. */
+  async function warm() {
+    plan('warm up', describeRegistry(appsList()), { app: null, workflows: [] }, planOpts).catch(() => {});
+    return fixedLines();
+  }
+  function fixedLines() {
+    const lines = new Set([ACK, 'Done.', 'Not sent.', 'Undone.', 'Nothing to undo.', 'Yes, or no?', 'Check your fingerprint.', 'Stopped.', 'Sent.', 'Not paid.', "I didn't catch how to do that."]);
+    for (const a of appsList()) for (const x of Object.values(a.actions || {})) if (x.doing) lines.add(x.doing);
+    return [...lines];
   }
 
   return {
-    hear,
+    hear, prefetch, warm, fixedLines,
     runner, gates, memory, workflows,
     /** The Yes and No buttons on the ask-first sheet. */
     yes: () => gates.yes({ button: true }),
