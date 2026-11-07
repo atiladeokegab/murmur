@@ -8,7 +8,6 @@ import { loadLook, writeLook, applyLook } from '../look.js';
 import { createToolkit } from '../vendor/toolkit/index.js';
 import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
-import { cachedTts } from '../voice/tts-cache.js';
 import * as passkey from '../passkey.js';
 import { byHand, checkFingerprint, payAttempt } from './gate.js';
 import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
