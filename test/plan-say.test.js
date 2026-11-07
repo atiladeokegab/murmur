@@ -133,3 +133,14 @@ test('blind 60 misses, round 2: remind, this afternoon, a new note, a lot bigger
   for (const u of ['Hello', 'Hi, is anyone there', "I can't see the screen, how do I start"]) assert.match(tool(u), /^say\{"text":"Hello, I'm Murmur\./, u);
   assert.equal(tool('Who is my latest message from'), 'messages__read{"new":true}');
 });
+
+test('"Call Mum" opens her chat on the real phone, whose Phone app is settings; an app with a call action plans the call', async () => {
+  const { createPhone } = await import('../public/os/phone.js');
+  const phoneApp = createPhone({ stop() {}, where() {}, noLook() {}, isNoLook: () => false, sound() {}, isSound: () => true });
+  const real = describeRegistry([...apps, phoneApp]);
+  const p = demoPlan('Call Mum', real, { app: null, workflows: [] });
+  assert.deepEqual(p.plan.map((s) => s.tool), ['messages__openChat', 'say'], JSON.stringify(p));
+  assert.equal(p.plan[1].params.text, "I can't call yet. I've opened Mum's chat.");
+  const calls = { id: 'calls', name: 'Calls', actions: { call: { describe: 'Call a person', doing: 'Calling', hint: 'Call', params: { type: 'object', properties: { who: { type: 'string' } }, required: ['who'] }, async run() {}, verify: () => true } } };
+  assert.ok(!demoPlan('Call Mum', describeRegistry([...apps, phoneApp, calls]), { app: null, workflows: [] }).plan.some((s) => s.tool === 'say'));
+});

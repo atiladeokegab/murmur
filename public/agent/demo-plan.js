@@ -305,7 +305,7 @@ function plan(said, apps, context, dry) {
     return task([step('messages', ['openChat', 'open'], { who: name(m[1]) }), step('messages', ['read'])]);
   }
   // No phone app yet: "call Mum" opens Mum's chat and says so; an installed calls app gets its own plan.
-  if ((m = t.match(/^(?:call|ring|phone|video call)\s+(?!(?:a|an|the|my|me|it|them)\b)(\w+)(?:\s+(?:now|back|please))?$/i)) && !apps.some((a) => /call|phone/i.test(a.id))) {
+  if ((m = t.match(/^(?:call|ring|phone|video call)\s+(?!(?:a|an|the|my|me|it|them)\b)(\w+)(?:\s+(?:now|back|please))?$/i)) && !apps.some((a) => (a.actions || []).some((x) => /^(?:call|ring|dial)/i.test(x.name)))) { // a call action, not an app id: the shell's Phone is settings
     const who = name(m[1]);
     return task([step('messages', ['openChat', 'open'], { who }), { tool: 'say', params: { text: `I can't call yet. I've opened ${who}'s chat.` } }]);
   }
