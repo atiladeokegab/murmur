@@ -148,3 +148,17 @@ test('a gated action resolves its person before the one confirm', async () => {
   await agent.yes(); await done;
   assert.equal(asked.filter((t) => t === 'Sam or Samira?').length, 1);
 });
+
+test('remove_app: the agent gate asks, a spoken no keeps it, a tile of the same name wins', async () => {
+  const removed = [];
+  const s = await setup({ os: { remove: async (name, { confirm }) => (await confirm(`Remove ${name} from your phone?`)) ? (removed.push(name), { ok: true, say: `Removed ${name}.` }) : { ok: false, cancelled: true, say: 'Kept it.' } } });
+  let p = s.agent.hear('Remove Hello');
+  await until(() => s.agent.gates.current?.gate === 'delete');
+  assert.equal(s.spoken.at(-1), 'Remove Hello from your phone?');
+  s.agent.no(); await p;
+  assert.ok(s.spoken.includes('Kept it.')); assert.deepEqual(removed, []);
+  p = s.agent.hear('Uninstall the hello app');
+  await until(() => s.agent.gates.current); await s.agent.yes(); await p;
+  assert.deepEqual(removed, ['hello']);
+  assert.deepEqual(demoPlan('Remove pizza', describeRegistry(s.registry)).plan.map((x) => x.tool).includes('remove_app'), false);
+});
