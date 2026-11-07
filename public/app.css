@@ -57,6 +57,7 @@
   --h-talk: 88px;
   --h-btn: 96px;
   --h-link: 64px;
+  --t-glide: 200ms;          /* the agent cursor glide */
   --nl-room: 40svh;         /* no-look: room so the band never hides the pointed tile */
   --w-column: 720px;
   --r-now: 6px;
@@ -297,3 +298,13 @@ dialog { container: sheet / inline-size; }
   .nl-band .choice { flex: 1 1 100%; min-height: 64px; font-size: 0.75rem; padding: 2px 6px; }
 }
 .tile.cursor { outline: var(--ring) solid var(--c-focus); outline-offset: calc(var(--ring) * -1); background: var(--c-board-press); }
+
+/* ---------- the agent cursor: the ring on the control the agent presses (public/sdk/cursor.js) ---------- */
+.agent-cursor {
+  position: fixed; left: 0; top: 0; z-index: 20; pointer-events: none; box-sizing: border-box;
+  width: var(--w); height: var(--h); transform: translate(var(--x), var(--y));
+  border: var(--ring) solid var(--c-focus); border-radius: var(--r-btn);
+  transition: transform var(--t-glide) ease-out, width var(--t-glide) ease-out, height var(--t-glide) ease-out;
+}
+.agent-cursor[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .agent-cursor { transition: none; } }
