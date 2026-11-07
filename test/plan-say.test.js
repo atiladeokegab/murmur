@@ -262,3 +262,13 @@ test('gallery routes: open, pick, last photo, and send Mum the beach photo throu
   assert.equal(lineOf(photoOf('last')), 'Your photo from Saturday: you and Sam on the beach at Brighton.');
   assert.ok(PHOTOS.length >= 6 && PHOTOS.length <= 8);
 });
+
+test('Prometheus live on b9fd468: restaurants near me are Places, never a flight; nearest station and places near me too', async () => {
+  for (const s of ['Find restaurants near me', 'suggest some restaurants nearby', 'where can I eat']) assert.equal(tool(s), 'places__food{}', s);
+  assert.equal(tool('nearest station'), 'places__howFar{"place":"station"}');
+  assert.equal(tool("where's the nearest station"), 'places__howFar{"place":"station"}');
+  assert.equal(tool('places near me'), 'places__nearby{}');
+  assert.equal(tool('find flights to Lisbon'), 'travel__findFlights{"to":"Lisbon"}');
+  const { foodLine } = await import('../public/apps/places/index.js');
+  assert.equal(foodLine(), "Near you: Pasta Corner, 4 minutes' walk; Noodle House, 6 minutes' walk; Spice Garden, 9 minutes' walk.");
+});

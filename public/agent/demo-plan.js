@@ -513,7 +513,10 @@ function plan(said, apps, context, dry) {
     if ((m = t.match(/^how far(?: away)? is\s+(.+?)(?:\s+from here)?$/i))) return at(['howFar'], m[1]);
     if ((m = t.match(/^(?:what'?s |what is |tell me )?(?:the )?(?:route|way|walking route)\s+to\s+(.+)$/i)) ||
         ((m = t.match(/^directions\s+to\s+(.+)$/i)) && !apps.some((a) => a.id === 'transit'))) return at(['route'], m[1]);
-    if (/^(?:what'?s|what is|anything) (?:nearby|near (?:me|here)|around here)$/i.test(t)) return at(['nearby']);
+    // "Find restaurants near me" is food, never a flight to "restaurants near me" (Prometheus, live on b9fd468).
+    if (/\b(?:restaurants?|places? to eat|somewhere to eat|where (?:can|could|should) i eat)\b/i.test(t) && !/\b(?:order|deliver|book)/i.test(t)) return at(['food']);
+    if (/^(?:(?:show|find|tell) me |find |list )?(?:what'?s|what is|anything|places|things) (?:nearby|near (?:me|here)|around (?:me|here))$/i.test(t)) return at(['nearby']);
+    if ((m = t.match(/^(?:(?:where'?s|where is|find|find me|show me|how far is)\s+)?(?:the\s+)?(?:nearest|closest)\s+(.+?)(?:\s+(?:to me|from here))?$/i))) return at(['howFar'], m[1]);
     if ((m = t.match(/^is\s+(.+?)\s+open(?: now| today)?$/i)) || (m = t.match(/^when (?:does|do)\s+(.+?)\s+(?:open|close)$/i)) ||
         (m = t.match(/^(?:what are )?(?:the )?opening (?:hours|times) (?:for|of|at)\s+(.+)$/i))) return at(['hours'], m[1]);
   }

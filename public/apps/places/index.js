@@ -19,6 +19,8 @@ const PLACES = [
   { id: 'cafe', name: 'the café on the corner', words: ['cafe', 'coffee'], metres: 150, walk: 2, bus: null,
     route: ['left out of the door', 'walk to the corner', 'the door is on your right'], open: '07:30', close: '17:00' },
 ];
+// Invented, like PLACES. Pasta Corner is Joy's usual (lib/profile.js).
+const FOOD = [{ name: 'Pasta Corner', walk: 4 }, { name: 'Noodle House', walk: 6 }, { name: 'Spice Garden', walk: 9 }];
 
 let root = null, osSay = null, places = [], open = null, view = 'list';
 
@@ -51,6 +53,7 @@ export function hoursLine(p, now = NOW) {
   if (t >= mins(p.open) && t < mins(p.close)) return `Open now, until ${spoken(p.close)}.`;
   return `Closed now. Opens at ${spoken(p.open)}.`;
 }
+export const foodLine = () => `Near you: ${FOOD.map((f) => `${f.name}, ${f.walk} minutes' walk`).join('; ')}.`;
 export const nearbyLine = (list) => `Nearest: ${nearest(list).map((p) => `${p.name}, ${p.walk} minutes`).join('; ')}.`;
 /** The co-designer's longer answer: distance, walking time, the bus, and the route. */
 export function moreLine(p) {
@@ -93,10 +96,14 @@ function render() {
       btn('places-way', 'Route', (e) => go(p.id, 'route', e)),
       btn('places-hours', 'Opening hours', (e) => go(p.id, 'hours', e)),
       btn('places-back', 'All places', (e) => go(null, 'list', e))];
+  } else if (view === 'food') {
+    body = [el('h3', { id: 'places-list-h', className: 'app-h3', tabIndex: -1, textContent: 'Places to eat' }),
+      items(FOOD.map((f) => `${f.name}: ${f.walk} minutes' walk.`)), btn('places-back', 'All places', (e) => go(null, 'list', e))];
   } else {
     const list = view === 'nearby' ? nearest(places) : places;
     body = [el('h3', { id: 'places-list-h', className: 'app-h3', tabIndex: -1, textContent: view === 'nearby' ? 'Nearest three' : 'All places' }),
-      el('ul', { id: 'places-list', className: 'app-list' }, ...list.map((x) => el('li', {}, btn(`places-${x.id}`, cap(x.name), (e) => go(x.id, 'far', e), farLine(x)))))];
+      el('ul', { id: 'places-list', className: 'app-list' }, ...list.map((x) => el('li', {}, btn(`places-${x.id}`, cap(x.name), (e) => go(x.id, 'far', e), farLine(x))))),
+      ...(view === 'nearby' ? [btn('places-back', 'All places', (e) => go(null, 'list', e))] : [])]; // the nearest three may not hold the place asked for
   }
   const had = root.contains(root.ownerDocument.activeElement); // keep a screen reader's place when the body is replaced
   $('places-body').replaceChildren(...body);
@@ -113,7 +120,7 @@ function pick(said) {
 // Opens the place, then presses the button for what was asked. The person and the agent use the same door.
 async function show(ctx, said, buttonId) {
   const p = pick(said);
-  if (open !== p.id) { if (open) await ctx.tap($('places-back')); await ctx.tap($(`places-${p.id}`)); }
+  if (open !== p.id) { if (open || view !== 'list') await ctx.tap($('places-back')); await ctx.tap($(`places-${p.id}`)); }
   await ctx.tap($(buttonId));
   return p;
 }
@@ -130,6 +137,7 @@ const app = {
     root = r; osSay = os?.say || null;
     root.append(el('h2', { id: 'places-h', textContent: 'Places' }),
       btn('places-nearby', "What's nearby", (e) => go(null, 'nearby', e)),
+      btn('places-food', 'Places to eat', (e) => go(null, 'food', e)),
       el('div', { id: 'places-body', className: 'app-body' }));
     places = PLACES.map((p) => ({ ...p }));
     render();
@@ -137,12 +145,13 @@ const app = {
 
   read() {
     const p = cur();
-    if (!p) return view === 'nearby' ? nearbyLine(places) : `${places.map((x) => x.name).join(', ')}.`;
+    if (!p) return view === 'food' ? foodLine() : view === 'nearby' ? nearbyLine(places) : `${places.map((x) => x.name).join(', ')}.`;
     return `${cap(p.name)}. ${view === 'route' ? routeLine(p) : view === 'hours' ? hoursLine(p) : farLine(p)}`;
   },
   place() {
     const p = cur();
     if (p) return { where: cap(p.name), item: view === 'route' ? 'the route' : view === 'hours' ? 'opening hours' : 'how far', next: view === 'route' ? 'hours' : 'route' };
+    if (view === 'food') return { where: 'Places, to eat', item: FOOD[0].name, n: 1, of: FOOD.length, next: 'how far' };
     return { where: view === 'nearby' ? 'Places, nearby' : 'Places', item: places[0]?.name, n: 1, of: view === 'nearby' ? 3 : places.length, next: 'how far' };
   },
   state() {
@@ -178,6 +187,14 @@ const app = {
       async run(p, ctx) { await ctx.tap($('places-nearby')); await ctx.say(nearbyLine(places)); },
       verify: (s) => (s.open === null && s.view === 'nearby') || "Places isn't showing what's nearby.",
       more: (s) => nearbyMore(s.places),
+    },
+    food: {
+      describe: 'Say the restaurants nearby, with walking time',
+      doing: "Finding what's nearby",
+      hint: 'Places to eat is the second button under the heading.',
+      params: { type: 'object', properties: {} },
+      async run(p, ctx) { await ctx.tap($('places-food')); await ctx.say(foodLine()); },
+      verify: (s) => (s.open === null && s.view === 'food') || "Places isn't showing places to eat.",
     },
     hours: {
       describe: 'Say whether a place is open now, and its opening hours',
