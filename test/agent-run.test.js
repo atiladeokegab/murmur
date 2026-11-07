@@ -393,6 +393,19 @@ test('a read-only, refused or No\'d task keeps the last change undoable, still 8
   assert.equal(s.state('hello').draft, 'Lunch on Tuesday.', 'the 8 s run from the change, not from the read');
 });
 
+test('a read-only task:done carries the live Undo with its own expiry, so the panel keeps the button', async () => {
+  const s = await setup();
+  await s.agent.runner.run({ utterance: 'write', steps: [{ tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Lunch.' } }] });
+  const until = s.ev('task:done').at(-1).undo?.until;
+  assert.ok(until, 'the change offers Undo');
+  s.clock.t += 2000;
+  await s.agent.hear("Read Mum's message");
+  assert.deepEqual(s.ev('task:done').at(-1).undo, { label: s.ev('task:done').at(-2).undo.label, until }, 'same Undo, same expiry');
+  s.clock.t = until + 1;
+  await s.agent.hear("Read Mum's message");
+  assert.equal(s.ev('task:done').at(-1).undo, undefined, 'an expired Undo is not offered');
+});
+
 test('Ask me: a step line is never said once its step is done, and "Writing your reply" is left to the readback', async () => {
   const s = await setup({ agency: () => 'ask' });
   await gated(s, "Text Sam I'm ten minutes late", async () => { s.clock.t += 600; await s.agent.hear('send'); }, { choose: 'Sam' });
