@@ -10,11 +10,13 @@ import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
 import { cachedTts } from '../voice/tts-cache.js';
 import * as passkey from '../passkey.js';
-import { byHand } from './gate.js';
+import { byHand, checkFingerprint, payAttempt } from './gate.js';
 import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
 import { installToken } from '../agent/token.js';
-import { play, buzz, mute, unmute, isMuted } from '../sound/index.js';
+import { play, buzz, mute, unmute, isMuted, EARCON_NAMES } from '../sound/index.js';
+import { cachedTts, warmTts } from '../voice/tts-cache.js';
 import { createPhone } from './phone.js';
+import { talkAnywhere } from './talk.js';
 installToken(); // wraps fetch before any /api call
 
 const $ = (s) => document.querySelector(s);
@@ -49,9 +51,10 @@ saveLook();
 // ---------- one voice: Murmur speaks, or the screen reader reads the one status region ----------
 const status = $('#say');
 const caps = QUIET ? {} : await fetch('/health').then((r) => r.json()).catch(() => ({}));
-let token = 0, lastLine = '';
+let token = 0, lastLine = '', listening = false;
 const readerSpeaks = () => look.speaker === 'reader';
-function applySpeaker() { status.setAttribute('aria-live', readerSpeaks() ? 'polite' : 'off'); }
+// Screen reader mode: TalkBack and VoiceOver take the taps, so a Talk button comes first in the reading order.
+function applySpeaker() { status.setAttribute('aria-live', readerSpeaks() ? 'polite' : 'off'); $('#talk-first').hidden = !readerSpeaks(); }
 function show(text) { status.textContent = text; if (text) lastLine = text; }
 function hush() { token++; stopAudio(); try { speechSynthesis.cancel(); } catch { /* no speech */ } }
 const wait = (ms, signal) => new Promise((res) => {
@@ -63,7 +66,8 @@ function speak(text, signal) {
   text = String(text || '');
   show(text);
   if (signal?.aborted) return Promise.resolve(false);
-  if (QUIET || !text) return Promise.resolve(true);
+  // Barge-in: while the mic is open nothing new is voiced (shown only), so the queue drains and the mic never hears Murmur
+  if (QUIET || !text || listening) return Promise.resolve(true);
   if (readerSpeaks()) return wait(Math.min(4000, 600 + text.length * 55), signal); // give TalkBack time to read it
   const my = token; // only Stop (hush) moves token: a later line queues behind a started one, never cuts it
   return new Promise((res) => {
@@ -73,7 +77,7 @@ function speak(text, signal) {
     signal?.addEventListener('abort', abort, { once: true });
     const local = () => browserSpeak(text, () => end(my === token));
     if (!caps.tts) return local();
-    cachedTts(text)
+    cachedTts(text) // fetched once; the fixed lines are warmed at boot
       .then((a) => (my === token ? playPcm(a.audio, a.rate) : null))
       .then(() => end(my === token))
       .catch(() => (my === token ? local() : end(false)));
@@ -142,11 +146,9 @@ const take = () => { const g = granted; granted = false; return g; };
 const osFor = (app, kv) => ({
     kv, bus, registry,
     say: (t) => speak(t, personal.signal),
-    // A person's own tap on a gated control is their yes (Pay still checks the fingerprint); when the agent
-    // pressed it, the runner already asked.
-    confirm: ({ gate, readback }) => (take() ? Promise.resolve(true) : byHand({ app: app.id, gate, readback, bus,
-      passkey: { usable: fingerprintUsable, confirm: () => passkey.confirm() },
-      sheet: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true) })),
+    // A person's own tap on a gated control still gets the readback sheet (no grace), and pay the fingerprint;
+    // when the agent pressed it, the runner already asked.
+    confirm: ({ gate, readback }) => (take() ? Promise.resolve(true) : byHand({ app: app.id, gate, readback, bus, sheet: sheetConfirm })),
     get workflows() { return agent?.workflows; },
     get agent() { return agent; }, // Mine runs a workflow with os.agent.runWorkflow(name)
     hear: (text) => hear(text, 'typed'),
@@ -208,15 +210,18 @@ function tilesNow() {
 function renderBoard() {
   $('#day').textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long' });
   $('#board').replaceChildren(...tilesNow().map(({ app, now, line }, i) => {
-    const why = line.why || '';
+    const title = line.title || app.name;
+    // read() opens with the app's own name ("Messages, 3 chats."): the tile says it once
+    const rest = (line.why || '').startsWith(title) ? line.why.slice(title.length) : null;
+    const why = (rest !== null && /^([.,:]|$)/.test(rest) ? rest.replace(/^[.,:]\s*/, '') : line.why || '').replace(/^./, (c) => c.toUpperCase());
     const btn = el('button', { className: 'tile', type: 'button' },
       now ? el('span', { className: 'head' }, el('span', { className: 'badge', textContent: 'Now' }), flap(nowTime()))
         : el('span', { className: 'when' }),
-      el('span', { className: 'what' }, el('span', { className: 'title', textContent: line.title || app.name }),
+      el('span', { className: 'what' }, el('span', { className: 'title', textContent: title }),
         el('span', { className: 'why', textContent: why })),
       el('span', { className: 'key', textContent: String(i + 1) }));
     btn.dataset.app = app.id;
-    btn.setAttribute('aria-label', `${now ? 'Now: ' : ''}${line.title || app.name}. ${why}`);
+    btn.setAttribute('aria-label', `${now ? 'Now: ' : ''}${title}.${why ? ' ' + why : ''}`);
     [...btn.children].forEach((c) => c.setAttribute('aria-hidden', 'true'));
     btn.addEventListener('click', () => { open(app.id); if (line.say) speak(line.say, personal.signal); });
     return el('li', { className: now ? 'now' : '' }, btn);
@@ -236,13 +241,13 @@ function addTile() {
 setInterval(() => { const f = $('#board .now .flap'); if (f) f.replaceWith(flap(nowTime())); }, 15000);
 
 // ---------- the work panel: place line, current step, Stop, the Done line with Undo, the sentences ----------
-let panel = { ...IDLE }, undoTimer = null;
+let panel = { ...IDLE }, undoTimer = null, asking = ''; // asking: the open sheet's question, which the heading shows
 const work = $('#work');
 function renderPanel() {
   const p = panel;
   work.hidden = !(p.on || p.done || current);
   $('#place').textContent = p.place || (current ? placeLine(registry.get(current).place()) : '');
-  $('#step').textContent = p.on ? p.step : '';
+  $('#step').textContent = p.on ? asking || p.step : '';
   $('#step').hidden = !p.on;
   $('#slot-a').hidden = $('#slot-b').hidden = !(p.on || p.done);
   $('#done-line').hidden = p.on || !p.done;
@@ -267,6 +272,7 @@ function renderPanel() {
   while (ticks.children.length > p.ticks.length) ticks.lastChild.remove();
 }
 bus.on('*', (name, e) => {
+  if (thinking && (/^(task:start|task:done|step:start|ask)$/.test(name) || (name === 'say' && !/^On it\b/.test(e.text)))) stopThinking();
   const was = panel;
   panel = reduce(panel, name, e);
   if (name === 'task:done') panel.ms = e.ms;
@@ -275,15 +281,15 @@ bus.on('*', (name, e) => {
   if (name === 'task:done') {
     drop('task');
     ding(e.ok ? 'done' : 'stopped');
-    cursor.hide();
-    if (panel.done?.line) show(panel.done.line); // the strip says where it ended, not the last question
+    setTimeout(() => { if (!panel.on) cursor.hide(); }, 400); // the ring rests on the last press a moment
+    if (panel.done?.line && !readerSpeaks()) show(panel.done.line); // the strip says where it ended; in reader mode the runner's line already does
     renderPanel();
     clearTimeout(undoTimer);
     if (e.undo) {
       const ms = Math.max(0, (e.undo.until ?? Date.now() + 8000) - Date.now());
       undoTimer = setTimeout(() => { panel = { ...panel, done: panel.done && { ...panel.done, undo: null } }; renderPanel(); }, ms);
       $('#undo').focus();
-    } else $('#done-line').focus();
+    } else $('#talk').focus(); // focus on Talk for what's next; the status region says the line
     return;
   }
   if (name === 'undo') ding('undo');
@@ -297,19 +303,27 @@ const dialog = $('#sheet');
 const sheetBody = $('#sheet-body');
 let pending = null; // what the sheet is asking: { kind: 'confirm'|'choose', gate?, readback?, question?, choices?, at, answer(v) }
 const VERB = { send: 'Send', pay: 'Pay', call: 'Call', delete: 'Delete' };
+// A travel hold is a pay gate (nothing is charged), but its button and question say Hold.
+const verbOf = ({ gate, readback }) => (gate === 'pay' && /\b(hold|held)\b/i.test(readback || '') ? 'Hold' : VERB[gate] || 'Yes');
 const GRACE_MS = 500; // a yes this soon could not have heard the readback
 let opener = null;
-function openSheet(kids, focusEl) {
+function openSheet(kids, focusEl, question) {
+  asking = question; renderPanel(); show(question); // the heading and caption ask what the sheet asks, no stale "Sam or Samira?"
   if (!dialog.open) opener = document.activeElement;
   sheetBody.replaceChildren(...kids);
-  if (!dialog.open) { dialog.show(); behind(true); push('sheet'); }
-  focusEl.focus();
+  const rising = !dialog.open;
+  if (rising) { dialog.show(); behind(true); push('sheet'); }
+  // Focus after the 220 ms rise, not during it: focus forces a layout mid-animation (magic-judge: 2 dropped frames)
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!rising || still) focusEl.focus();
+  else setTimeout(() => { if (dialog.open && focusEl.isConnected) focusEl.focus(); }, 230);
 }
 // Under the sheet the board and the app go inert and dim; the work panel stays live, so Stop still works.
 const behind = (on) => { for (const n of [$('#board-view'), appsEl]) n.inert = on; };
 function closeSheet() {
   if (!dialog.open) return;
   dialog.close();
+  asking = ''; renderPanel();
   behind(false);
   drop('sheet');
   (opener?.isConnected ? opener : $('#stop:not([hidden])') || $('#board .tile'))?.focus();
@@ -323,13 +337,14 @@ function showSheet(kind, q, answer) {
   pending = { kind, ...q, at: performance.now(), answer };
   ding('gate');
   if (kind === 'confirm') {
-    const verb = VERB[q.gate] || 'Yes';
+    const verb = verbOf(q);
     const read = el('p', { id: 'sheet-readback', tabIndex: -1, textContent: q.readback || '' });
     const yes = el('button', { className: 'choice yes', type: 'button', id: 'sheet-yes', textContent: verb });
     const no = el('button', { className: 'choice', type: 'button', id: 'sheet-no', textContent: 'No' });
     yes.addEventListener('click', () => answerSheet(true));
     no.addEventListener('click', () => answerSheet(false));
-    openSheet([el('h2', { id: 'sheet-title', textContent: q.question || `${verb}?` }), read, el('div', { className: 'row' }, yes, no)], read);
+    const title = verb === 'Hold' || !q.question ? `${verb}?` : q.question;
+    openSheet([el('h2', { id: 'sheet-title', textContent: title }), read, el('div', { className: 'row' }, yes, no)], read, title);
   } else {
     const h = el('h2', { id: 'sheet-title', tabIndex: -1, textContent: q.question });
     const btns = q.choices.map((c, i) => {
@@ -339,34 +354,34 @@ function showSheet(kind, q, answer) {
     });
     const none = el('button', { className: 'choice', type: 'button', textContent: 'None of these' });
     none.addEventListener('click', () => answerSheet(null));
-    openSheet([h, el('div', { className: 'row' }, ...btns, none)], h);
+    openSheet([h, el('div', { className: 'row' }, ...btns, none)], h, q.question);
   }
 }
 function hideSheet(kind) { if (pending?.kind === kind) { pending = null; closeSheet(); } }
 
-// The sheet: every gate the runner asks through ctx.confirm, and a hand-tapped Pay with no fingerprint to check.
+// The sheet: every gate the runner asks through ctx.confirm, and every gated control a person taps (no grace then).
 // The shell keeps the grace, the fingerprint and the voice, and resolves { result, fingerprint } for pay.
-function sheetConfirm({ gate, readback }) {
+function sheetConfirm({ gate, readback, grace = true }) {
   return new Promise((resolve) => {
     showSheet('confirm', { gate, readback }, (v) => {
-      if (v === true && performance.now() - pending.at < GRACE_MS) return false;
-      pending = null;
+      if (v === true && grace && performance.now() - pending.at < GRACE_MS) return false;
       if (v === true && gate === 'pay') { // pay always needs the fingerprint (spec §3.7)
-        fingerprintUsable().then((usable) => {
-          // shortcut: no platform authenticator means the sheet's yes stands alone (fingerprint:false)
-          if (!usable) { closeSheet(); resolve({ result: true, fingerprint: false }); return; }
-          show('Check your fingerprint.');
-          passkey.confirm().then((ok) => ok === true, () => false).then((ok) => { closeSheet(); resolve({ result: ok, fingerprint: true }); });
-        });
+        show('Check your fingerprint.');
+        const attempt = payAttempt(fingerprint);
+        const mine = pending = { ...pending, answer: (w) => (w === true ? false : (attempt.cancel(), true)) }; // Stop or Back cancels; another yes waits
+        attempt.result.then((ok) => { if (pending === mine) { pending = null; closeSheet(); } resolve({ result: ok, fingerprint: ok }); }); // never close a newer sheet
         return true;
       }
+      pending = null;
       closeSheet(); resolve(v === true);
       return true;
     });
-    speak(`${String(readback || '').replace(/[.!?\s]+$/, '')}. ${VERB[gate] || 'Yes'}?`, personal.signal);
+    const r = String(readback || '').trim(); // a readback that already asks ("… Pay?") is said as it is
+    speak(/\?$/.test(r) ? r : `${r.replace(/[.!\s]+$/, '')}. ${verbOf({ gate, readback })}?`, personal.signal);
   });
 }
-async function fingerprintUsable() { return passkey.hasPasskey() || await passkey.available(); }
+// Every pay, hand or agent: the fingerprint or no pay (gate.js). The spoken or tapped yes never stands alone.
+const fingerprint = () => checkFingerprint({ passkey: { has: passkey.hasPasskey, available: passkey.available, confirm: passkey.confirm }, say: (t) => speak(t, personal.signal) });
 function sheetChoose({ question, choices }) {
   return new Promise((resolve) => {
     showSheet('choose', { question, choices }, (v) => { pending = null; closeSheet(); resolve(Number.isInteger(v) ? v : null); });
@@ -378,12 +393,12 @@ function sheetChoose({ question, choices }) {
 const agentGate = (s) => (s ? showSheet('confirm', s, (v) => { if (v === true) agent.yes(); else agent.no(); }) : hideSheet('confirm'));
 const agentChoose = (c) => (c ? showSheet('choose', c, (v) => { agent.pick(Number.isInteger(v) ? v : null); }) : hideSheet('choose'));
 
-// ---------- tap to talk (never hold: TalkBack's double tap cannot hold) ----------
+// ---------- talk anywhere: a tap on blank space or a long press anywhere (os/talk.js), the bar, or Space ----------
 const talk = $('#talk'), talkLabel = $('#talk-label'), typed = $('#typed');
 const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null, listening = false, heard = '', silence = null;
+let rec = null, heard = '', silence = null, still = null;
 function showTyped(reason) { typed.hidden = false; if (reason) talkLabel.textContent = reason; $('#typed-text').focus(); }
-function setListening(on) { listening = on; talk.setAttribute('aria-pressed', String(on)); talkLabel.textContent = on ? 'Listening. Tap to finish' : 'Tap to talk'; }
+function setListening(on) { listening = on; talk.setAttribute('aria-pressed', String(on)); talkLabel.textContent = on ? 'Listening. Tap anywhere to finish' : 'Tap anywhere to talk'; }
 function summon() {
   if (listening) { endTalk(); return; }
   hush(); audioOut(); ding('summon');
@@ -393,7 +408,8 @@ function summon() {
   rec.onresult = (e) => {
     heard = [...e.results].map((r) => r[0].transcript).join(' ');
     talkLabel.textContent = heard;
-    clearTimeout(silence); silence = setTimeout(endTalk, 1500);
+    clearTimeout(silence); silence = setTimeout(endTalk, 600);
+    clearTimeout(still); still = setTimeout(() => agent?.prefetch?.(heard.trim()), 400); // plan while they finish
   };
   rec.onerror = (e) => { if (/not-allowed/.test(e.error)) showTyped("Murmur can't hear you: allow the microphone"); };
   rec.onend = () => { clearTimeout(silence); setListening(false); if (heard.trim()) hear(heard.trim(), 'voice'); };
@@ -401,6 +417,8 @@ function summon() {
 }
 function endTalk() { clearTimeout(silence); try { rec?.stop(); } catch { /* already stopped */ } }
 talk.addEventListener('click', summon);
+$('#talk-first').addEventListener('click', summon);
+talkAnywhere({ start: summon, listening: () => listening });
 typed.addEventListener('submit', (e) => { e.preventDefault(); const i = $('#typed-text'); const t = i.value.trim(); i.value = ''; if (t) hear(t, 'typed'); });
 addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); if (stack.length) history.back(); else if (look.nolook) setNoLook(false); return; }
@@ -410,10 +428,19 @@ addEventListener('keydown', (e) => {
 });
 
 let lastUtterance = '';
+// A soft pulse every 600 ms while the plan is out; the task's first sign (or 7 s) ends it.
+const PULSE = EARCON_NAMES.includes('thinking') ? 'thinking' : 'heard';
+let thinking = 0;
+const stopThinking = () => { clearInterval(thinking); thinking = 0; };
+function think() {
+  stopThinking();
+  let n = 0;
+  thinking = setInterval(() => { if (++n > 12) stopThinking(); else if (!QUIET) play(PULSE); }, 600);
+}
 function hear(text, path) {
   ding('heard');
   lastUtterance = text;
-  if (agent) { agent.hear(text, { path }); return; }
+  if (agent) { think(); agent.hear(text, { path }); return; }
   // No agent on this build: a choice sheet still takes a spoken name ("Samira").
   if (pending?.kind === 'choose') {
     const i = pending.choices.findIndex((c) => new RegExp(`\\b${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text));
@@ -425,17 +452,19 @@ function hear(text, path) {
 
 // ---------- the eight verbs: the shell's side (the agent matches the words and does undo and carry on) ----------
 function stopAll() {
+  stopThinking();
   personal.abort(); personal = new AbortController();
   hush();
   if (pending) answerSheet(pending.kind === 'confirm' ? false : null);
   agent?.stop?.();
   if (!panel.on) ding('stopped');
 }
+const oneStop = (t) => (/[.!?]$/.test(String(t).trim()) ? String(t).trim() : `${String(t).trim()}.`); // one stop, never "one.."
 function where() {
   const app = current && registry.get(current);
-  if (!app) { const t = tilesNow()[0]; return speak(`The board. Now: ${t.line.title || t.app.name}.`, personal.signal); }
+  if (!app) { const t = tilesNow()[0]; return speak(`The board. Now: ${oneStop(t.line.title || t.app.name)}`, personal.signal); }
   const p = app.place();
-  return speak(`${[p.where, p.item, p.n && p.of ? `${p.n} of ${p.of}` : ''].filter(Boolean).join(', ')}.${p.next ? ` Next: ${p.next}.` : ''}`, personal.signal);
+  return speak(`${oneStop([p.where, p.item, p.n && p.of ? `${p.n} of ${p.of}` : ''].filter(Boolean).join(', '))}${p.next ? ` Next: ${oneStop(p.next)}` : ''}`, personal.signal);
 }
 const again = () => speak(lastLine, personal.signal);
 function takeOver() {
@@ -473,8 +502,6 @@ function setNoLook(on) {
   else { speak('No-look mode is off.', personal.signal); $('#board .tile')?.focus(); }
 }
 $('#nolook-exit').addEventListener('click', () => setNoLook(false));
-// Summon on the board: a tap on empty space (not a tile or a control) opens the mic.
-$('#board-view').addEventListener('click', (e) => { if (!e.target.closest('button, a, input, textarea')) summon(); });
 
 // ---------- Your look is an app (public/apps/look/); the demo panel and first open come from wire.js ----------
 $('#look-link').addEventListener('click', (e) => { e.preventDefault(); open('look'); });
@@ -510,8 +537,9 @@ try {
   const { createAgent } = await import('../agent/index.js');
   agent = await createAgent({
     registry, bus, ctxFor, speak, librarian,
-    os: { open: (id) => open(id), current: () => current, install },
-    fingerprint: () => passkey.confirm(),
+    os: { open: (id) => open(id), current: () => current, install, home: () => home(),
+      sound: (on) => { (on ? unmute : mute)(); store.set('muted', !on); } },
+    fingerprint,
     agency: () => look.agency, answers: () => look.answers,
     onGate: agentGate, onChoose: agentChoose,
   });
@@ -522,6 +550,7 @@ try {
     for (const w of SEED()) await agent.workflows.save(w.name, w.steps.map((s) => ({ ...s, tool: `${s.app}__${s.action}` })));
   }
   await registry.get('mine')?.seed?.();
+  if (caps.tts) agent.warm?.().then((lines) => warmTts(lines)).catch(() => {}); // not awaited: boot does not wait on the network
 } catch (e) {
   if (!/Failed to fetch|Cannot find|404|Importing a module script failed/i.test(String(e?.message))) console.error('agent failed to start', e);
 }
