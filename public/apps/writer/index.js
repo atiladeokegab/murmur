@@ -150,7 +150,7 @@ function el(tag, props = {}, ...kids) {
 const button = (text, props = {}) => el('button', { type: 'button', className: 'app-btn', ...props }, text);
 const field = (id, label) => [el('label', { for: id, className: 'app-label' }, label), el('input', { id, className: 'app-field', autocomplete: 'off' })];
 
-function render() {
+function render(result) {
   if (!body) return;
   const ch = W.current(s), all = sentences(ch.text);
   const text = el('textarea', { id: 'wr-text', className: 'app-field', rows: 3 });
@@ -163,11 +163,11 @@ function render() {
     else li.append(t);
     return li;
   });
-  body.replaceChildren(...[
+  keepFocus(() => body.replaceChildren(...[
     el('h3', { className: 'app-h3' }, `Chapter ${s.chapter + 1}: ${ch.title}`),
     el('p', { className: 'app-place', id: 'wr-place' }, W.where(s)),
-    button('Read the last page', { id: 'wr-last', className: 'app-btn primary', onclick: (e) => { W.startLastPage(s); save(); render(); personReads(e); } }),
-    button('Carry on', { id: 'wr-carry', onclick: (e) => { W.startCarryOn(s); save(); render(); personReads(e); } }),
+    button('Read the last page', { id: 'wr-last', className: 'app-btn primary', onclick: (e) => { W.startLastPage(s); save(); render('#wr-sentences .is-current'); personReads(e); } }),
+    button('Carry on', { id: 'wr-carry', onclick: (e) => { W.startCarryOn(s); save(); render('#wr-sentences .is-current'); personReads(e); } }),
     button('Where am I', { id: 'wr-where', onclick: (e) => { s.lastSaid = W.where(s); save(); if (e.isTrusted) os.say?.(s.lastSaid); } }),
     el('ol', { className: 'app-sentences', id: 'wr-sentences', 'aria-label': `Chapter ${s.chapter + 1}, sentence by sentence` }, lis),
     el('h3', { className: 'app-h3' }, 'Write'),
@@ -188,5 +188,18 @@ function render() {
         onclick: () => { W.openChapter(s, i + 1); save(); render(); } })))),
     ...field('wr-title', 'New chapter title, if you want one'),
     button('New chapter', { id: 'wr-new', onclick: () => { W.newChapter(s, q('#wr-title').value); save(); render(); } }),
-  ].filter(Boolean));
+  ].filter(Boolean)), result);
+}
+
+// A re-render replaces the controls. Keep keyboard focus in the app: on the result when one is named, else the same control.
+function keyOf(n) {
+  if (n.id) return `#${n.id}`;
+  const a = [...(n.attributes || [])].find((x) => x.name.startsWith('data-'));
+  return a ? `[${a.name}=${JSON.stringify(a.value)}]` : null;
+}
+function keepFocus(paint, result) {
+  const doc = root.ownerDocument, was = doc.activeElement;
+  const had = !!was && was !== doc.body && root.contains(was), key = had && keyOf(was);
+  paint();
+  if (had && !root.contains(doc.activeElement)) ((result && q(result)) || (key && q(key)) || q('h2'))?.focus?.();
 }
