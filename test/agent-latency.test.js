@@ -23,7 +23,7 @@ test('a slow plan gets "On it." first, and the steps speak only after it', async
   const s = await setup({ plan: plan200, ackMs: 10 });
   await s.agent.hear('Make the text bigger');
   assert.equal(s.spoken[0], ACK);
-  assert.equal(s.spoken[1], s.registry.get('look').read(), 'then the result');
+  assert.equal(s.spoken[1], 'Text 150 percent.', 'then the result: only the changed row');
   assert.equal(s.state('look').size, 150);
 });
 
