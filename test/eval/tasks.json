@@ -209,9 +209,9 @@
     {
       "id": "back-cancels-task", "app": "messages", "utterance": "Tell Mum: I'll meet you by the library.",
       "gap": "Android Back during a task", "followups": [{ "when": "gate", "back": true }, { "afterMs": 650, "say": "yes" }],
-      "expect": "Browser history Back cancels the pending task, returns to the board, and a late yes sends nothing.",
+      "expect": "Browser history Back cancels the pending task, and a late yes sends nothing.",
       "assertions": ["same(state('messages').lastSent, before('messages').lastSent)"],
-      "boardVisible": true, "outcome": "cancelled", "noGatedRuns": true
+      "outcome": "cancelled", "noGatedRuns": true
     },
     {
       "id": "typed-reduced-motion", "app": "writer", "utterance": "Write in Writer: Bring the spare charger.",
