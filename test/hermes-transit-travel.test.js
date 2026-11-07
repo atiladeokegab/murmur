@@ -66,3 +66,16 @@ test('Travel: a No holds nothing, refusals are in words, reset clears', async ()
   await app.reset();
   assert.equal(app.state().view, 'search');
 });
+
+test('travel: "book the 9:40" picks and holds in one step; "hold it" with nothing open says why, in words', async () => {
+  const { createTravel } = await import('../public/apps/travel/index.js');
+  const app = createTravel();
+  const { run, asked } = await phone([app], { answers: [true] });
+  const none = await run('travel__hold');
+  assert.equal(none.ok, false); assert.equal(none.reason, 'Find the flights first.'); assert.equal(asked.length, 0);
+  await run('travel__findFlights', { to: 'Lisbon', day: 'Friday' });
+  assert.match((await run('travel__hold', { flight: 'it' })).reason, /^Which flight\? There's the 06:55, the 09:40, the 14:20\.$/);
+  assert.ok((await run('travel__hold', { flight: 'the 9:40' })).ok);
+  assert.equal(app.state().held.id, 'TA311');
+  assert.match(asked[0].readback, /^Tagus Air, Friday at nine forty from Heathrow/);
+});

@@ -1,19 +1,82 @@
-/* Inside: laptop-sized, Station-board tokens from /app.css, typeset like a log. */
-body.inside { height: auto; min-height: 100svh; display: block; margin: 0; padding: var(--gutter); background: var(--c-page); color: var(--c-ink); font-family: var(--f-read); line-height: var(--lh); }
-.inside header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1rem 2rem; border-bottom: 2px solid var(--c-slat); padding-bottom: .75rem; }
-.inside h1 { font-size: var(--fs-h1); margin: 0; }
-.inside .quiet { color: var(--c-quiet); margin: 0; }
-.inside #tally { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 0; }
-.inside #tally div { display: flex; flex-direction: column-reverse; }
-.inside #tally dt { color: var(--c-quiet); font-size: var(--fs-hint); }
-.inside #tally dd { margin: 0; font-family: var(--f-time); font-size: var(--fs-title); }
-.inside #tally .bad dd { color: var(--c-accent); }
-.inside main { overflow: visible; display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; margin-top: 1rem; }
-.inside section { background: var(--c-board); border: 1px solid var(--c-slat); border-radius: var(--r-cell); padding: .75rem; min-height: 50vh; max-height: 70vh; overflow-y: auto; overflow-wrap: anywhere; }
-.inside h2 { font-size: var(--fs-title); margin: 0 0 .5rem; }
-.inside ol { list-style: none; margin: 0; padding: 0; }
-.inside li { border-top: 1px solid var(--c-slat); padding: .4rem 0; font-size: var(--fs-say); }
-.inside code { font-family: var(--f-time); font-size: var(--fs-hint); color: var(--c-quiet); white-space: pre-wrap; }
-.inside .ok::before { content: "✓ "; color: var(--c-accent); }
-.inside .no::before { content: "✗ "; }
-.inside footer { border-top: 2px solid var(--c-slat); margin-top: 1rem; color: var(--c-quiet); }
+/* Inside: laptop-sized, Station-board tokens from /app.css, typeset like a log. Nothing moves at rest. */
+body.inside { height: 100svh; display: grid; grid-template-rows: auto 1fr auto; gap: 1.25rem; margin: 0; padding: 1.5rem 2rem 1rem;
+  background: var(--c-page); color: var(--c-ink); font-family: var(--f-read); line-height: var(--lh); overflow: hidden; }
+.inside header { display: grid; grid-template-columns: auto 1fr; align-items: end; gap: .25rem 2.5rem; }
+.inside h1 { font-size: var(--fs-now-title); line-height: 1; margin: 0; letter-spacing: -0.01em; }
+.inside #link { grid-column: 1; grid-row: 2; margin: 0; color: var(--c-quiet); font-size: var(--fs-hint); display: flex; align-items: center; gap: .5rem; }
+.inside #link::before { content: ""; width: .55rem; height: .55rem; border-radius: 50%; background: var(--c-slat); }
+body.inside[data-link="on"] #link::before { background: var(--c-ink); }
+.inside #tally { grid-column: 2; grid-row: 1 / 3; justify-self: end; display: flex; gap: 6px; margin: 0; }
+.inside #tally div { display: flex; flex-direction: column-reverse; align-items: center; gap: .35rem; min-width: 6.5rem; padding: .6rem .5rem .5rem;
+  background: var(--c-board); border: 1px solid var(--c-slat); border-radius: var(--r-cell); }
+.inside #tally dt { color: var(--c-quiet); font-size: var(--fs-hint); white-space: nowrap; }
+.inside #tally dd { margin: 0; font: 600 2.25rem/1 var(--f-time); font-variant-numeric: tabular-nums; padding: .3rem .55rem; min-width: 2.2em; text-align: center;
+  background: var(--c-cell); border-radius: var(--r-cell); position: relative; isolation: isolate; }
+.inside #tally dd::after { content: ""; position: absolute; z-index: -1; inset: 50% 0 auto; height: 1px; background: var(--c-cell-line); }
+/* the one number the beat is about: framed in the accent, the accent used once */
+.inside #tally .t-bypassed { border-color: var(--c-accent); }
+.inside #tally .t-bypassed dd { color: var(--c-accent); }
+.inside #tally .t-bypassed.bad { background: var(--c-accent); }
+.inside #tally .t-bypassed.bad dt { color: var(--c-on-accent); }
+
+.inside main { display: grid; grid-template-columns: .9fr 1.1fr 1.5fr 1.1fr 1fr; gap: 10px; min-height: 0; }
+.inside section { display: flex; flex-direction: column; min-height: 0; background: var(--c-board); border: 1px solid var(--c-slat); border-radius: var(--r-cell); overflow-wrap: anywhere; }
+.inside h2 { display: flex; justify-content: space-between; align-items: baseline; margin: 0; padding: .75rem .9rem .6rem; font-size: var(--fs-say);
+  text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid var(--c-slat); }
+.inside h2 .count { font: 500 var(--fs-hint)/1 var(--f-time); color: var(--c-quiet); }
+.inside section > ol { list-style: none; margin: 0; padding: 0 .9rem; overflow-y: auto; flex: 1; scrollbar-width: thin; scrollbar-color: var(--c-slat) transparent; }
+.inside section > ol > li { padding: .7rem 0; border-bottom: 1px solid var(--c-slat); }
+.inside section > ol > li:last-child { border-bottom: 0; }
+.inside li.old { opacity: .45; }
+.inside p { margin: 0; }
+.inside p + p { margin-top: .2rem; }
+.inside .heard, .inside .read { font-size: var(--fs-talk); line-height: 1.25; }
+.inside .raw, .inside .meta, .inside .pressed, .inside code { color: var(--c-quiet); font-size: var(--fs-hint); }
+.inside .meta, .inside code { font-family: var(--f-time); font-size: .78rem; }
+.inside code { white-space: pre-wrap; overflow-wrap: break-word; }
+/* history folds to one line, so the live task stays in view */
+.inside li.old code, .inside li.old .raw, .inside li.old .pressed, .inside li.old .meta, .inside li.old .fields, .inside li.old .why { display: none; }
+.inside .fields { display: grid; grid-template-columns: auto 1fr; gap: .1rem .6rem; margin: .3rem 0 0; font: .78rem/1.4 var(--f-time); }
+.inside .fields dt { color: var(--c-quiet); }
+.inside .fields dd { margin: 0; }
+.inside .ms::before { content: " · "; }
+.inside .pressed q { color: var(--c-ink); quotes: "“" "”"; }
+.inside .calls { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
+.inside .calls li { display: flex; flex-wrap: wrap; gap: .1rem .45rem; align-items: baseline; }
+.inside .calls .n { font: 600 .78rem/1 var(--f-time); background: var(--c-cell); border-radius: var(--r-cell); padding: .2rem .35rem; }
+.inside .step { display: flex; align-items: center; gap: .5rem; font-weight: 700; }
+.inside .gate { margin-left: auto; font: 600 .72rem/1 var(--f-time); text-transform: uppercase; letter-spacing: .06em; padding: .25rem .4rem;
+  border: 1px solid var(--c-ink); border-radius: var(--r-cell); }
+.inside .tick { width: 1.1rem; height: 1.1rem; flex: none; fill: none; stroke: var(--c-ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.inside .cross { width: 1.1rem; text-align: center; flex: none; }
+.inside .spin { width: 1.1rem; height: 1.1rem; flex: none; border-radius: 50%; border: 2px solid var(--c-slat); border-top-color: var(--c-ink); }
+.inside li[data-result="failed"] .res, .inside .why { color: var(--c-ink); font-weight: 700; }
+.inside .answer { font-family: var(--f-time); font-size: .85rem; color: var(--c-quiet); }
+.inside .answer.yes, .inside .answer.no { color: var(--c-ink); }
+.inside .kind { font-weight: 700; text-transform: capitalize; }
+.inside footer { color: var(--c-quiet); font-size: var(--fs-hint); border-top: 1px solid var(--c-slat); padding-top: .7rem; }
+.inside footer p { margin: 0; }
+.inside footer b { color: var(--c-ink); font-weight: 700; }
+
+/* Below laptop width the page scrolls as one column instead. */
+@media (max-width: 1100px) {
+  body.inside { height: auto; overflow: visible; }
+  .inside header { grid-template-columns: 1fr; }
+  .inside #tally { grid-column: 1; grid-row: auto; justify-self: start; flex-wrap: wrap; }
+  .inside main { grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+  .inside section { max-height: 70vh; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .inside li.in { animation: rise 320ms cubic-bezier(.2,.8,.2,1) backwards; }
+  .inside li.done { animation: settle 700ms ease-out; }
+  .inside li.done .tick path { stroke-dasharray: 16; animation: draw 380ms cubic-bezier(.3,.7,.2,1) both; }
+  .inside .spin { animation: turn .8s linear infinite; }
+  .inside .flip { animation: flip 460ms cubic-bezier(.3,.7,.2,1) backwards; }
+  .inside li.old { transition: opacity 600ms ease; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+  @keyframes settle { from { background: var(--c-board-press); } }
+  @keyframes draw { from { stroke-dashoffset: 16; } to { stroke-dashoffset: 0; } }
+  @keyframes turn { to { transform: rotate(1turn); } }
+  @keyframes flip { 0% { transform: perspective(300px) rotateX(-88deg); opacity: .2 } 70% { transform: perspective(300px) rotateX(8deg) } 100% { transform: none; opacity: 1 } }
+}

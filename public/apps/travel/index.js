@@ -29,6 +29,12 @@ export function createTravel() {
   let root = null, body = null, doc = null, ui = null, s = {}, confirm = null, holding = null;
   const fresh = () => ({ view: 'search', query: null, results: [], selected: null, held: null });
   const sel = () => s.results.find((f) => f.id === s.selected);
+  // The flight a hold means: the one named ("book the 9:40"), else the one open. Thrown words are spoken.
+  const target = (st, p) => {
+    const f = (p.flight && pickOf(p.flight, st.results)) || st.results.find((x) => x.id === st.selected);
+    if (f) return f;
+    throw new Error(st.results.length ? `Which flight? There's the ${st.results.map((x) => x.time).join(', the ')}.` : 'Find the flights first.');
+  };
 
   // Hold is a pay gate (spec §3.7): a person's own tap asks through os.confirm (fingerprint included);
   // when the agent pressed it, the runner already asked and os.confirm answers yes at once.
@@ -121,16 +127,20 @@ export function createTravel() {
       },
       hold: {
         describe: 'Hold the picked flight for 24 hours', doing: 'Holding the flight',
-        params: { type: 'object', properties: {} },
+        params: { type: 'object', properties: { flight: { type: 'string' } } },
         gate: 'pay',
         hint: 'Hold this flight is the large button under the flight',
-        readback(st) { const f = st.results.find((x) => x.id === st.selected); return `${f.airline}, ${cap(st.query.day)} at ${f.spoken} from ${f.airport} to ${st.query.to}, ${money(f.price)}, held for 24 hours.`; },
+        readback(st, p = {}) { const f = target(st, p); return `${f.airline}, ${cap(st.query.day)} at ${f.spoken} from ${f.airport} to ${st.query.to}, ${money(f.price)}, held for 24 hours.`; },
         async run(p, ctx) {
-          if (!sel()) throw new Error('Pick a flight first.');
+          const f = target(s, p);
+          if (s.selected !== f.id || s.view !== 'flight') {
+            if (s.view !== 'results') await ctx.tap(ui.find('back'));
+            await ctx.tap(ui.find('pick', f.id));
+          }
           await ctx.tap(ui.find('hold'));
           await holding; // the click's handler awaits os.confirm; settle it before the runner verifies
         },
-        verify(st) { return (st.view === 'held' && !!st.held && st.held.id === st.selected) || 'The flight is not held.'; },
+        verify(st, p = {}) { const f = p.flight && pickOf(p.flight, st.results); return (st.view === 'held' && !!st.held && st.held.id === (f ? f.id : st.selected)) || 'The flight is not held.'; },
       },
     },
   };
