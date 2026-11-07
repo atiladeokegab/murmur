@@ -10,12 +10,12 @@ export async function planUtterance(utterance, apps, context = {}, { fetch = glo
       const r = await fetch('/api/plan', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ utterance, apps, context }),
-        signal: AbortSignal.timeout(9000),
+        signal: AbortSignal.timeout(20000), // the server tries up to three models, 6 s each
       });
       if (r.ok) {
         const j = await r.json();
         const v = validatePlan(j.steps, apps, { dryRun: j.kind === 'teach' });
-        return { kind: j.kind, steps: v.steps, dropped: [...(j.dropped || []), ...v.dropped], say: j.say, provider: j.provider };
+        return { kind: j.kind, steps: v.steps, dropped: [...(j.dropped || []), ...v.dropped], say: j.say, provider: j.provider, model: j.model };
       }
     } catch { /* offline: the demo provider below */ }
   }
