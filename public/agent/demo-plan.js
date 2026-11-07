@@ -449,7 +449,7 @@ function plan(said, apps, context, dry) {
   }
   // The phone's Bank: "Open the bank", "What's my balance", "Recent payments", "Freeze my card"
   if (/^(?:open|go to|show)\s+(?:the\s+|my\s+)?(?:murmur\s+)?bank(?:\s+app)?$/i.test(t) ||
-    /^(?:what'?s|what is|check|tell me|read|say|how much is)\s+(?:in\s+)?(?:my\s+|the\s+)?(?:(?:murmur\s+)?bank\s+)?balance$|^how much (?:money )?(?:have i got|do i have)(?: in (?:the|my) bank)?$/i.test(t)) return task([step('bank', ['balance'], {})]);
+    /^(?:what'?s|what is|check|tell me|read|say|how much is)\s+(?:in\s+)?(?:my\s+|the\s+)?(?:(?:murmur\s+)?bank\s+)?balance$|^am i (?:ok|okay|alright|all right|good) (?:for|on) (?:money|cash)$|^how much (?:money )?(?:have i got|do i have)(?: in (?:the|my) bank)?$/i.test(t)) return task([step('bank', ['balance'], {})]);
   if (/^(?:read |what are |show )?(?:my |the )?(?:recent|last) (?:bank )?(?:payments|transactions|spending)$|^what have i (?:spent|paid)(?: recently)?$/i.test(t)) return task([step('bank', ['recent'], {})]);
   if (/^freeze (?:my |the )?(?:bank )?card$/i.test(t)) return task([step('bank', ['freezeCard'], {})]);
   // "Pay Sam twenty pounds", "Pay Samira five pounds fifty", "Send Sam £20 please", "... from Murmur Bank"
