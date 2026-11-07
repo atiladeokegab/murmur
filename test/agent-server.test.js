@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { describeRegistry } from '../public/agent/plan.js';
 import { plan, cleanApps } from '../lib/agent/planner.js';
-import { stubMessages } from './agent-fixtures.js';
+import messages from '../public/apps/messages/index.js';
 
-const apps = describeRegistry([stubMessages()]);
+const apps = describeRegistry([messages]);
 
 test('POST /api/plan returns a validated plan offline', async () => {
   delete process.env.GEMINI_API_KEY;
@@ -39,13 +39,13 @@ test('a Gemini failure falls back to the demo plan; the registry from the browse
 test('Gemini function calls become the plan, validated', async () => {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [
-    { functionCall: { name: 'messages__openChat', args: { name: 'Sam', evil: 1 } } },
+    { functionCall: { name: 'messages__openChat', args: { who: 'Sam', evil: 1 } } },
     { functionCall: { name: 'messages__wipe', args: {} } },
   ] } }] }) });
   try {
     const out = await plan({ key: 'k', utterance: 'open Sam', apps });
     assert.equal(out.provider, 'gemini');
-    assert.deepEqual(out.steps.map((s) => [s.tool, s.params]), [['messages__openChat', { name: 'Sam' }]]);
+    assert.deepEqual(out.steps.map((s) => [s.tool, s.params]), [['messages__openChat', { who: 'Sam' }]]);
     assert.ok(out.dropped.some((d) => d.reason === 'unknown action'));
   } finally { globalThis.fetch = realFetch; }
 });

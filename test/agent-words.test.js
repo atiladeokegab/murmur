@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { hear } from '../public/agent/words.js';
 import { validatePlan, describeRegistry, toolsFor, cantLine } from '../public/agent/plan.js';
 import { demoPlan } from '../public/agent/demo-plan.js';
-import { stubMessages, stubShop, stubCalendar } from './agent-fixtures.js';
+import { stubShop } from './agent-fixtures.js';
+import messages from '../public/apps/messages/index.js';
+import calendar from '../public/apps/calendar/index.js';
 
 const kinds = (t, o) => hear(t, o).words.map((w) => w.kind);
 
@@ -47,7 +49,7 @@ test('confirm words: yes, send, pay, call only; never ok or mm; not in the first
   assert.deepEqual(hear('yes').words, []);
 });
 
-const apps = describeRegistry([stubMessages(), stubShop(), stubCalendar()]);
+const apps = describeRegistry([messages, stubShop(), calendar]);
 
 test('the tool list is generated from the registry, gates marked', () => {
   const tools = toolsFor(apps);
@@ -61,17 +63,17 @@ test('the tool list is generated from the registry, gates marked', () => {
 
 test('plans are validated: unknown tools and params dropped, and said in the app\'s words', () => {
   const { steps, dropped } = validatePlan([
-    { tool: 'messages__openChat', params: { name: 'Sam', colour: 'red' } },
+    { tool: 'messages__openChat', params: { who: 'Sam', colour: 'red' } },
     { tool: 'messages__delete', params: {} },
     { tool: 'bank__transfer', params: { amount: 100 } },
     { tool: 'messages__reply', params: { text: 42 } },
     { tool: 'messages__send' },
   ], apps);
   assert.deepEqual(steps.map((s) => s.tool), ['messages__openChat', 'messages__send']);
-  assert.deepEqual(steps[0].params, { name: 'Sam' });
+  assert.deepEqual(steps[0].params, { who: 'Sam' });
   assert.equal(steps[1].gate, 'send');
   assert.deepEqual(dropped.map((d) => d.reason), ['dropped params colour', 'unknown action', 'unknown app', 'missing text']);
-  assert.equal(dropped[1].say, "I can't do that in Messages. I can open a chat, read it, or reply.");
+  assert.equal(dropped[1].say, "I can't do that in Messages. I can open the chat with a person, read the new message in the open chat, or write a reply in the open chat.");
   assert.equal(cantLine(apps[0]), dropped[1].say);
   assert.equal(dropped[2].say, "That app isn't on this phone.");
 });
@@ -80,26 +82,26 @@ const run = (t, ctx) => { const p = demoPlan(t, apps, ctx); return { ...p, ...va
 const tools = (t, ctx) => run(t, ctx).steps.map((s) => `${s.tool}${Object.keys(s.params).length ? ' ' + JSON.stringify(s.params) : ''}`);
 
 test('demo provider: Vertical 1 and its variants', () => {
-  const want = ['messages__openChat {"name":"Sam"}', 'messages__reply {"text":"I\'m ten minutes late."}', 'messages__send'];
+  const want = ['messages__openChat {"who":"Sam"}', 'messages__reply {"text":"I\'m ten minutes late."}', 'messages__send'];
   assert.deepEqual(tools("Text Sam I'm ten minutes late"), want);
-  assert.deepEqual(tools("text sam i'm ten minutes late."), ['messages__openChat {"name":"Sam"}', 'messages__reply {"text":"I\'m ten minutes late."}', 'messages__send']);
+  assert.deepEqual(tools("text sam i'm ten minutes late."), ['messages__openChat {"who":"Sam"}', 'messages__reply {"text":"I\'m ten minutes late."}', 'messages__send']);
   assert.deepEqual(tools("Message Sam I'm ten minutes late"), want);
   assert.deepEqual(tools("Tell Sam that I'm ten minutes late"), want);
   assert.deepEqual(tools("Send Sam a message saying I'm ten minutes late"), want);
   assert.deepEqual(tools("Send a message to Sam saying I'm ten minutes late"), want);
-  assert.deepEqual(tools('tell Mum to stop worrying'), ['messages__openChat {"name":"Mum"}', 'messages__reply {"text":"Stop worrying."}', 'messages__send']);
+  assert.deepEqual(tools('tell Mum to stop worrying'), ['messages__openChat {"who":"Mum"}', 'messages__reply {"text":"Stop worrying."}', 'messages__send']);
 });
 
 test('demo provider: the §6 demo script', () => {
-  assert.deepEqual(tools("Read Mum's message"), ['messages__openChat {"name":"Mum"}', 'messages__read']);
-  assert.deepEqual(tools('What did Mum say?'), ['messages__openChat {"name":"Mum"}', 'messages__read']);
+  assert.deepEqual(tools("Read Mum's message"), ['messages__openChat {"who":"Mum"}', 'messages__read']);
+  assert.deepEqual(tools('What did Mum say?'), ['messages__openChat {"who":"Mum"}', 'messages__read']);
   assert.deepEqual(tools("Reply: Tuesday's fine."), ['messages__reply {"text":"Tuesday\'s fine."}']);
   assert.deepEqual(tools('Change Tuesday to Wednesday', { app: 'messages' }), ['messages__replace {"from":"Tuesday","to":"Wednesday"}']);
   assert.deepEqual(tools('Send it.', { app: 'messages' }), ['messages__send']);
   assert.deepEqual(tools('Save that as Reply to Mum'), ['save_workflow {"name":"Reply to Mum","slot":false}']);
   assert.deepEqual(tools('save that as message someone'), ['save_workflow {"name":"Message someone","slot":true}']);
-  assert.deepEqual(tools('Move lunch with Mum to Wednesday'), ['calendar__move {"event":"lunch with Mum","day":"Wednesday"}']);
-  assert.deepEqual(tools('Do it: move lunch with Mum to Wednesday.'), ['calendar__move {"event":"lunch with Mum","day":"Wednesday"}']);
+  assert.deepEqual(tools('Move lunch with Mum to Wednesday'), ['calendar__move {"what":"lunch with Mum","to":"Wednesday"}']);
+  assert.deepEqual(tools('Do it: move lunch with Mum to Wednesday.'), ['calendar__move {"what":"lunch with Mum","to":"Wednesday"}']);
   assert.deepEqual(tools('Order my usual'), ['shop__orderUsual', 'shop__pay']);
   assert.deepEqual(tools('order my usual coffee'), ['shop__orderUsual', 'shop__pay']);
   const teach = run('How do I move a meeting?');

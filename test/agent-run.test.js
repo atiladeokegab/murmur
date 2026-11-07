@@ -2,70 +2,72 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createToolkit } from '../public/vendor/toolkit/index.js';
 import { createAgent } from '../public/agent/index.js';
-import { attachNarration, placeLine } from '../public/agent/narrate.js';
+import { placeLine } from '../public/agent/narrate.js';
 import { createVoice } from '../public/voice/route.js';
-import { gerund } from '../public/agent/runner.js';
+import { gerund, BEAT_MS } from '../public/agent/runner.js';
 import { observationOf } from '../public/agent/memory.js';
-import { stubMessages, stubShop, stubCalendar, testBus, memoryKV } from './agent-fixtures.js';
+import { phone, memoryKV } from './agent-fixtures.js';
 
 const tick = () => new Promise((r) => setImmediate(r));
 async function until(f, n = 2000) { for (let i = 0; i < n; i++) { if (f()) return; await tick(); } throw new Error('timed out'); }
 
-function setup({ broken = false, fingerprint = async () => true, agency = () => 'just' } = {}) {
+async function setup({ patch, fingerprint = async () => true, agency = () => 'just' } = {}) {
   const clock = { t: Date.UTC(2026, 10, 7, 8, 40), now() { return this.t; } };
   const sleep = async (ms) => { clock.t += ms; await tick(); };
   const kv = memoryKV();
   const { librarian } = createToolkit({ kv, clock });
-  const bus = testBus();
-  const taps = [];
-  const apps = [stubMessages({ broken }), stubShop(), stubCalendar()];
-  const ctxFor = (a) => ({
-    tap: async (el) => { taps.push(`${a.id}:${el.id}`); bus.emit('cursor', { app: a.id, target: el.id }); },
-    type: async () => {}, say: async (text) => bus.emit('say', { text }), kv: null,
-  });
-  const agent = createAgent({ registry: apps, bus, ctxFor, librarian, fingerprint, agency, clock, sleep, planOpts: { offline: true } });
+  const p = await phone({ patch });
   const spoken = [];
-  bus.on('say', (e) => spoken.push(e.text));
-  const state = (id) => apps.find((a) => a.id === id).state();
-  return { agent, bus, clock, taps, kv, state, spoken, librarian, apps };
+  const agent = createAgent({ registry: p.registry, bus: p.bus, ctxFor: p.ctxFor, librarian, fingerprint, agency, clock, sleep,
+    planOpts: { offline: true }, speak: async (t) => { spoken.push(t); } });
+  const log = p.bus.log;
+  const ev = (name) => log.filter((e) => e.name === name);
+  return { ...p, agent, clock, kv, spoken, librarian, log, ev };
 }
 
-/** Say something that will open a gate, wait for the sheet, then let `after` answer it. */
-async function gated(s, utterance, after) {
+/** Say something that will open a gate (answering "Sam or Samira?" first if asked), then let `after` answer it. */
+async function gated(s, utterance, after, { choose } = {}) {
   const p = s.agent.hear(utterance);
-  await until(() => s.bus.log.some((e) => e.type === 'gate:open'));
+  if (choose) { await until(() => s.spoken.some((t) => / or .+\?$/.test(t))); await s.agent.hear(choose); }
+  await until(() => s.agent.gates.current);
   await after();
   return p;
 }
 
+/** No gated step is verified without a confirm {result:true} between its step:start and its tick. */
 function assertGatesHonoured(log) {
-  // No gated action ever ran without a confirm event whose result was yes, just before it.
   log.forEach((e, i) => {
-    if (e.type === 'step:start' && e.gate) {
-      const c = log.slice(0, i).reverse().find((x) => x.type === 'confirm');
-      assert.equal(c?.result, 'yes', `gated ${e.tool} ran without a yes`);
-    }
+    if (e.name !== 'step:start' || !e.gate) return;
+    const end = log.findIndex((x, j) => j > i && x.task === e.task && x.n === e.n && /^step:(verified|failed)$/.test(x.name));
+    if (log[end]?.name === 'step:verified') assert.ok(log.slice(i, end).some((x) => x.name === 'confirm' && x.result === true), `gated ${e.action} ran without a yes`);
   });
-  // No tick without a verify: every step:verified follows its own step:start.
-  log.forEach((e, i) => { if (e.type === 'step:verified') assert.ok(log.slice(0, i).some((x) => x.type === 'step:start' && x.tool === e.tool)); });
+  log.forEach((e, i) => { if (e.name === 'step:verified') assert.ok(log.slice(0, i).some((x) => x.name === 'step:start' && x.task === e.task && x.n === e.n)); });
 }
 
-test('Vertical 1: "Text Sam I\'m ten minutes late" is planned, run with the cursor, verified, gated and logged', async () => {
-  const s = setup();
-  const out = await gated(s, "Text Sam I'm ten minutes late", async () => { s.clock.t += 600; await s.agent.hear('send'); });
+test('Vertical 1: "Text Sam I\'m ten minutes late" is planned, asks Sam or Samira, runs with the cursor, verified, gated and logged', async () => {
+  const s = await setup();
+  const out = await gated(s, "Text Sam I'm ten minutes late", async () => { s.clock.t += 600; await s.agent.hear('send'); }, { choose: 'Sam' });
   assert.equal(out.status, 'done');
-  assert.deepEqual(s.state('messages').lastSent, { to: 'Sam', text: "I'm ten minutes late." });
-  assert.deepEqual(s.taps, ['messages:chat-Sam', 'messages:reply', 'messages:send']);
-  const types = s.bus.log.map((e) => e.type).filter((t) => /^(task|step|confirm|gate)/.test(t));
-  assert.deepEqual(types, ['task:start', 'step:start', 'step:verified', 'step:start', 'step:verified', 'gate:open', 'confirm', 'step:start', 'step:verified', 'task:done']);
-  const plan = s.bus.log.find((e) => e.type === 'plan');
-  assert.equal(plan.provider, 'demo');
-  const gate = s.bus.log.find((e) => e.type === 'confirm');
-  assert.equal(gate.readback, "To Sam: I'm ten minutes late.");
-  assert.ok(s.spoken.includes("To Sam: I'm ten minutes late. Send it?"));
-  assertGatesHonoured(s.bus.log);
-  await until(() => s.bus.log.some((e) => e.type === 'memory' && e.observation));
-  const mem = s.bus.log.find((e) => e.type === 'memory' && e.observation);
+  assert.deepEqual(s.state('messages').lastSent, { to: 'sam', text: "I'm ten minutes late." });
+  assert.equal(s.taps.at(-1), 'Send');
+  assert.equal(s.taps.length, 3, "the chat, the reply box, Send: the person's own controls");
+  const names = s.log.map((e) => e.name).filter((t) => /^(task|step|confirm|ask)/.test(t));
+  assert.deepEqual(names, ['task:start', 'step:start', 'ask', 'step:verified', 'step:start', 'step:verified', 'step:start', 'confirm', 'step:verified', 'task:done']);
+  const ids = new Set(s.log.filter((e) => /^(task|step)/.test(e.name)).map((e) => e.task));
+  assert.equal(ids.size, 1);
+  assert.match([...ids][0], /^t-\d+/);
+  assert.deepEqual(s.ev('task:start')[0].plan.map((x) => x.name), ['messages__openChat', 'messages__reply', 'messages__send']);
+  assert.equal(s.ev('ask')[0].result, 'Sam');
+  assert.deepEqual(s.ev('step:start').map((e) => [e.n, e.of, e.label]), [[1, 3, 'Opening the chat'], [2, 3, 'Writing your reply'], [3, 3, 'Sending']]);
+  const gate = s.ev('confirm')[0];
+  assert.equal(gate.result, true);
+  assert.equal(gate.readback, "Send to Sam: I'm ten minutes late.");
+  assert.ok(s.spoken.includes("Send to Sam: I'm ten minutes late. Send it?"));
+  assert.ok(s.spoken.includes('Sam or Samira?'));
+  assert.equal(s.ev('task:done')[0].ok, true);
+  assertGatesHonoured(s.log);
+  await until(() => s.ev('memory').some((e) => e.observation));
+  const mem = s.ev('memory').find((e) => e.observation);
   assert.equal(mem.logged, true);
   assert.deepEqual(Object.keys(mem.observation).sort(), ['actions', 'app', 'category', 'hour', 'success', 'task', 'type', 'weekday']);
   assert.deepEqual(mem.observation.actions, ['messages__openChat', 'messages__reply', 'messages__send']);
@@ -82,18 +84,19 @@ test('the observation is a whitelist: no utterance, no params', () => {
 });
 
 test('stop between the readback and the yes cancels; a later yes sends nothing', async () => {
-  const s = setup();
+  const s = await setup();
   const out = await gated(s, "Tell Mum: I'll be home at seven.", async () => { s.clock.t += 650; await s.agent.hear('stop'); });
   assert.equal(out.status, 'stopped');
   s.clock.t += 650;
   await s.agent.hear('yes');
   assert.equal(s.state('messages').lastSent, null);
-  assert.equal(s.bus.log.find((e) => e.type === 'confirm').result, 'stop');
-  assertGatesHonoured(s.bus.log);
+  assert.equal(s.ev('confirm')[0].result, false);
+  assert.equal(s.ev('task:done')[0].ok, false);
+  assertGatesHonoured(s.log);
 });
 
 test('a yes in the first half second is ignored; the sheet stays; no sends nothing', async () => {
-  const s = setup();
+  const s = await setup();
   const out = await gated(s, 'Tell Mum: Please bring the spare charger.', async () => {
     s.clock.t += 50; await s.agent.hear('yes');
     s.clock.t += 650; assert.ok(s.agent.gates.current, 'still gated');
@@ -103,10 +106,11 @@ test('a yes in the first half second is ignored; the sheet stays; no sends nothi
   assert.equal(out.status, 'cancelled');
   assert.equal(s.state('messages').lastSent, null);
   assert.equal(out.line, 'Not sent.');
+  assert.equal(s.ev('task:done')[0].reason, 'Not sent.');
 });
 
 test('Back during a task cancels it', async () => {
-  const s = setup();
+  const s = await setup();
   const out = await gated(s, "Tell Mum: I'll meet you by the library.", () => s.agent.stop());
   assert.equal(out.status, 'stopped');
   s.clock.t += 650; await s.agent.hear('yes');
@@ -114,190 +118,196 @@ test('Back during a task cancels it', async () => {
 });
 
 test('pay needs the fingerprint; a stranger cannot pay', async () => {
-  const ok = setup({ fingerprint: async () => true });
+  const ok = await setup({ fingerprint: async () => true });
   await gated(ok, 'Order my usual from Demo Café.', async () => { ok.clock.t += 650; await ok.agent.hear('pay'); });
-  assert.equal(ok.state('shop').paid, true);
+  assert.equal(ok.state('shop').orders.length, 1);
   assert.ok(ok.spoken.includes('Check your fingerprint.'));
-  assert.equal(ok.bus.log.find((e) => e.type === 'confirm').fingerprint, true);
+  assertGatesHonoured(ok.log);
 
-  const no = setup({ fingerprint: async () => false });
+  const no = await setup({ fingerprint: async () => false });
   const p = gated(no, 'Order my usual from Demo Café.', async () => { no.clock.t += 650; await no.agent.hear('pay'); });
   await until(() => no.spoken.includes('Not you, or not read. Try again, or No.'));
-  assert.equal(no.state('shop').paid, false);
+  assert.equal(no.state('shop').orders.length, 0);
   await no.agent.hear('no');
   assert.equal((await p).status, 'cancelled');
-  assert.equal(no.state('shop').paid, false);
-  assertGatesHonoured(no.bus.log);
+  assert.equal(no.state('shop').orders.length, 0);
+  assertGatesHonoured(no.log);
 });
 
 test('a failed verify stops the task, with no tick, and offers the way out', async () => {
-  const s = setup({ broken: true });
+  const s = await setup({ patch: { messages: (a) => ({ reply: { ...a.reply, async run() {} } }) } });
   const out = await s.agent.hear('Draft a message to Mum: Bring the blue bag.');
   assert.equal(out.status, 'failed');
-  assert.ok(!s.bus.log.some((e) => e.type === 'step:verified' && e.tool === 'messages__reply'));
-  assert.ok(s.bus.log.some((e) => e.type === 'step:failed' && e.tool === 'messages__reply'));
-  assert.match(out.line, /Try again, I'll do it, or stop\.$/);
+  assert.ok(!s.ev('step:verified').some((e) => e.action === 'messages__reply'));
+  assert.ok(s.ev('step:failed').some((e) => e.action === 'messages__reply'));
+  assert.equal(out.line, "The reply box did not take it. Try again, I'll do it, or stop.");
+  assert.equal(s.ev('task:done')[0].ok, false);
   assert.equal(s.state('messages').draft, '');
 });
 
 test('undo works for 8 seconds after a change, then is gone', async () => {
-  const s = setup();
-  await s.agent.hear('Draft a message to Mum: Lunch on Tuesday.');
-  assert.equal(s.state('messages').draft, 'Lunch on Tuesday.');
+  const s = await setup();
+  const write = [{ tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Lunch on Tuesday.' } }];
+  await s.agent.runner.run({ utterance: 'write', steps: write });
+  assert.equal(s.state('hello').draft, 'Lunch on Tuesday.');
   await s.agent.hear('undo');
-  assert.equal(s.state('messages').draft, '');
-  await s.agent.hear('Draft a message to Mum: Lunch on Tuesday.');
+  assert.equal(s.state('hello').draft, '');
+  assert.deepEqual(s.ev('undo').map((e) => [e.action, e.ok]), [['hello__write', true]]);
+  await s.agent.runner.run({ utterance: 'write', steps: write });
   s.clock.t += 8001;
   await s.agent.hear('undo');
-  assert.equal(s.state('messages').draft, 'Lunch on Tuesday.');
+  assert.equal(s.state('hello').draft, 'Lunch on Tuesday.');
   assert.ok(s.spoken.includes('Nothing to undo.'));
 });
 
 test('the race, then "save that as Reply to Mum", then run it', async () => {
-  const s = setup();
+  const s = await setup();
   await s.agent.hear("Read Mum's message");
+  assert.ok(s.spoken.includes('Lunch on Tuesday?'));
   await s.agent.hear("Reply: Tuesday's fine.");
   await s.agent.hear('Change Tuesday to Wednesday');
   assert.equal(s.state('messages').draft, "Wednesday's fine.");
   await gated(s, 'Send it', async () => { s.clock.t += 600; await s.agent.hear('send'); });
-  assert.deepEqual(s.state('messages').lastSent, { to: 'Mum', text: "Wednesday's fine." });
+  assert.deepEqual(s.state('messages').lastSent, { to: 'mum', text: "Wednesday's fine." });
   await s.agent.hear('Save that as Reply to Mum');
-  assert.match(s.spoken.at(-1), /^Open a chat \(Mum\), then read it, then reply \(Tuesday's fine\), then change a word \(Tuesday, Wednesday\), then send the reply\. Saved as Reply to Mum\.$/);
-  assert.ok(s.bus.log.some((e) => e.type === 'memory' && e.workflow?.name === 'Reply to Mum'));
-  assert.match(await s.agent.workflows.explain('reply to mum'), /^Reply to Mum: Open a chat/);
-  s.apps[0].reset();
-  const n = s.bus.log.length;
-  const out = await gated({ ...s, bus: { log: { some: (f) => s.bus.log.slice(n).some(f) } } }, 'run Reply to Mum', async () => { s.clock.t += 600; await s.agent.hear('yes'); });
+  assert.match(s.spoken.at(-1), /^Open the chat with a person \(Mum\), then read .+, then write a reply in the open chat \(Tuesday's fine\), then change one word .+ \(Tuesday, Wednesday\), then send the reply\. Saved as Reply to Mum\.$/);
+  assert.ok(s.ev('memory').some((e) => e.workflow?.name === 'Reply to Mum'));
+  await s.registry.get('messages').reset();
+  const out = await gated(s, 'run Reply to Mum', async () => { s.clock.t += 600; await s.agent.hear('yes'); });
   assert.equal(out.status, 'done');
-  assert.deepEqual(s.state('messages').lastSent, { to: 'Mum', text: "Wednesday's fine." });
-  assertGatesHonoured(s.bus.log);
+  assert.deepEqual(s.state('messages').lastSent, { to: 'mum', text: "Wednesday's fine." });
+  assertGatesHonoured(s.log);
 });
 
 test('a workflow with a slot asks who at run time', async () => {
-  const s = setup();
+  const s = await setup();
   await s.agent.hear("Draft a message to Mum: I'm at the library.");
   await s.agent.hear('Save that as message someone.');
-  s.apps[0].reset();
+  await s.registry.get('messages').reset();
   const p = s.agent.hear('run message someone');
   await until(() => s.spoken.at(-1) === 'Who?');
   await s.agent.hear('Samira');
   assert.equal((await p).status, 'done');
-  assert.equal(s.state('messages').open, 'Samira');
+  assert.equal(s.state('messages').currentChat, 'samira');
   assert.equal(s.state('messages').draft, "I'm at the library.");
   assert.equal(s.state('messages').lastSent, null);
 });
 
 test('edit a workflow: drop a step', async () => {
-  const s = setup();
+  const s = await setup();
   await s.agent.hear("Read Mum's message");
   await s.agent.hear('Save that as my morning');
   await s.agent.hear('Change my morning: drop the read');
-  assert.match(s.spoken.at(-1), /^My morning: Open a chat \(Mum\)\.$/);
+  assert.match(s.spoken.at(-1), /^My morning: Open the chat with a person \(Mum\)\.$/);
 });
 
 test('"how do I…" is a dry run that speaks the hints, then does it on request', async () => {
-  const s = setup();
+  const s = await setup();
   const before = JSON.stringify(s.state('calendar'));
   const out = await s.agent.hear('How do I move a meeting?');
   assert.equal(out.status, 'taught');
-  assert.equal(s.spoken.at(-1), 'Open Calendar, then Open the event, then the day button. Shall I do it, or walk you through?');
+  assert.equal(s.spoken.at(-1), 'Open Calendar, then Choose the plan under its day, then the day to move it to. Shall I do it, or walk you through?');
   assert.equal(JSON.stringify(s.state('calendar')), before);
-  assert.ok(!s.bus.log.some((e) => e.type === 'task:start'));
+  assert.ok(!s.ev('task:start').length);
   await s.agent.hear('do it');
   assert.equal(s.spoken.at(-1), "Say it in full, and I'll do it.");
   await s.agent.hear('How do I move a meeting?');
   const done = await s.agent.hear('Do it: move lunch with Mum to Wednesday.');
   assert.equal(done.status, 'done');
-  assert.equal(s.state('calendar').events[0].day, 'Wednesday');
+  assert.equal(s.state('calendar').events.find((e) => e.id === 'lunch-mum').day, 'Wednesday');
 });
 
 test('Teach me: each step waits for the person, then is verified', async () => {
-  const s = setup();
-  await s.agent.hear('How do I send a message to Sam?');
+  const s = await setup();
+  await s.agent.hear('How do I send a message to Mum?');
   const p = s.agent.hear('walk me through');
-  await until(() => s.spoken.includes('Chats are in a list; each is a button with the name'));
-  assert.equal(s.state('messages').open, null);
-  // The person taps Sam's chat themselves (the stub's own run, as their tap would).
-  await s.apps[0].actions.openChat.run({ name: 'Sam' }, { tap: async () => {} });
-  await until(() => s.bus.log.some((e) => e.type === 'step:verified' && e.tool === 'messages__openChat'));
+  await until(() => s.spoken.includes('Your chats are buttons under the Messages heading'));
+  assert.equal(s.state('messages').currentChat, null);
+  s.doc.body.querySelector('[data-chat="mum"]').click(); // the person taps Mum's chat themselves
+  await until(() => s.ev('step:verified').some((e) => e.action === 'messages__openChat'));
   s.agent.stop();
   assert.equal((await p).status, 'stopped');
+  assert.equal(s.ev('task:done').at(-1).ok, false);
 });
 
 test('refusals and the unknown: said, no task, nothing remembered', async () => {
-  const s = setup();
+  const s = await setup();
   assert.equal((await s.agent.hear('Transfer twenty pounds from my bank account to Samira.')).status, 'refused');
   assert.match(s.spoken.at(-1), /bank/);
   await s.agent.hear('Open Lantern Music and play my quiet playlist.');
   assert.match(s.spoken.at(-1), /don't have/);
   await s.agent.hear('Mum messa... shh... brng... [unintelligible]...');
   assert.match(s.spoken.at(-1), /didn't catch/);
-  assert.ok(!s.bus.log.some((e) => e.type === 'task:start' || e.type === 'memory'));
+  assert.ok(!s.log.some((e) => e.name === 'task:start' || e.name === 'memory'));
 });
 
 test('reserved words inside content stay content', async () => {
-  const s = setup();
+  const s = await setup();
   await s.agent.hear('Draft a message to Mum: Please stop worrying, say yes to lunch, and call me tomorrow.');
   assert.equal(s.state('messages').draft, 'Please stop worrying, say yes to lunch, and call me tomorrow.');
   assert.equal(s.state('messages').lastSent, null);
 });
 
-test('where am I reads the app\'s place', async () => {
-  const s = setup();
+test("where am I reads the app's place", async () => {
+  const s = await setup();
   await s.agent.hear('Draft a message to Mum: Hello.');
   await s.agent.hear('Where am I?');
-  assert.equal(s.spoken.at(-1), "Mum's chat, your reply.");
+  assert.equal(s.spoken.at(-1), placeLine(s.registry.get('messages').place()));
+  assert.match(s.spoken.at(-1), /^Mum's chat, your reply/);
+  assert.equal(s.ev('place').at(-1).app, 'messages');
   assert.equal(placeLine({ where: "Mum's chat", item: 'your reply', n: 2, of: 2, next: 'send it' }), "Mum's chat, your reply, sentence 2 of 2. Next: send it?");
 });
 
 test('three identical runs propose "just do it"; never means never', async () => {
-  const s = setup();
+  const s = await setup();
   for (let i = 0; i < 3; i++) await s.agent.hear("Read Mum's message");
-  await until(() => s.bus.log.some((e) => e.type === 'memory' && e.proposal));
+  await until(() => s.ev('memory').some((e) => e.proposal));
   assert.match(s.spoken.at(-1), /^Want me to just do this one from now on\? Yes, not now, or never\?$/);
   assert.equal((await s.agent.hear('Never.')).answer, 'never');
-  const n = s.bus.log.filter((e) => e.type === 'memory' && e.proposal).length;
+  const n = s.ev('memory').filter((e) => e.proposal).length;
   for (let i = 0; i < 3; i++) await s.agent.hear("Read Mum's message");
   await tick(); await tick();
-  assert.equal(s.bus.log.filter((e) => e.type === 'memory' && e.proposal).length, n);
+  assert.equal(s.ev('memory').filter((e) => e.proposal).length, n);
 });
 
 test('stop learning: nothing is logged while paused', async () => {
-  const s = setup();
+  const s = await setup();
   await s.agent.memory.stopLearning(true);
   await s.agent.hear("Read Mum's message");
-  await until(() => s.bus.log.some((e) => e.type === 'memory'));
-  assert.equal(s.bus.log.find((e) => e.type === 'memory').logged, false);
+  await until(() => s.ev('memory').length);
+  assert.equal(s.ev('memory')[0].logged, false);
 });
 
 test('Ask me pauses a beat before a change, never before reading or opening', async () => {
-  const s = setup({ agency: () => 'ask' });
+  const s = await setup({ agency: () => 'ask' });
+  const t0 = s.clock.t;
   await s.agent.hear('Draft a message to Mum: Hello.');
-  const next = s.bus.log.filter((e) => e.type === 'step:next').map((e) => e.tool);
-  assert.deepEqual(next, ['messages__reply']);
+  assert.equal(s.clock.t - t0, BEAT_MS, 'one beat, before the reply');
+  const t1 = s.clock.t;
+  await s.agent.hear("Read Mum's message");
+  assert.equal(s.clock.t, t1, 'no beat before opening or reading');
 });
 
-test('narration and who speaks: Murmur\'s voice or the status region, never both', async () => {
+test("narration and who speaks: Murmur's voice or the status region, never both", async () => {
   const status = { attrs: {}, textContent: '', setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; } };
   let who = 'murmur';
   const heard = [];
   const voice = createVoice({ status, who: () => who, speak: async (t) => heard.push(t) });
-  await voice.say('Opening a chat');
-  assert.deepEqual(heard, ['Opening a chat']);
+  await voice.say('Opening the chat');
+  assert.deepEqual(heard, ['Opening the chat']);
   assert.equal(status.attrs['aria-live'], 'off');
   assert.equal(status.attrs.role, 'status');
   who = 'reader';
   await voice.say('Sent.');
-  assert.deepEqual(heard, ['Opening a chat']);
+  assert.deepEqual(heard, ['Opening the chat']);
   assert.equal(status.attrs['aria-live'], 'polite');
   assert.equal(status.textContent, 'Sent.');
 
-  const s = setup();
-  const lines = [];
-  attachNarration(s.bus, { say: (t) => lines.push(t) });
+  const s = await setup();
   await s.agent.hear("Read Mum's message");
-  assert.deepEqual(lines.slice(0, 2), ['Opening a chat', 'Reading it']);
-  assert.equal(lines.at(-1), "Mum's chat. The last says: Lunch on Tuesday?");
+  assert.deepEqual(s.spoken.slice(0, 3), ['Opening the chat', 'Reading', 'Lunch on Tuesday?']);
+  assert.equal(s.spoken.at(-1), s.registry.get('messages').read());
+  assert.deepEqual(s.ev('say').map((e) => e.text), s.spoken, 'every sentence heard is on the record, once');
   assert.equal(gerund('Change a word'), 'Changing a word');
   assert.equal(gerund('Stop the timer'), 'Stopping the timer');
 });

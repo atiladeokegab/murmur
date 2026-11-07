@@ -30,13 +30,20 @@ export function observationOf({ apps = [], actions = [], success = false }, now 
  * @param {{ librarian, bus, kv?, clock? }} o  kv: { get(k), set(k,v) } for Murmur's own proposal counts
  */
 export function attachMemory({ librarian, bus, kv = mapKV(), clock = { now: () => Date.now() } }) {
+  // Collect each task's verified app actions from the bus; task:done {ok} ends it (contract §6).
+  const tasks = new Map();
+  const offs = [
+    bus.on('task:start', (e) => tasks.set(e.task, { apps: [], actions: [] })),
+    bus.on('step:verified', (e) => { const t = tasks.get(e.task); if (t && e.app) { t.actions.push(e.action); if (!t.apps.includes(e.app)) t.apps.push(e.app); } }),
+  ];
   const off = bus.on('task:done', async (e) => {
-    if (!e.actions?.length) return;
-    const obs = observationOf(e, new Date(clock.now()));
+    const t = tasks.get(e.task); tasks.delete(e.task);
+    if (!t?.actions.length) return;
+    const obs = observationOf({ ...t, success: !!e.ok }, new Date(clock.now()));
     let res;
     try { res = await librarian.logObservation(obs); } catch (err) { res = { logged: false, reason: err.message }; }
     bus.emit('memory', { observation: { type: obs.type, category: obs.category, ...obs.data }, logged: !!res?.logged, reason: res?.reason });
-    if (e.success && res?.logged) await countRun(obs.data.task);
+    if (e.ok && res?.logged) await countRun(obs.data.task);
   });
 
   async function countRun(task) {
@@ -52,7 +59,7 @@ export function attachMemory({ librarian, bus, kv = mapKV(), clock = { now: () =
   }
 
   return {
-    off,
+    off: () => { off(); offs.forEach((f) => f()); },
     /** Yes / Not now / Never on any proposal: Murmur's own or the Librarian's. */
     async respond(id, answer) {
       const a = { yes: 'accept', 'not now': 'declineOnce', never: 'suppress' }[String(answer).toLowerCase()];

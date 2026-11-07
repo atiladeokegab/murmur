@@ -74,7 +74,7 @@ const listWords = (xs) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(
 
 /** "I can't do that in Messages. I can open a chat, read it, or reply." */
 export function cantLine(app) {
-  return `I can't do that in ${app.name}. I can ${listWords(app.actions.slice(0, 3).map((x) => lowerFirst(x.describe)))}.`;
+  return `I can't do that in ${app.name}. I can ${listWords(app.actions.slice(0, 3).map((x) => lowerFirst(x.describe.split(",")[0])))}.`;
 }
 
 /**
