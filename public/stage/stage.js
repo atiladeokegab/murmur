@@ -8,8 +8,9 @@ $('inside-frame').src = `/inside?big&room=${encodeURIComponent(room)}`; // Insid
 // The phone at phone size, scaled to the height it has; observed, since the top line settles after the font loads.
 const col = document.querySelector('.phone-col'), phone = $('phone'), label = $('phone-label');
 let size = { w: 390, h: 844 };
+const BEZEL = 14; // px of device body around the screen, before scaling
 const fit = () => {
-  const s = Math.max(0.1, (col.clientHeight - label.offsetHeight - 8) / (size.h + 16));
+  const s = Math.max(0.1, (col.clientHeight - label.offsetHeight - 8) / (size.h + 2 * BEZEL));
   phone.style.setProperty('--w', size.w); phone.style.setProperty('--h', size.h); phone.style.setProperty('--s', String(s));
   return s;
 };
@@ -52,7 +53,7 @@ function frame(e) {
   d.defaultView.scrollTo(0, Number(e.sy) || 0);
   const has = Number.isFinite(e.cx) && Number.isFinite(e.cy);
   cursor.hidden = !has;
-  if (has) cursor.style.transform = `translate(${(8 + e.cx) * s}px, ${(8 + e.cy) * s}px)`;
+  if (has) ring(e.cx - 28, e.cy - 28, 56, 56, s); // a frame carries only the centre: a ring around it
 }
 setInterval(() => { if (Date.now() - lastFrame > 8000) show('live'); }, 1000);
 
@@ -82,3 +83,18 @@ $('inside-frame').addEventListener('load', (ev) => {
   const ol = ev.target.contentDocument?.getElementById('c-Actions');
   if (ol) new MutationObserver(() => { const li = ol.lastElementChild; if (li) ol.scrollTo({ top: ol.scrollTop + li.getBoundingClientRect().top - ol.getBoundingClientRect().top, behavior: 'instant' }); }).observe(ol, { childList: true, subtree: true });
 });
+
+// The agent's highlight: one ring on the stage, over whatever Murmur touches, in both modes. Phone pixels in, scaled here.
+function ring(x, y, w, h, s = Number(phone.style.getPropertyValue('--s')) || 1) {
+  cursor.hidden = false;
+  cursor.style.width = `${w * s}px`; cursor.style.height = `${h * s}px`;
+  cursor.style.transform = `translate(${(BEZEL + x) * s}px, ${(BEZEL + y) * s}px)`;
+}
+// Laptop copy: follow the phone's own .agent-cursor (same origin) and draw the stage ring on its box.
+setInterval(() => {
+  if (mode !== 'live') return;
+  const r = live.contentDocument?.querySelector('.agent-cursor');
+  if (!r || r.hidden || live.contentDocument.querySelector('dialog[open]')) { cursor.hidden = true; return; }
+  const v = (k) => parseFloat(r.style.getPropertyValue(k)) || 0;
+  ring(v('--x'), v('--y'), v('--w'), v('--h'));
+}, 50);
