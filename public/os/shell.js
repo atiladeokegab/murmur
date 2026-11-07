@@ -25,6 +25,7 @@ const QUIET = /[?&]quiet\b/.test(location.search); // the eval and the flows: no
 const look = Object.assign({ size: 100, theme: 'dark', rate: 1, speaker: 'murmur', agency: 'ask', planner: 'auto', nolook: false },
   store.get('look', {}));
 const saveLook = () => store.set('look', look);
+let agent = null; // declared before the mount loop: Mine reads os.workflows during seed()
 
 // ---------- the Librarian: Your look lives in the ability profile; Stop learning pauses memory ----------
 let librarian;
@@ -89,7 +90,8 @@ const ding = (name) => earcon(name, { sound: sound() });
 // ---------- Back: every open, sheet and task is a history entry ----------
 const stack = [];
 let skipPops = 0;
-function push(kind) { stack.push(kind); history.pushState({ d: stack.length }, ''); }
+const queued = []; // pushes made while a history.go() is still travelling land after it, or they would be undone
+function push(kind) { stack.push(kind); if (skipPops) queued.push(stack.length); else history.pushState({ d: stack.length }, ''); }
 function drop(kind) {
   const i = stack.lastIndexOf(kind);
   if (i < 0) return;
@@ -99,7 +101,7 @@ function drop(kind) {
   if (n) { skipPops++; history.go(-n); }
 }
 addEventListener('popstate', (e) => {
-  if (skipPops) { skipPops--; return; }
+  if (skipPops) { if (!--skipPops) while (queued.length) history.pushState({ d: queued.shift() }, ''); return; }
   const d = e.state?.d ?? 0;
   let handled = false;
   while (stack.length > d) { const k = stack.pop(); if (k) { onBack(k); handled = true; break; } }
@@ -524,7 +526,6 @@ const host = {
     no: () => answerSheet(pending?.kind === 'confirm' ? false : null), choose: (i) => answerSheet(i) },
   verbs: { stop: stopAll, where, again, takeOver },
 };
-let agent = null;
 try {
   const { createAgent } = await import('../agent/index.js');
   agent = await createAgent({

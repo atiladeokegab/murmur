@@ -23,7 +23,7 @@ async function readOn(say) {
     await say(all[i]);
   }
 }
-const personReads = (e) => { if (e.isTrusted) readOn(async (t) => os.say?.(t)).catch(() => {}); };
+const personReads = (e) => { if (e.isTrusted) readOn(async (t) => { if ((await os.say?.(t)) === false) throw new Error("Stopped."); }).catch(() => {}); };
 
 const app = {
   id: 'writer',

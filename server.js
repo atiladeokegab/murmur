@@ -5,6 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as demo from './lib/demo.js';
 import * as gemini from './lib/gemini.js';
+import * as agent from './lib/agent/planner.js';
+import { createGuard } from './lib/guard.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const KEY = process.env.GEMINI_API_KEY || '';
@@ -45,6 +47,10 @@ const api = {
       moved: (Array.isArray(body.moved) ? body.moved : []).slice(0, 3).map((s) => String(s).slice(0, 60)) };
     return withFallback('menu', async () => ({ say: await gemini.menuLine(KEY, info) }), () => ({ say: demo.menuLine(info) }));
   },
+  // The agent's planner: the browser sends what was said and its registry; a validated plan comes back.
+  async 'POST /api/plan'(body) {
+    return agent.plan({ key: KEY, utterance: body.utterance, apps: agent.cleanApps(body.apps), context: { app: String(body.context?.app || '').slice(0, 30), workflows: (Array.isArray(body.context?.workflows) ? body.context.workflows : []).slice(0, 20).map((w) => String(w).slice(0, 60)) } });
+  },
   async 'POST /api/live-token'() {
     if (LIVE_URL) return { token: 'test', url: LIVE_URL, model: gemini.LIVE_MODEL, voice: gemini.VOICE, persona: gemini.LIVE_PERSONA, tools: gemini.LIVE_TOOLS };
     if (!KEY || process.env.MURMUR_NO_LIVE) throw Object.assign(new Error('live unavailable'), { status: 503 });
@@ -58,11 +64,17 @@ const api = {
   },
 };
 
+const guard = createGuard();
+
 export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
     if (url.pathname === '/health') return send(res, 200, { ok: true, provider: PROVIDER, live: (!!KEY || !!LIVE_URL) && !process.env.MURMUR_NO_LIVE, tts: !!KEY });
     const handler = api[`${req.method} ${url.pathname}`];
+    if (url.pathname.startsWith('/api/')) {
+      const no = guard(req, { model: !!KEY }); // every /api route may call the model once a key is set
+      if (no) return send(res, no.status, { error: no.error, say: no.say });
+    }
     if (handler) return send(res, 200, await handler(await readJson(req)));
     if (url.pathname.startsWith('/api/')) return send(res, 404, { error: 'not found' });
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'method' });

@@ -40,6 +40,7 @@ test('rows are real buttons that name their current value', () => {
   assert.equal(controlName(root.querySelector('#look-size-more')), 'Text: bigger. Now 100 percent');
   assert.equal(root.querySelector('#look-size-less').getAttribute('aria-disabled'), 'true');
   assert.equal(root.querySelector('#look-speaker-murmur').getAttribute('aria-pressed'), 'true');
+  assert.equal(root.querySelector('#look-theme-dark').getAttribute('aria-pressed'), 'true', 'a fresh profile starts dark, not light');
   assert.equal(root.querySelector('h2').textContent, 'Your look');
 });
 
