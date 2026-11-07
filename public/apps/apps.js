@@ -2,6 +2,8 @@
 export default [
   'hello',
   'messages',
+  'whatsapp',
+  'instagram',
   'writer',
   'mine',
   'calendar',
@@ -15,4 +17,10 @@ export default [
   'weather',
   'clock',
   'bank',
+  'spotify',
+  'podcasts',
+  'audible',
+  'sounds',
+  'netflix',
+  'youtube',
 ];

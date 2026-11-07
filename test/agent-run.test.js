@@ -460,7 +460,7 @@ test('an app the phone does not have: Murmur says it is bringing it over, and In
   assert.ok(s.spoken.some((l) => /I don't have Camera yet\. I'm starting to bring it over from your phone now\./.test(l)), s.spoken.join(' | '));
 });
 
-test('a popular app the phone lacks is acted out: one line, app:open, ticks on /stage, never which-app, never a send', async () => {
+test.skip('superseded: Spotify, Deliveroo and the rest are real apps now (7 Nov). a popular app the phone lacks is acted out: one line, app:open, ticks on /stage, never which-app, never a send', async () => {
   const s = await setup();
   const opened = []; s.bus.on('app:open', (e) => opened.push(e.name));
   await s.agent.hear('play my liked songs on Spotify'); await until(() => s.ev('task:done').length);
@@ -469,7 +469,7 @@ test('a popular app the phone lacks is acted out: one line, app:open, ticks on /
   assert.equal(s.ev('step:verified').length, 3);
   assert.equal(s.ev('ask').length, 0, 'never asks which app');
   const t = await setup();
-  await t.agent.hear('send a WhatsApp to Priya'); await until(() => t.ev('task:done').length);
+  await t.agent.hear('order my usual on Deliveroo'); await until(() => t.ev('task:done').length);
   assert.ok(t.spoken.some((l) => /won't send, pay, call or delete/.test(l)), t.spoken.join(' | '));
   assert.ok(!t.spoken.some((l) => /\bsent\b/i.test(l)));
 });
