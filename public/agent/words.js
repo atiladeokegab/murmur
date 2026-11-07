@@ -9,6 +9,7 @@ const PHRASES = {
   carry_on: ['carry on', 'continue', 'keep going', 'go on', 'resume'],
   again: ['again', 'say again', 'say that again', 'repeat', 'repeat that', 'sorry again', 'pardon'],
   take_over: ["i'll do it", 'i will do it', 'let me do it', "i'll take over", 'let me'],
+  offer: ['what can i do', 'what can i do here', 'what can i say', 'help', 'options', 'what are my options'],
 };
 // Confirm words open nothing by themselves: they only count while a gate is open (see hear()). Never ok or mm.
 const CONFIRM = { yes: ['yes', 'yes please', 'yes send it', 'yes do it', 'yes pay', 'yes call'],
