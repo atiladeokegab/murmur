@@ -1,25 +1,37 @@
 // Murmur's live voice: Gemini Live over a browser WebSocket with a one-use token from our server.
 // Hold the bar: the mic streams 16 kHz PCM. Let go: the turn ends. Press again while it talks: it stops (barge-in).
 // Any failure throws to the caller, which falls back to Web Speech + /api/chat.
+import { initAudioContext } from './sound/index.js';
 
 const WS = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
 
 // ---------- audio out: queue 16-bit PCM chunks back to back ----------
 let outCtx = null, nextAt = 0;
 const playing = new Set();
+/** The one AudioContext: the earcons' (sound/index.js), so voice and earcons share a clock and an open speaker. */
 export function audioOut() {
-  outCtx ||= new AudioContext();
+  outCtx ||= initAudioContext() || new AudioContext();
   if (outCtx.state === 'suspended') outCtx.resume();
   return outCtx;
+}
+const SILENT = 0.004 * 32768; // about -48 dBFS: under the softest consonant tail measured on the ElevenLabs clips
+/** The part of a clip worth playing: leading and trailing silence cut, keeping 30 ms each side. [from, to) */
+export function voiced(pcm, rate) {
+  let a = 0, z = pcm.length;
+  while (a < z && Math.abs(pcm[a]) < SILENT) a++;
+  while (z > a && Math.abs(pcm[z - 1]) < SILENT) z--;
+  const keep = Math.round(rate * 0.03);
+  return z > a ? [Math.max(0, a - keep), Math.min(pcm.length, z + keep)] : [0, 0];
 }
 export function playPcm(b64, rate = 24000) {
   const ctx = audioOut();
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   const pcm = new Int16Array(bytes.buffer, 0, bytes.byteLength >> 1);
-  if (!pcm.length) return Promise.resolve();
-  const buf = ctx.createBuffer(1, pcm.length, rate);
+  const [from, to] = voiced(pcm, rate);
+  if (to <= from) return Promise.resolve();
+  const buf = ctx.createBuffer(1, to - from, rate);
   const ch = buf.getChannelData(0);
-  for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 32768;
+  for (let i = from; i < to; i++) ch[i - from] = pcm[i] / 32768;
   const src = ctx.createBufferSource();
   src.buffer = buf; src.connect(ctx.destination);
   nextAt = Math.max(nextAt, ctx.currentTime + 0.03);
