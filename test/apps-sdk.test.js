@@ -258,3 +258,20 @@ test("a person's own tap on Send or Delete asks first, with the readback; No sen
   assert.match(asked2[0].readback, /^Delete My morning\?/);
   assert.equal(mine.state().workflows.length, 1, 'No deletes nothing');
 });
+
+test('a mount with no confirm sends nothing and deletes nothing, even on a tap', async () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const doc = fakeDocument();
+  await mountApp(messages, doc.body, { kv: null, bus: createBus(), say: async () => true });
+  await messages.reset();
+  const tap = (sel) => doc.body.querySelector(sel).dispatchEvent({ type: 'click', isTrusted: true });
+  tap('[data-chat="mum"]');
+  const box = doc.body.querySelector('#msg-draft'); box.value = 'See you then.'; box.dispatchEvent({ type: 'input' });
+  tap('#msg-send'); await settle();
+  assert.equal(messages.state().lastSent, null);
+  const doc2 = fakeDocument();
+  await mountApp(mine, doc2.body, { kv: null, bus: createBus(), say() {} });
+  await mine.reset();
+  doc2.body.querySelector('[data-delete="My morning"]').dispatchEvent({ type: 'click', isTrusted: true }); await settle();
+  assert.equal(mine.state().workflows.length, 1);
+});
