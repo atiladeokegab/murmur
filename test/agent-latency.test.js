@@ -27,7 +27,7 @@ test('"On it." is the first thing said on every task, and the steps act while it
   assert.equal(s.state('look').size, 150, 'the step ran while "On it." was still being said');
   assert.equal(slowSpeech.length, 1, 'the next line waits its turn');
   release(true); await done;
-  assert.ok(slowSpeech.length > 1);
+  assert.ok(slowSpeech.includes('Text 150 percent.'), 'then the result: only the changed row');
 });
 
 test('Stop empties the speech queue', async () => {

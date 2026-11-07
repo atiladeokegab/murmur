@@ -47,7 +47,10 @@ test('rows are real buttons that name their current value', () => {
 test('text bigger applies on touch, says itself, and stops at 400 percent', async () => {
   assert.equal((await run('look__textBigger')).ok, true);
   assert.equal(settings().size, 150);
-  assert.equal(said.at(-1), 'Text: bigger. Now 150 percent.');
+  assert.ok(!said.includes('Text: bigger. Now 150 percent.'), "the agent's press is quiet: its done line says the change");
+  root.querySelector('#look-size-less').click(); // a tap by hand says itself
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(said.at(-1), 'Text: smaller. Now 100 percent.');
   assert.equal((await run('look__setText', { percent: 400 })).ok, true);
   assert.equal(controlName(root.querySelector('#look-size-more')), 'Text: bigger. Now 400 percent');
   const r = await run('look__textBigger');
@@ -64,7 +67,7 @@ test('colours, voice speed and how much Murmur does are voice actions verified b
   assert.equal((await run('look__colours', { colours: 'yellow' })).ok, true);
   off();
   assert.deepEqual(seen, ['yellow']);
-  assert.equal(said.at(-1), 'Colours: Yellow on black.');
+  assert.ok(!said.includes('Colours: Yellow on black.'));
   assert.equal((await run('look__voiceFaster')).ok, true);
   assert.equal(settings().rate, 1.25);
   assert.equal((await run('look__howMuch', { mode: 'teach' })).ok, true);
