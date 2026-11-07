@@ -16,6 +16,7 @@ const SIM = 'Simulated fares for the demo. Nothing is booked or charged.';
 const sentence = (f) => `${f.airline} at ${f.spoken} from ${f.airport}, ${f.stops ? f.hours : `direct, ${f.hours}`}, ${money(f.price)}.`;
 
 // "9:40", "the 9:40", "940", "nine forty", "the second", "2" -> a flight in the results.
+const POINTER = /^(it|that|this|that one|this one|the one|the same one|this flight|that flight)$/;
 function pickOf(q, flights) {
   const n = norm(q);
   const ord = ['first', 'second', 'third'].findIndex((w) => n.includes(w));
@@ -35,8 +36,8 @@ export function createTravel() {
     const list = () => `There's the ${st.results.map((x) => x.time).join(', the ')}.`;
     const named = p.flight && st.results.length ? pickOf(p.flight, st.results) : null;
     if (named) return named;
-    // A time that isn't on the list ("the 11:00") never falls back to the open flight; "it" still means the open one.
-    if (named === undefined && /\d/.test(p.flight)) throw new Error(`The ${p.flight.replace(/^the /i, '')} isn't on the list. ${list()}`);
+    // Only a pointer ("it", "that one") means the open flight; any other name not on the list is refused, never a silent fallback.
+    if (named === undefined && !POINTER.test(norm(p.flight))) throw new Error(`The ${p.flight.replace(/^the /i, '')} isn't on the list. ${list()}`);
     const f = st.results.find((x) => x.id === st.selected);
     if (f) return f;
     throw new Error(st.results.length ? `Which flight? ${list()}` : 'Find the flights first.');

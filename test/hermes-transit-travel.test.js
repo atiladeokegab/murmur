@@ -71,7 +71,7 @@ test('Travel: a No holds nothing, refusals are in words, reset clears', async ()
 test('travel: "book the 9:40" picks and holds in one step; "hold it" with nothing open says why, in words', async () => {
   const { createTravel } = await import('../public/apps/travel/index.js');
   const app = createTravel();
-  const { run, asked } = await phone([app], { answers: [true] });
+  const { run, asked } = await phone([app], { answers: [true, true] });
   const none = await run('travel__hold');
   assert.equal(none.ok, false); assert.equal(none.reason, 'Find the flights first.'); assert.equal(asked.length, 0);
   await run('travel__findFlights', { to: 'Lisbon', day: 'Friday' });
@@ -80,6 +80,14 @@ test('travel: "book the 9:40" picks and holds in one step; "hold it" with nothin
   const off = await run('travel__hold', { flight: 'the 11:00' });
   assert.equal(off.reason, "The 11:00 isn't on the list. There's the 06:55, the 09:40, the 14:20.", 'not a silent 9:40');
   assert.equal(app.state().held, null); assert.equal(asked.length, 0);
+  for (const said of ["eleven o'clock", 'the late one']) {
+    const r = await run('travel__hold', { flight: said });
+    assert.equal(r.reason, `The ${said.replace(/^the /, '')} isn't on the list. There's the 06:55, the 09:40, the 14:20.`, said);
+  }
+  assert.equal(app.state().held, null); assert.equal(asked.length, 0);
+  assert.ok((await run('travel__hold', { flight: 'that one' })).ok, 'a pointer means the open 9:40');
+  assert.equal(app.state().held.id, 'TA311');
+  await run('travel__findFlights', { to: 'Lisbon', day: 'Friday' });
   assert.ok((await run('travel__hold', { flight: 'the 9:40' })).ok);
   assert.equal(app.state().held.id, 'TA311');
   assert.match(asked[0].readback, /^Tagus Air, Friday at nine forty from Heathrow/);
