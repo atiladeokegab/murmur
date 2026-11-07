@@ -79,6 +79,61 @@ test('calendar: "Move lunch with Mum to Wednesday" is free, moved, verified, off
   assert.equal(typeof calendar.actions.move.verify(calendar.state(), { event: 'lunch', day: 'Wednesday' }), 'string');
 });
 
+test('calendar: an absolute date keeps the requested date and noon when moved', async () => {
+  const p = await phone();
+  const r = await p.run('calendar__move', { event: 'lunch with Mum', day: '12 November 2026', time: 'noon' });
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual({ day: ev(p.s(), 'lunch').day, date: ev(p.s(), 'lunch').date, time: ev(p.s(), 'lunch').time },
+    { day: 'Thursday', date: '2026-11-12', time: '12:00' });
+  assert.equal(calendar.actions.move.verify(p.s(), { event: 'lunch with Mum', day: '12 November 2026', time: 'noon' }), true);
+  await calendar.actions.move.undo(p.ctxFor(calendar));
+  assert.deepEqual({ day: ev(p.s(), 'lunch').day, date: ev(p.s(), 'lunch').date, time: ev(p.s(), 'lunch').time },
+    { day: 'Tuesday', date: '2026-11-10', time: '12:30' });
+  const prefixed = await p.run('calendar__move', { event: 'lunch with Mum', day: 'Thursday 12 November 2026' });
+  assert.equal(prefixed.ok, true, prefixed.reason);
+  assert.deepEqual({ day: ev(p.s(), 'lunch').day, date: ev(p.s(), 'lunch').date }, { day: 'Thursday', date: '2026-11-12' });
+});
+
+test('calendar: invalid, conflicting, and out-of-week explicit dates fail without changing events', async () => {
+  const p = await phone();
+  const before = structuredClone(p.s().events);
+  for (const day of ['Thursday 29 February 2027', 'Thursday 19 November 2026', 'Tuesday 12 November 2026', 'Thursday29February2027', 'Thursday 19 Nov 2026', 'Thursday 2026/11/19']) {
+    const r = await p.run('calendar__move', { event: 'lunch with Mum', day });
+    assert.equal(r.ok, false, `${day} must fail closed`);
+    assert.deepEqual(p.s().events, before, `${day} must not move or rewrite the event`);
+    assert.equal(p.s().lastMoved, null, `${day} must not report a move`);
+  }
+});
+
+test('calendar: add and read reject invalid or unsupported dates without a success tick', async () => {
+  const p = await phone();
+  const before = structuredClone(p.s().events);
+  for (const day of ['19 November 2026', 'Thursday 29 February 2027', 'Tuesday 12 November 2026', 'Thursday 19 Nov 2026', 'Thursday 2026/11/19']) {
+    for (const [action, params] of [
+      ['add', { title: 'Dentist', day, time: 'noon' }],
+      ['whatsOn', { day }],
+    ]) {
+      const ticks = p.bus.log.filter((e) => e.name === 'step:verified').length;
+      const result = await p.run(`calendar__${action}`, params);
+      assert.equal(result.ok, false, `${action}: ${day} must fail closed`);
+      assert.deepEqual(p.s().events, before, `${action}: ${day} must preserve every event`);
+      assert.equal(p.bus.log.filter((e) => e.name === 'step:verified').length, ticks);
+    }
+  }
+});
+
+test('calendar: add and read accept a date in the demo week; add verifies its exact date', async () => {
+  const p = await phone();
+  const params = { title: 'Dentist', day: 'Thursday 12 November 2026', time: 'noon' };
+  assert.equal((await p.run('calendar__add', params)).ok, true);
+  assert.equal(ev(p.s(), 'dentist').date, '2026-11-12');
+  assert.equal((await p.run('calendar__whatsOn', { day: params.day })).ok, true);
+  assert.match(p.said().at(-1), /Dentist at 12 pm/);
+  const wrong = p.s();
+  ev(wrong, 'dentist').date = '2026-11-19';
+  assert.notEqual(calendar.actions.add.verify(wrong, params), true);
+});
+
 test('calendar: a clash is said and asked; keep fails in words, move anyway moves', async () => {
   const keep = await phone({ picks: ['Keep it on Friday'] });
   const r = await keep.run('calendar__move', { event: 'Call Sam', day: 'Thursday' });
@@ -132,7 +187,7 @@ test("calendar: a person's own Send invite tap gets the shell's ask-first sheet 
 test('calendar: add an event, a bad day fails in words, and reset brings the seed back', async () => {
   const p = await phone();
   assert.equal((await p.run('calendar__add', { title: 'Coffee with Ana', day: 'wed', time: '10am' })).ok, true);
-  assert.deepEqual(ev(p.s(), 'coffeewithana'), { id: 'coffeewithana', title: 'Coffee with Ana', day: 'Wednesday', time: '10:00', mins: 60, with: null, invited: [] });
+  assert.deepEqual(ev(p.s(), 'coffeewithana'), { id: 'coffeewithana', title: 'Coffee with Ana', day: 'Wednesday', date: '2026-11-11', time: '10:00', mins: 60, with: null, invited: [] });
   const bad = await p.run('calendar__add', { title: 'Swim', day: 'Blursday', time: '8am' });
   assert.equal(bad.ok, false);
   assert.match(bad.reason, /which day/);
