@@ -58,6 +58,7 @@ function apply() {
   const html = root.ownerDocument.documentElement;
   if (html) {
     if (!/[?&]zoom=/.test(globalThis.location?.search || '')) applyLook(look); // ?zoom= is for captures
+    html.dataset.size = String(look.size); // look.css tightens padding above 300%
     html.dataset.speaker = look.speaker;
     html.dataset.agency = look.agency;
   }
@@ -219,7 +220,12 @@ const app = {
     root.append(el('h2', { id: 'look-h', textContent: 'Your look' }), ...rows);
     look = { ...DEFAULTS, ...((await kv.get('look')) || {}) };
     const { librarian } = await lib();
-    if (librarian) { try { Object.assign(look, await readLook(librarian)); } catch { /* keep the kv copy */ } }
+    if (librarian) {
+      try { // a fresh profile reads as light; seed it from ours (dark by default) instead, as public/app.js does
+        if (!(await librarian.getProfile())?.fields?.needs?.length) await writeLook(librarian, look);
+        Object.assign(look, await readLook(librarian));
+      } catch { /* keep the kv copy */ }
+    }
     apply();
     render();
   },

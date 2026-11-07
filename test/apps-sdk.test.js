@@ -219,3 +219,14 @@ test('state.example.json matches what state() returns', async () => {
     assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), JSON.parse(JSON.stringify(example)), id);
   }
 });
+
+test("a person's tap on Read stops when the shell's say says Stop (resolves false)", async () => {
+  const doc = fakeDocument(); const said = [];
+  const os = { kv: null, bus: createBus(), say: async (t) => { said.push(t); return said.length < 2; } };
+  await mountApp(writer, doc.body, os);
+  await writer.reset();
+  doc.body.querySelector('#wr-last').dispatchEvent({ type: 'click', isTrusted: true });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(said.length, 2, 'stopped after the sentence that was cut off');
+  assert.equal(writer.place().say, 'Chapter 2, sentence 12 of 30, the part about the station.');
+});
