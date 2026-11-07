@@ -232,7 +232,7 @@ dialog {
   scrollbar-width: thin; scrollbar-color: var(--c-quiet) transparent;
   border: var(--bw-talk) solid var(--c-accent); border-radius: var(--r-sheet); background: var(--c-sheet); color: var(--c-ink);
 }
-body:has(dialog[open]) main { opacity: var(--o-behind); }
+body:has(dialog[open]) main { opacity: var(--o-behind); filter: grayscale(1); } /* grey, not tan: dimmed amber reads as muddy on the light page */
 dialog::backdrop { background: var(--c-scrim); }
 .sheet { display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem; font-variant-numeric: normal; }
 .sheet::after { content: ""; position: sticky; bottom: 0; flex: none; height: 1.25rem; margin-bottom: -1.25rem; background: linear-gradient(transparent, var(--c-sheet)); pointer-events: none; } /* the scroll hint: sits in the padding at the end, fades the cut row while there is more */
