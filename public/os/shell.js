@@ -107,7 +107,7 @@ addEventListener('popstate', (e) => {
   if (!handled && d > 0) history.back(); // an entry whose thing already closed: take the next one
 });
 function onBack(kind) {
-  if (kind === 'sheet') answerSheet(null, { fromBack: true });
+  if (kind === 'sheet') answerSheet(null);
   else if (kind === 'task') stopAll();
   else if (kind === 'app') home({ fromBack: true });
 }
@@ -239,12 +239,12 @@ bus.on('*', (name, e) => {
   if (panel !== was) renderPanel();
 });
 $('#stop').addEventListener('click', () => stopAll());
-$('#undo').addEventListener('click', () => agent?.undo?.());
+$('#undo').addEventListener('click', () => (agent?.undo || agent?.runner?.undo)?.());
 
 // ---------- the ask-first sheet: gates and choices ----------
 const dialog = $('#sheet');
 const sheetBody = $('#sheet-body');
-let pending = null; // { kind: 'confirm'|'choose', resolve, at, gate?, readback?, question?, choices? }
+let pending = null; // what the sheet is asking: { kind: 'confirm'|'choose', gate?, readback?, question?, choices?, at, answer(v) }
 const VERB = { send: 'Send', pay: 'Pay', call: 'Call', delete: 'Delete' };
 const GRACE_MS = 500; // a yes this soon could not have heard the readback
 let opener = null;
@@ -254,61 +254,70 @@ function openSheet(kids, focusEl) {
   if (!dialog.open) { dialog.show(); $('main').inert = true; push('sheet'); }
   focusEl.focus();
 }
-function closeSheet({ fromBack = false } = {}) {
+function closeSheet() {
   if (!dialog.open) return;
   dialog.close();
   $('main').inert = false;
-  if (!fromBack) drop('sheet');
+  drop('sheet');
   (opener?.isConnected ? opener : $('#stop:not([hidden])') || $('#board .tile'))?.focus();
 }
-/** Resolve whatever the sheet is asking. confirm: true/false; choose: an index or null. */
-function answerSheet(value, { fromBack = false } = {}) {
-  const p = pending;
-  if (!p) { closeSheet({ fromBack }); return false; }
-  if (p.kind === 'confirm' && value === true && performance.now() - p.at < GRACE_MS) return false;
-  pending = null;
-  closeSheet({ fromBack });
-  p.resolve(p.kind === 'confirm' ? value === true : (Number.isInteger(value) ? value : null));
-  return true;
+/** Answer whatever the sheet is asking. confirm: true/false; choose: an index or null. False if it was ignored. */
+function answerSheet(value) {
+  if (!pending) { closeSheet(); return false; }
+  return pending.answer(value) !== false;
 }
-function sheetConfirm({ gate, readback }) {
-  return new Promise((resolve) => {
-    const verb = VERB[gate] || 'Yes';
-    const read = el('p', { id: 'sheet-readback', tabIndex: -1, textContent: readback });
+function showSheet(kind, q, answer) {
+  pending = { kind, ...q, at: performance.now(), answer };
+  ding('gate');
+  if (kind === 'confirm') {
+    const verb = VERB[q.gate] || 'Yes';
+    const read = el('p', { id: 'sheet-readback', tabIndex: -1, textContent: q.readback || '' });
     const yes = el('button', { className: 'choice yes', type: 'button', id: 'sheet-yes', textContent: verb });
     const no = el('button', { className: 'choice', type: 'button', id: 'sheet-no', textContent: 'No' });
-    const wrap = async (ok) => {
-      if (ok && gate === 'pay' && passkey.hasPasskey()) {
-        if (performance.now() - (pending?.at ?? 0) < GRACE_MS) return;
-        show('Check your fingerprint.');
-        try { ok = await passkey.confirm(); } catch { ok = false; }
-      }
-      answerSheet(ok);
-    };
-    pending = { kind: 'confirm', gate, readback, at: performance.now(), resolve: (v) => resolve(v) };
-    yes.addEventListener('click', () => wrap(true));
+    yes.addEventListener('click', () => answerSheet(true));
     no.addEventListener('click', () => answerSheet(false));
-    ding('gate');
-    openSheet([el('h2', { id: 'sheet-title', textContent: `${verb}?` }), read, el('div', { className: 'row' }, yes, no)], read);
-    speak(`${readback}. ${verb}?`, personal.signal);
-  });
-}
-function sheetChoose({ question, choices }) {
-  return new Promise((resolve) => {
-    pending = { kind: 'choose', question, choices, at: performance.now(), resolve };
-    const h = el('h2', { id: 'sheet-title', tabIndex: -1, textContent: question });
-    const btns = choices.map((c, i) => {
+    openSheet([el('h2', { id: 'sheet-title', textContent: q.question || `${verb}?` }), read, el('div', { className: 'row' }, yes, no)], read);
+  } else {
+    const h = el('h2', { id: 'sheet-title', tabIndex: -1, textContent: q.question });
+    const btns = q.choices.map((c, i) => {
       const b = el('button', { className: 'choice yes', type: 'button', textContent: c });
       b.addEventListener('click', () => answerSheet(i));
       return b;
     });
     const none = el('button', { className: 'choice', type: 'button', textContent: 'None of these' });
     none.addEventListener('click', () => answerSheet(null));
-    ding('gate');
     openSheet([h, el('div', { className: 'row' }, ...btns, none)], h);
+  }
+}
+function hideSheet(kind) { if (pending?.kind === kind) { pending = null; closeSheet(); } }
+
+// The person's own path (an app's own gated button): the shell keeps the grace, the fingerprint and the voice.
+function sheetConfirm({ gate, readback }) {
+  return new Promise((resolve) => {
+    showSheet('confirm', { gate, readback }, (v) => {
+      if (v === true && performance.now() - pending.at < GRACE_MS) return false;
+      pending = null;
+      if (v === true && gate === 'pay' && passkey.hasPasskey()) {
+        show('Check your fingerprint.');
+        passkey.confirm().catch(() => false).then((ok) => { closeSheet(); resolve(!!ok); });
+        return true;
+      }
+      closeSheet(); resolve(v === true);
+      return true;
+    });
+    speak(`${readback}. ${VERB[gate] || 'Yes'}?`, personal.signal);
+  });
+}
+function sheetChoose({ question, choices }) {
+  return new Promise((resolve) => {
+    showSheet('choose', { question, choices }, (v) => { pending = null; closeSheet(); resolve(Number.isInteger(v) ? v : null); });
     speak(question, personal.signal);
   });
 }
+// The agent's gates and choices: it keeps the grace, the fingerprint and the voice; the sheet shows them and
+// forwards the taps. It hides the sheet by calling back with null.
+const agentGate = (s) => (s ? showSheet('confirm', s, (v) => { if (v === true) agent.yes(); else agent.no(); }) : hideSheet('confirm'));
+const agentChoose = (c) => (c ? showSheet('choose', c, (v) => { agent.pick(Number.isInteger(v) ? v : null); }) : hideSheet('choose'));
 
 // ---------- tap to talk (never hold: TalkBack's double tap cannot hold) ----------
 const talk = $('#talk'), talkLabel = $('#talk-label'), typed = $('#typed');
@@ -346,12 +355,12 @@ let lastUtterance = '';
 function hear(text, path) {
   ding('heard');
   lastUtterance = text;
-  // A choice sheet takes a spoken name ("Samira") before anything else hears it.
+  if (agent) { agent.hear(text, { path }); return; }
+  // No agent on this build: a choice sheet still takes a spoken name ("Samira").
   if (pending?.kind === 'choose') {
     const i = pending.choices.findIndex((c) => new RegExp(`\\b${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text));
     if (i >= 0) { answerSheet(i); return; }
   }
-  if (agent) { agent.hear(text, { path }); return; }
   show(`Heard: ${text}`);
   speak("I can't do that yet.", personal.signal);
 }
@@ -372,7 +381,7 @@ function where() {
 }
 const again = () => speak(lastLine, personal.signal);
 function takeOver() {
-  agent?.takeOver?.();
+  (agent?.takeOver || agent?.runner?.takeOver)?.();
   hush();
   show("You've got it. I'll stay quiet until you need me.");
 }
@@ -384,7 +393,7 @@ const gestures = recogniser({
   doubleTap() { again(); },
   swipe(dir) {
     if (dir === 'down') stopAll();
-    else if (dir === 'right') agent?.carryOn?.();
+    else if (dir === 'right') agent?.hear('carry on', { path: 'gesture' });
     else if (dir === 'up') where();
   },
   holdStart() { summon(); },   // holding still works; letting go ends it
@@ -498,25 +507,33 @@ $('#day').addEventListener('click', () => {
 });
 
 // ---------- the agent ----------
+// ctxFor(app, hooks): hooks are the agent's { bus, ask, choose, speak, signal }; an AbortSignal alone also works.
+function ctxFor(app, hooks = {}) {
+  if (hooks instanceof AbortSignal) hooks = { signal: hooks };
+  if (current !== app.id) open(app.id, { focus: false }); // the agent works where you can see it
+  const ctx = createCtx({ app, root: roots[app.id], bus, kv: kvs[app.id], cursor, speak,
+    ask: (q) => sheetConfirm(q), choose: (q) => sheetChoose(q), ...hooks });
+  const tap = ctx.tap;
+  ctx.tap = async (...a) => { agentPress = true; try { await tap(...a); } finally { agentPress = false; } };
+  return ctx;
+}
 const host = {
-  registry, bus,
-  ctxFor(app, signal) {
-    if (current !== app.id) open(app.id, { focus: false }); // the agent works where you can see it
-    const ctx = createCtx({ app, root: roots[app.id], bus, kv: kvs[app.id], cursor, signal, speak,
-      ask: (q) => sheetConfirm(q), choose: (q) => sheetChoose(q) });
-    const tap = ctx.tap;
-    ctx.tap = async (...a) => { agentPress = true; try { await tap(...a); } finally { agentPress = false; } };
-    return ctx;
-  },
-  speak, open, home, current: () => (current ? registry.get(current) : null),
+  registry, bus, ctxFor, speak, open, home, current: () => (current ? registry.get(current) : null),
   agency: () => look.agency, planner: () => look.planner, earcon: ding,
-  sheet: { pending: () => pending && { ...pending, resolve: undefined }, yes: () => answerSheet(true), no: () => answerSheet(pending?.kind === 'confirm' ? false : null), choose: (i) => answerSheet(i) },
+  sheet: { pending: () => pending && { ...pending, answer: undefined }, yes: () => answerSheet(true),
+    no: () => answerSheet(pending?.kind === 'confirm' ? false : null), choose: (i) => answerSheet(i) },
   verbs: { stop: stopAll, where, again, takeOver },
 };
 let agent = null;
 try {
-  const mod = await import('../agent/index.js');
-  agent = await mod.createAgent(host);
+  const { createAgent } = await import('../agent/index.js');
+  agent = await createAgent({
+    registry, bus, ctxFor, speak, librarian,
+    os: { open: (id) => open(id), current: () => current },
+    fingerprint: () => passkey.confirm(),
+    agency: () => look.agency,
+    onGate: agentGate, onChoose: agentChoose,
+  });
 } catch (e) {
   if (!/Failed to fetch|Cannot find|404|Importing a module script failed/i.test(String(e?.message))) console.error('agent failed to start', e);
 }
