@@ -49,7 +49,8 @@ export function toolsFor(apps) {
   };
   const decl = (name, describe, params, extra = '') => ({ name, description: describe + extra, parameters: up(params) });
   return [
-    ...Object.entries(BUILTINS).map(([n, b]) => decl(n, b.describe, b.params)),
+    ...Object.entries(BUILTINS).map(([n, b]) => decl(n, b.describe, n === 'open_app'
+      ? { ...b.params, properties: { app: { type: 'string', enum: apps.map((x) => x.id) } } } : b.params)),
     ...apps.flatMap((a) => a.actions.map((x) => decl(`${a.id}${SEP}${x.name}`, `${a.name}: ${x.describe}`, x.params,
       x.gate ? ` (asks the person first: ${x.gate})` : ''))),
   ];
@@ -89,6 +90,7 @@ export function validatePlan(plan, apps, { dryRun = false } = {}) {
     const tool = String(step?.tool || '');
     const raw = step?.params && typeof step.params === 'object' ? step.params : {};
     let spec, app = null, action = tool;
+    if (tool === 'open_app' && !apps.some((x) => x.id === raw.app)) { dropped.push({ tool, reason: 'unknown app' }); continue; } // model noise like "the board"
     if (BUILTINS[tool]) spec = BUILTINS[tool];
     else {
       const [id, name] = tool.split(SEP);

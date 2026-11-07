@@ -26,6 +26,12 @@ check('the place line shows', (await page.locator('#place').textContent()).lengt
 await page.goBack(); await page.waitForTimeout(100);
 check('Back closes the app', await page.evaluate(() => !document.querySelector('#board-view').hidden && document.querySelector('#app-hello').hidden));
 
+await page.evaluate(() => { window.murmur.open('hello'); window.murmur.home(); window.murmur.open('hello'); });
+await page.waitForTimeout(300);
+check('closing then opening at once keeps one Back entry', await page.evaluate(() => history.state?.d === 1 && !document.querySelector('#app-hello').hidden));
+await page.goBack(); await page.waitForTimeout(100);
+check('and Back still closes it', await page.evaluate(() => !document.querySelector('#board-view').hidden));
+
 // A task the way the runner drives it.
 const task = (yes) => page.evaluate(async (yes) => {
   const { runAction } = await import('/sdk/index.js');
