@@ -90,18 +90,77 @@ export function demoPlan(utterance, apps, context = {}) {
   if (GARBLED.test(raw)) return { kind: 'unknown', plan: [], say: "Sorry, I didn't catch that. Again?" };
   const teach = raw.match(/^how (?:do|can|would|should) i\s+(.+?)[?.!]*$/i);
   if (teach) {
-    const inner = plan(teach[1], apps, context, true);
+    const inner = planOrWords(teach[1], apps, context, true);
     return inner.kind === 'task' ? { kind: 'teach', plan: inner.plan } : inner;
   }
-  const whole = plan(raw, apps, context, false);
+  const whole = planOrWords(raw, apps, context, false);
   if (whole.kind !== 'unknown') return whole;
   // Two requests in one breath: "Add a flat white, then read my basket".
   const parts = raw.split(/,?\s+(?:and then|then|and)\s+|,\s+(?=what|where|read)/i).filter(Boolean);
   if (parts.length > 1) {
-    const each = parts.map((p) => plan(p, apps, context, false));
+    const each = parts.map((p) => planOrWords(p, apps, context, false));
     if (each.every((p) => p.kind === 'task')) return { kind: 'task', plan: each.flatMap((p) => p.plan) };
   }
   return whole;
+}
+
+// The hand-written words first (refusal() reads those alone). Where they miss, or name an app this phone does not have ("read my basket" with
+// no Shop), any installed app's own action words (its name, say and describe) plan it, so a plug-in plans for free.
+function planOrWords(said, apps, context, dry) {
+  const r = plan(said, apps, context, dry);
+  const missing = r.kind === 'task' && r.plan.some((x) => x.tool.includes(SEP) && !apps.some((a) => a.id === x.tool.split(SEP)[0]));
+  if (!missing && !(r.kind === 'unknown' && r.say?.startsWith(MISS))) return r;
+  const t = said.trim().replace(/[.!?]+$/, '');
+  // An answer to a slot question ("Where to?" "The station") finishes the ask it answers.
+  return byWords(t, apps, context.app) || (context.asked && byWords(`${context.asked} ${t}`, apps, context.app)) || r;
+}
+
+const MISS = "I can't do that one yet.";
+const STOP = new Set('my the a an to of for in on at it is me please and with from your some what usual'.split(' ')); // "order my usual": the usual one
+const stem = (w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
+const words = (s) => String(s || '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().replace(/'/g, '').split(/[^a-z0-9]+/).filter(Boolean).map(stem);
+
+/** "add milk", "cancel my taxi": the first word said must be the action's verb (its name, or the first word of its say
+ * or describe); then the most words in common wins, the open app on a tie. Still tied: "Which one: A or B?". */
+export function byWords(t, apps, here) {
+  const content = words(t).filter((w) => !STOP.has(w));
+  if (!content.length) return null;
+  const hits = [];
+  for (const a of apps) for (const x of a.actions || []) {
+    const name = words(x.name), say = words(x.say), all = new Set([...name, ...say, ...words(x.describe), ...words(a.name), ...words(a.id)]);
+    if (![...name, say[0], words(x.describe)[0]].includes(content[0])) continue;
+    const nums = Object.values(x.params?.properties || {}).some((d) => d.type === 'number' || d.type === 'integer');
+    if (nums || (x.gate === 'pay' && x.params?.required?.length)) continue; // amounts, and money with a slot, stay with the hand-written words
+    const n = new Set(content.filter((w) => all.has(w))).size;
+    const f = fit(t, x, all);
+    if (!f.slot && content.some((w) => !all.has(w))) continue; // words it has no place for ("next bus") are not this action
+    if (f.gap && Object.keys(f.params).length) continue; // a slot guessed but another still missing ("send Sam 20 quid" as an invite)
+    if (n >= 2 || name.includes(content[0]) || say[0] === content[0]) hits.push({ a, x, n, ...f }); // one word alone must be its own verb
+  }
+  if (!hits.length) return null;
+  const top = Math.max(...hits.map((h) => h.n));
+  let best = hits.filter((h) => h.n === top);
+  if (best.length > 1 && best.some((h) => h.a.id === here)) best = best.filter((h) => h.a.id === here);
+  if (best.length > 1 && best.some((h) => !h.gap)) best = best.filter((h) => !h.gap); // "add milk": the Grocer's item, not an event with no day
+  if (best.length > 1) {
+    const one = (h) => `${h.x.say || h.x.describe.charAt(0).toLowerCase() + h.x.describe.slice(1)} in ${h.a.name}`;
+    return { kind: 'unknown', plan: [], say: `Which one: ${best.slice(0, 3).map(one).join(' or ')}?` };
+  }
+  const { a, x, params, gap } = best[0];
+  if (gap) {
+    const props = x.params?.properties || {}, question = `${(props[gap]?.description || `Which ${gap}`).replace(/[.?]*$/, '')}?`;
+    return { kind: 'task', plan: [{ tool: 'open_app', params: { app: a.id } }, { tool: 'ask', params: { question } }], asked: t };
+  }
+  return { kind: 'task', plan: [{ tool: `${a.id}${SEP}${x.name}`, params }] };
+}
+
+// What is left once the action's own words go is its one string slot: "add milk" -> item: milk.
+function fit(t, x, all) {
+  const left = t.split(/\s+/).filter((w) => !all.has(words(w)[0])).join(' ').replace(/^(?:(?:my|the|a|an|to|for|some|of)\s+)+/i, '').trim();
+  const props = x.params?.properties || {}, need = x.params?.required || [];
+  const slot = need.find((k) => props[k]?.type === 'string') || Object.keys(props).find((k) => props[k]?.type === 'string');
+  const params = left && slot ? { [slot]: left } : {};
+  return { params, slot, gap: need.find((k) => !(k in params)) };
 }
 
 function plan(said, apps, context, dry) {
@@ -194,6 +253,7 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:send|text)\s+(\w+)\s+a\s+(?:message|text|note)\s+(?:saying|that|to say)?\s*(.+)$/i)) ||
       (m = t.match(/^(?:send|write)\s+(?:a\s+)?(?:message|text|note)\s+to\s+(\w+)\s+(?:saying|that|to say)\s*(.+)$/i))) return msg(m[1], m[2], true);
   if ((m = t.match(/^(?:send|write)\s+(?:a\s+)?(?:message|text|note)\s+to\s+(\w+)$/i))) return msg(m[1], '', true);
+  if ((m = t.match(/^write\s+to\s+(?!(?:my|the|a|an)\b)(\w+)(?:[,:]?\s+(.{2,}))?$/i))) return msg(m[1], m[2] || '', true); // a person, not the Writer
   if ((m = t.match(/^let\s+(\w+)\s+know\s+(?:that\s+)?(.{2,})$/i))) return msg(m[1], m[2], true);
   if (/^(?:read|check|play)\s+(?:me\s+)?(?:my\s+|the\s+)?(?:new\s+|latest\s+|unread\s+)?(?:messages?|texts?)$|^(?:do i have|have i got|are there|got)?\s*any\s+(?:new\s+)?(?:messages|texts)$|^(?:what are |what's in )?my (?:messages|texts)$/i.test(t)) {
     return task([step('messages', ['read'], { new: true })]);
@@ -302,7 +362,7 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:run|start|do)\s+(.+)$/i))) return task([{ tool: 'run_workflow', params: { name: m[1] } }]);
 
   const names = ['messages', 'calendar', 'look'].map((id) => apps.find((a) => a.id === id)?.name).filter(Boolean);
-  return { kind: 'unknown', plan: [], say: `I can't do that one yet. Try ${names.join(', ') || 'Messages'}.` };
+  return { kind: 'unknown', plan: [], say: `${MISS} Try ${names.join(', ') || 'Messages'}.` };
 }
 
 /** Dictation clean-up: fix words, never meaning. "behind the blue door. No, the green door." -> green. */

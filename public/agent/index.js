@@ -231,6 +231,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     // Held like a step's line, so a question that comes first ("Sam or Samira?") is the ack instead.
     say(ACK, { narration: true, ack: true });
     const p = await planFor(rest);
+    slotAsk = p.asked || null;
     if (!p.steps.length || p.kind === 'teach') releaseAck();
     if (!p.steps.length) { await say(p.say || p.dropped.find((d) => d.say)?.say || "I can't do that one yet."); return { status: p.kind === 'refuse' ? 'refused' : 'unknown', say: p.say }; }
     const unsaid = p.dropped.find((d) => d.say);
@@ -254,7 +255,8 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   // the plan when the final words and the open app match. Anything else plans afresh.
   let early = null;
   const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
-  async function contextNow() { return { app: current(), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [] }; }
+  let slotAsk = null; // "get a price": the words a slot question ("Where to?") waits to finish
+  async function contextNow() { return { app: current(), ...(slotAsk ? { asked: slotAsk } : {}), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [] }; }
   async function planFor(text) {
     const context = await contextNow();
     if (early && early.text === norm(text) && early.app === context.app) { const e = early; early = null; return e.plan; }
