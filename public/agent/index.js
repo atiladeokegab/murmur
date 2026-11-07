@@ -121,6 +121,11 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
       case 'go_home': if (!os.home) return false; await os.home(); return true;
       case 'sound': if (!os.sound) return false; await os.sound(!!p.on); await say(p.on ? 'Sounds on.' : 'Sounds off.'); return true;
       case 'install_app': { const r = await os.install?.(p.name); await say(r?.say || "I can't add apps here."); return !!r?.ok; }
+      case 'remove_app': {
+        // The agent's own delete gate asks, so a spoken yes or no answers it like any other gate.
+        const r = await os.remove?.(p.name, { confirm: (readback) => gates.ask({ gate: 'delete', readback }) });
+        await say(r?.say || "I can't remove apps here."); return !!r?.ok;
+      }
       case 'run_workflow': return false; // handled in hear(): it becomes its own task
       default: return false;
     }
