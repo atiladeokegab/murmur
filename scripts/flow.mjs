@@ -1,0 +1,43 @@
+// Dev only: drive the main paths in a real browser and fail on any page error. PLAYWRIGHT=<pkg> node scripts/flow.mjs [url] [outdir]
+const { chromium } = await import(process.env.PLAYWRIGHT || 'playwright');
+const url = process.argv[2] || 'http://localhost:8080/';
+const out = process.argv[3] || 'shots';
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 390, height: 757 } });
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+await page.context().addInitScript(() => { window.open = (u) => { (window.opened ||= []).push(u); return {}; }; });
+await page.goto(url, { waitUntil: 'networkidle' });
+await page.evaluate(() => localStorage.clear());
+await page.reload({ waitUntil: 'networkidle' });
+const say = () => page.locator('#say').textContent();
+const step = async (name, fn, check) => {
+  await fn(); await page.waitForTimeout(300);
+  const s = await say(); const ok = check(s);
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${s}`); if (!ok) errors.push(name);
+};
+await step('greeting', async () => {}, (s) => /is first/.test(s));
+await step('tap Now opens notes', () => page.locator('.now .tile').click(), (s) => /notes are open/.test(s));
+await page.screenshot({ path: `${out}/notes.png` });
+await step('type: where am I', async () => { await page.evaluate(() => murmur.ask('where am I')); }, (s) => /^Sentence \d of 8/.test(s));
+await step('type: change Tuesday to Wednesday', () => page.evaluate(() => murmur.ask('change Tuesday to Wednesday')), (s) => /Changed\. Call the dentist on Wednesday/.test(s));
+await page.keyboard.press('Escape');
+const focused = await page.evaluate(() => document.activeElement.dataset.id);
+console.log(`${focused === 'notes' ? 'ok  ' : 'FAIL'} focus back on the tile: ${focused}`); if (focused !== 'notes') errors.push('focus');
+await step('Message Mum', () => page.locator('[data-id="mum"]').click(), (s) => /^Mum says/.test(s));
+await step('voice edit the reply', () => page.evaluate(() => murmur.ask('change one to two')), (s) => /at two on Sunday/.test(s));
+await page.screenshot({ path: `${out}/draft.png` });
+await step('send', () => page.evaluate(() => murmur.ask('send')), (s) => /WhatsApp/.test(s));
+const sent = await page.evaluate(() => window.opened && window.opened.at(-1));
+console.log(`${/two%20on%20Sunday/.test(sent) ? 'ok  ' : 'FAIL'} WhatsApp link: ${sent}`); if (!/two%20on%20Sunday/.test(sent)) errors.push('wa');
+await step('order beans by voice', () => page.evaluate(() => murmur.ask('order my usual beans')), (s) => /Shall I pay/.test(s));
+await page.screenshot({ path: `${out}/pay.png` });
+await step('yes pays', () => page.evaluate(() => murmur.ask('yes')), (s) => /Paid/.test(s));
+await step('load a week', () => page.evaluate(() => murmur.loadWeek()), (s) => /moved up/.test(s));
+await page.screenshot({ path: `${out}/week.png` });
+const order = await page.locator('.tile').evaluateAll((b) => b.map((x) => x.dataset.id));
+console.log('order after a week:', order.join(', '));
+await step('accept the proposal', () => page.locator('[data-answer="yes"]').click(), (s) => /Added/.test(s));
+await browser.close();
+if (errors.length) { console.error('flow FAILED:', errors.join(' | ')); process.exit(1); }
+console.log('flow ok');

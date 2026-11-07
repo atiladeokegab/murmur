@@ -1,0 +1,1 @@
+Copied from AI-for-Accessibility-Toolkit@c31ce2b (Apache 2.0), unmodified.

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Murmur</title>
+<script>
+  // Your look applies before first paint; ?zoom=4 forces 400% text for the reflow capture.
+  (function () {
+    var look = {};
+    try { look = JSON.parse(localStorage.getItem('murmur:look') || '{}'); } catch (e) {}
+    var z = /[?&]zoom=([\d.]+)/.exec(location.search);
+    var size = z ? Number(z[1]) * 100 : look.size;
+    if (size) document.documentElement.style.fontSize = size + '%';
+    if (look.theme) document.documentElement.dataset.theme = look.theme;
+  })();
+</script>
+<link rel="preload" href="fonts/atkinson-next.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="app.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<a class="skip" href="#menu">Skip to your menu</a>
+<main>
+  <div class="column">
+    <header>
+      <h1><span class="menu">Your menu<span class="sr">,</span></span> <span class="day" id="day"></span></h1>
+    </header>
+    <p class="note" id="note" hidden></p>
+    <ol id="menu" tabindex="-1" aria-label="Your menu"></ol>
+    <section class="proposal" id="proposal" aria-labelledby="proposal-text" hidden>
+      <p id="proposal-text"></p>
+      <div class="choices">
+        <button class="choice yes" type="button" data-answer="yes">Yes, add it</button>
+        <button class="choice" type="button" data-answer="later">Not now</button>
+        <button class="choice" type="button" data-answer="never">Never</button>
+      </div>
+    </section>
+    <a class="look" href="#look" id="look-link">Your look: text, colours, voice</a>
+  </div>
+</main>
+<footer>
+  <p class="say"><span class="who" aria-hidden="true">Murmur</span><span id="say" role="status" aria-live="polite"></span></p>
+  <form class="typed" id="typed" hidden>
+    <label class="sr" for="typed-text">Type to Murmur</label>
+    <input id="typed-text" autocomplete="off" enterkeyhint="send" placeholder="Type to Murmur">
+    <button type="submit">Send</button>
+  </form>
+  <button class="talk" id="talk" type="button" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    <span class="label" id="talk-label">Hold to talk</span>
+    <span class="hint" aria-hidden="true">or hold Space</span>
+  </button>
+</footer>
+<dialog id="sheet" aria-labelledby="sheet-title"><div class="sheet" id="sheet-body"></div></dialog>
+</body>
+</html>
