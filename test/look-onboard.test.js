@@ -20,7 +20,7 @@ test('step 1: first open says who Murmur is, how to talk and one thing to try, o
   assert.equal(await p.open(), true);
   assert.deepEqual(p.said, [FIRST_WORDS]);
   assert.deepEqual(p.shown, [FIRST_WORDS], 'the same line as a quiet caption');
-  assert.match(FIRST_WORDS, /Tap anywhere and speak\. Try saying: read my messages\.$/);
+  assert.match(FIRST_WORDS, /Tap anywhere and speak\. Try saying: read Mum's message\.$/);
   assert.equal(await p.open(), false, 'never twice');
   assert.deepEqual(p.said, [FIRST_WORDS]);
 });
