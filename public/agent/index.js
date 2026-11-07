@@ -298,7 +298,8 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     const fresh = movedAt != null && clock.now() - movedAt < 120000;
     const cal = fresh && app('calendar')?.state?.(), mv = cal?.lastMoved, ev = mv && cal.events?.find((e) => e.id === mv.id);
     const moved = ev?.with ? { what: ev.title.replace(/\s+with\s+.+$/i, ''), with: ev.with, day: mv.to, time: mv.time } : null;
-    return { app: current(), me: meContext(), ...(slotAsk ? { asked: slotAsk } : {}), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [], ...(moved ? { moved } : {}) };
+    const nt = app('notifications')?.state?.()?.last; // the notification just read, so "open it" or "reply" goes to its chat
+    return { app: current(), me: meContext(), ...(slotAsk ? { asked: slotAsk } : {}), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [], ...(moved ? { moved } : {}), ...(nt ? { notified: { who: nt.who, app: nt.app, id: nt.id } } : {}) };
   }
   async function planFor(text) {
     const context = await contextNow();

@@ -308,6 +308,20 @@ function plan(said, apps, context, dry) {
     if (send) steps.push(step('messages', ['send']));
     return task(steps);
   };
+  // Notifications: "Check my notifications", "Any notifications from Sam?", "What did Mum send me?" read the latest 1 to 3;
+  // then "open it" or "reply" goes to that one's chat (context.notified, from the agent).
+  if (apps.some((a) => a.id === 'notifications')) {
+    if ((m = t.match(/^(?:(?:check|read|show|open|see|go through|play)\s+(?:me\s+)?(?:my\s+|the\s+)?(?:new\s+|latest\s+|recent\s+)?notifications?|(?:do i have|have i got|are there|got|is there)?\s*any\s+(?:new\s+)?notifications?|what(?:'s| is| are)?\s+(?:in\s+)?my\s+notifications?|(?:my\s+)?notifications?)(?:\s+from\s+(?:my\s+)?(.+?))?$/i)) ||
+        (m = t.match(/^what (?:did|has)\s+(?:my\s+)?(\w+)\s+(?:sent|send)(?:\s+me)?$/i))) return task([step('notifications', ['check'], m[1] ? { who: name(m[1]) } : {})]);
+    const r = context.notified?.app === 'messages' && t.match(/^(?:reply|answer|respond)(?:\s+to\s+(?:it|that|this|them|him|her))?[,:]?\s+(?!to\b)(.{2,})$/i);
+    if (r) { const n = context.notified; return task([step('messages', ['openChat', 'open'], n.id ? { id: n.id } : { who: n.who }), step('messages', ['reply', 'draft', 'write'], { text: body(r[1]) }), step('messages', ['send'])]); } // "Reply" asked "What should it say?": the answer comes back as "reply <words>"
+    const n = context.app === 'notifications' && context.notified;
+    if (n && /^(?:open|show|go to)\s+(?:it|that|this|that one|this one|the chat)$|^(?:reply|answer|respond)(?:\s+to\s+(?:it|that|this|them|him|her))?$/i.test(t)) {
+      if (n.app !== 'messages') return task([{ tool: 'open_app', params: { app: n.app } }]);
+      const open = step('messages', ['openChat', 'open'], n.id ? { id: n.id } : { who: n.who }); // the id: Sam's note never asks "Sam or Samira?"
+      return /^(?:reply|answer|respond)/i.test(t) ? { ...task([open, { tool: 'ask', params: { question: 'What should it say?' } }]), asked: 'reply' } : task([open]);
+    }
+  }
   // Draft any kind of text (the lead, 7 Nov): to a person it's a message (no mail app, so an email goes to Messages);
   // a note, post or letter goes to the Writer. A plain template here; "and send it" sends with no extra yes.
   if ((m = raw.match(/^(?:please\s+)?(?:write|draft|compose)\s+(?:me\s+)?(?:an?\s+|the\s+)?(?:quick\s+|short\s+)?(e-?mail|mail|message|text|note|post|letter|reply|tweet)(?:\s+(?:to|for)\s+(?!say)(\w+))?(?:[,:]?\s+(saying|that|about|asking|telling (?:him|her|them)))?\s*([\s\S]*?)(?:[,.]?\s+and send(?: it)?)?[.!?]*$/i)) && !(m[2] && !m[3] && /^[:,]/.test(m[4]))) { // "to Mum: words" keeps the words as said (the rule below)
