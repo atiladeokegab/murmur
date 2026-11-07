@@ -103,8 +103,8 @@ const app = {
 export default app;
 
 // ---------- the call ----------
-// A call always asks, a person's own tap too: a mis-dial by someone who can't see is the risk. The shell's
-// os.confirm says yes at once when the agent pressed it (the runner already asked). No confirm, no call.
+// Every call goes through os.confirm. The agent was already asked by the runner, and a person's own tap is
+// their yes (contract §7, os/gate.js), so neither gets a second sheet. No confirm, no call.
 async function callAsked(id, back, byHand) {
   if (s.status !== 'idle') return;
   const readback = back ? app.actions.callBack.readback(s, { who: id }) : app.actions.call.readback(s, { who: id });
