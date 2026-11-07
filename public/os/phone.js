@@ -34,8 +34,8 @@ export function createPhone(os) {
       root.append(el('h2', { id: 'phone-h', textContent: 'Phone' }),
         btn('sound', '', () => os.sound(!os.isSound())),
         btn('noLook', '', () => os.noLook(!os.isNoLook())),
-        btn('where', 'Where am I?', async () => { await os.where(); wheres++; }),
-        btn('stop', 'Stop what Murmur is doing', async () => { await os.stop(); stops++; }));
+        btn('where', 'Where am I?', async () => { wheres++; await os.where(); }), // counted on the press: speaking it can take seconds
+        btn('stop', 'Stop what Murmur is doing', async () => { stops++; await os.stop(); }));
       render();
     },
     read: () => `Phone. Sounds are ${os.isSound() ? 'on' : 'off'}. No-look mode is ${os.isNoLook() ? 'on' : 'off'}.`,
