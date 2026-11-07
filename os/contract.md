@@ -1,7 +1,8 @@
 # Murmur OS contract
 
 This is the contract between the shell, the agent and the apps. It is the source of truth on `main`. To
-change it, send a change request to Zeus; never edit it silently. Spec: Murmur OS §3.3 and §8.1.
+change it, send a change request to Zeus; never edit it silently. Rev 3 (13:30): `step:next`, `task:done`
+`line` and `undo`, `confirm` `fingerprint` and `byHand`, the hand-tap rule for gates (§7) and the host (§9). Spec: Murmur OS §3.3 and §8.1.
 
 The code is in `public/sdk/` (import everything from `public/sdk/index.js`). The worked example is
 `public/apps/hello/`, and `test/sdk.test.js` runs it end to end.
@@ -130,17 +131,18 @@ plain JSON.
 |---|---|---|
 | `heard` | `{ text, raw?, path: 'live' \| 'speech' \| 'typed', ms? }` | voice |
 | `task:start` | `{ task, utterance, plan: [{ name, params }] }` | agent |
+| `step:next` | `{ task, label }`: the next step, said before it runs ("Ask me" announces it) | agent |
 | `step:start` | `{ task?, action, app, n, of, label, params, gate, dropped }` | runAction |
 | `tap` | `{ app, control }` | ctx.tap |
 | `step:verified` | `{ task?, action, app, n, of, ms }` | runAction |
 | `step:failed` | `{ task?, action, app?, n, of, reason, cancelled?, stopped? }` | runAction, agent |
-| `confirm` | `{ app, gate, readback, result }` | ctx.confirm |
+| `confirm` | `{ app, gate, readback, result, fingerprint?, byHand? }`: `fingerprint` is set for `pay` (true when a passkey checked it); `byHand` when the person tapped the control | ctx.confirm, shell (`os.confirm`) |
 | `ask` | `{ app?, question, choices?, result }` | ctx.choose, agent (OS tool `ask`) |
 | `say` | `{ app?, text }` | ctx.say, agent |
 | `place` | `{ app, where, item?, n?, of?, next? }` | runAction, agent (`where`, open_app) |
 | `memory` | `{ observation }` \| `{ proposal }` \| `{ workflow }` | agent (Librarian) |
 | `undo` | `{ task?, action, ok }` | agent |
-| `task:done` | `{ task, ms, ok, reason? }`: always ends a task (done, failed or stopped) | agent |
+| `task:done` | `{ task, ms, ok, reason?, line?, undo? }`: always ends a task (done, failed or stopped). `line` is the Done line ("Sent to Sam."); `undo: { label, until }` (ms since epoch) offers Undo until then | agent |
 
 `task` is a string id the agent makes (`t-<timestamp>`). runAction leaves it out, and the agent adds it by
 wrapping the bus it passes in. The shell's work panel numbers steps from `n` and `of`. Its "Done in N s"
@@ -178,7 +180,16 @@ Also decided:
   `runAction` still verifies every step.
 - Ids have no underscores.
 - `seed()` is idempotent, and `reset()` wipes and then calls seed.
-- A person's own tap on a gated control (for example Send) is their yes. The gate applies to the agent.
+- **A person's own tap on a gated control is their yes** (rev 3, 13:30). The app calls
+  `await os.confirm({ gate, readback })` before it acts, and acts only on `true`. For `send`, `call` and
+  `delete` a hand tap gets no extra sheet: `os.confirm` records `confirm { byHand: true, result: true }` and
+  says yes. **Pay always needs the fingerprint** (spec §3.7), hand tap or not: `os.confirm` runs the passkey
+  (`public/passkey.js`) and says yes only when it verified the person. A phone with no platform authenticator
+  gets the readback sheet instead, recorded `fingerprint: false`. When the agent pressed the control,
+  `os.confirm` answers yes at once, because the runner already asked through `ctx.confirm`.
+- **The shell owns the gate sheet** (rev 3). Every gate the runner meets goes through `ctx.confirm`, which
+  calls the shell's sheet: the readback said aloud, a yes in the first 0.5 s ignored, the passkey for `pay`,
+  and the `confirm` event. The agent does not draw its own sheet or check its own fingerprint.
 - Tools use JSON schema with lower-case types.
 
 ## 8. Checklist for a new app (copy `public/apps/hello/`)
@@ -188,6 +199,27 @@ Also decided:
 - [ ] `read()` and `place()` in plain words; `state()` is JSON and holds everything verify needs
 - [ ] `seed()` and `reset()` with invented people only. No banking, health or government
 - [ ] each action has `describe`, `doing` (2 to 5 words), `params` schema, `hint`, `run` through ctx, and `verify`
-- [ ] gated actions (`send`, `pay`, `call`, `delete`) have a `readback` and no `undo`
+- [ ] gated actions (`send`, `pay`, `call`, `delete`) have a `readback` and no `undo`, and the control's own
+      handler awaits `os.confirm({ gate, readback })` before it acts
 - [ ] one line in `public/apps/apps.js`, and a test like `test/sdk.test.js` that runs each action through
       `runAction`
+
+## 9. The host: what the shell passes to the agent (rev 3)
+
+The shell imports `public/agent/index.js` and calls `createAgent(host)` once, after every app has mounted:
+
+| `host` field | What it is |
+|---|---|
+| `registry`, `bus` | the shell's registry and bus |
+| `ctxFor(app, hooks?)` | a ctx for `app`. It opens the app first, so the agent works where the person can see. `hooks` may set `signal` (Stop), `choose` and `speak`; leave `ask` out, so gates reach the shell's sheet (§7). An `AbortSignal` alone also works |
+| `speak(text, signal?)` | the one voice; resolves `false` when Stop cut it off |
+| `librarian` | the Librarian from the toolkit (memory, Your look profile) |
+| `os` | `{ open(id), current() }`: open an app (focus to its h2) and the open app's id or null |
+| `fingerprint()` | `passkey.confirm()`, for a gate the agent judges risky beyond `pay` |
+| `agency()` | `'ask' \| 'just' \| 'teach'`, from Your look |
+| `onGate(sheet \| null)`, `onChoose(choice \| null)` | legacy: the shell still shows them, until the agent asks through ctx |
+
+`createAgent` returns at least `{ hear(text, {path}), stop(), takeOver(), undo(), carryOn(), yes(), no(),
+pick(i), workflows }`. The shell calls `stop` for the Stop bar, Back during a task and the "stop" verb;
+`undo` for the Done line's Undo; `takeOver` when the person touches an app mid-task; `carryOn` for "carry
+on" and the swipe right.
