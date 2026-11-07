@@ -168,12 +168,14 @@ test('Mine reads the agent store: skills with recipe.actions, slots said as some
     { tool: 'messages__openChat', app: 'messages', action: 'openChat', params: { who: '$who' }, gate: null },
     { tool: 'messages__send', app: 'messages', action: 'send', params: {}, gate: 'send' }] } }];
   const heard = [];
-  const os = { kv: null, bus: createBus(), say() {}, hear: (t) => heard.push(t), confirm: async () => true, workflows: { all: async () => skills, remove: async (n) => { removed = n; } } };
+  const os = { kv: null, bus: createBus(), say() {}, hear: (t) => heard.push(t), agent: { runWorkflow: async (n) => heard.push(`runWorkflow ${n}`) }, confirm: async () => true, workflows: { all: async () => skills, remove: async (n) => { removed = n; } } };
   await mountApp(mine, host, os);
   assert.equal(mine.read(), 'Mine, 1 saved: Message someone.');
   assert.equal(host.querySelector('[data-explain="Message someone"]').textContent, "What's in Message someone");
   host.querySelector('[data-run="Message someone"]').click();
   assert.deepEqual(heard, [], 'an agent tap on Run does not start a second task');
+  host.querySelector('[data-run="Message someone"]').dispatchEvent({ type: 'click', isTrusted: true });
+  assert.deepEqual(heard, ['runWorkflow Message someone'], "a person's tap runs it through the agent");
   host.querySelector('[data-delete="Message someone"]').click();
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(removed, 'Message someone');
