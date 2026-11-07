@@ -55,6 +55,7 @@ const app = {
         await ctx.tap(b);
       },
       verify: (st, p) => st.chapter === p.n - 1 || `Chapter ${p.n} didn't open.`,
+      done: (st, p) => `Chapter ${p.n}.`,
     },
     readLastPage: {
       describe: 'Read the last page of the book aloud, sentence by sentence',
@@ -82,6 +83,7 @@ const app = {
       hint: 'Carry on is the second button',
       async run(p, ctx) { await ctx.tap(q('#wr-carry')); await readOn((t) => ctx.say(t)); },
       verify: (st) => (st.readFrom != null && st.sentence >= st.readFrom) || 'Reading did not carry on.',
+      done: () => '', // it just read aloud; nothing to add
     },
     dictate: {
       describe: 'Add dictated sentences to the end of the open chapter',
@@ -94,6 +96,7 @@ const app = {
         await ctx.tap(box); await ctx.type(box, p.text); await ctx.tap(q('#wr-add'));
       },
       verify: (st, p) => (!!String(p.text).trim() && st.chapters[st.chapter].text.endsWith(String(p.text).trim())) || 'It did not go in.',
+      done: () => 'Added.',
       async undo(ctx) { await ctx.tap(q('#wr-undo')); },
     },
     change: {
@@ -111,6 +114,7 @@ const app = {
       },
       verify: (st, p) => (!!st.changed && st.changed.chapter === st.chapter && st.changed.to === p.to
         && words(p.to).test(sentences(st.chapters[st.chapter].text)[st.changed.sentence] || '')) || `${p.from} wasn't changed.`,
+      done: () => 'Changed.',
       async undo(ctx) { await ctx.tap(q('#wr-undo')); },
     },
     newChapter: {
@@ -125,6 +129,7 @@ const app = {
       },
       verify: (st, p) => (st.chapter === st.chapters.length - 1 && st.chapters[st.chapter].text === ''
         && (!p.title || st.chapters[st.chapter].title === String(p.title).trim())) || 'No new chapter.',
+      done: (st) => `Chapter ${st.chapters.length} started.`,
     },
   },
 };
