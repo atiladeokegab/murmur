@@ -64,5 +64,15 @@ test('mirror: one POST in flight at a time; a change meanwhile goes right after,
   assert.deepEqual(sent, ['a'], 'held while the first is in flight');
   done(); await wait(10);
   assert.deepEqual(sent, ['a', 'c'], 'then the newest screen');
-  done(); stop();
+  html = 'd'; obs(); await wait(10); stop(); done(); await wait(10);
+  assert.deepEqual(sent, ['a', 'c'], 'nothing after stop, even with a change queued behind a POST');
+});
+
+test('relay: a stalled laptop skips frames instead of buffering them', () => {
+  _screens.clear();
+  const slow = sink(); slow.res.writableLength = 2e6; stream(slow.req, slow.res, 'slow');
+  const n = slow.lines.length;
+  publish({ type: 'mirror:frame', html: '<body>x</body>' }, 'slow');
+  assert.equal(slow.lines.length, n);
+  for (const c of closers) c();
 });

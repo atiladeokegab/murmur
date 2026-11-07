@@ -14,10 +14,14 @@ export function frameOf(doc) {
     else if (el.type === 'checkbox' || el.type === 'radio') c.toggleAttribute('checked', el.checked);
     else if (el.type !== 'password') c.setAttribute('value', el.value);
   });
-  copy.querySelectorAll('script').forEach((s) => s.remove());
+  copy.querySelectorAll('script, .agent-cursor').forEach((s) => s.remove()); // the laptop draws the ring from cx, cy
+  copy.querySelectorAll('input[type=password]').forEach((el) => el.removeAttribute('value'));
+  for (const el of copy.querySelectorAll('*')) for (const a of [...el.attributes]) {
+    if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name); // markup only, nothing runs on the laptop
+  }
   const ring = doc.querySelector('.agent-cursor'), win = doc.defaultView, root = doc.documentElement;
   let cx = null, cy = null;
-  if (ring && !ring.hidden) {
+  if (ring && !ring.hidden && !doc.querySelector('dialog[open]')) { // a sheet hides the ring (app.css)
     const v = (k) => parseFloat(ring.style.getPropertyValue(k)) || 0;
     cx = Math.round(v('--x') + v('--w') / 2); cy = Math.round(v('--y') + v('--h') / 2);
   }
@@ -36,13 +40,14 @@ export function mirror({ doc, room, send, every = 150, beat = 5000, now = () => 
   send ??= (f) => {
     try {
       return Promise.resolve(globalThis.fetch(`/api/bus?room=${encodeURIComponent(room)}`, { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ type: 'mirror:frame', ...f }) })).catch(() => {});
+        body: JSON.stringify({ type: 'mirror:frame', ...f }), signal: AbortSignal.timeout(5000) })).catch(() => {}); // a hung POST never stops the mirror
     } catch {}
   };
-  let last = -Infinity, timer = null, prev = '', busy = false, again = false; // one POST in flight: slow wifi never reorders frames
+  let last = -Infinity, timer = null, prev = '', busy = false, again = false, stopped = false; // one POST in flight: slow wifi never reorders frames
   let quiet = 0; // last send time: an idle phone still sends one frame every `beat` ms, or the stage falls back to its own phone
   const shoot = (force = false) => {
     timer = null;
+    if (stopped) return;
     if (busy) { again = true; return; }
     last = now();
     let f;
@@ -52,7 +57,7 @@ export function mirror({ doc, room, send, every = 150, beat = 5000, now = () => 
     busy = true;
     Promise.resolve(send(f)).catch(() => {}).finally(() => { busy = false; if (again) { again = false; soon(); } });
   };
-  const soon = () => { if (!timer) timer = setTimeout(() => shoot(), Math.max(0, last + every - now())); };
+  const soon = () => { if (!timer && !stopped) timer = setTimeout(() => shoot(), Math.max(0, last + every - now())); };
   const win = doc.defaultView;
   const obs = new win.MutationObserver(soon);
   obs.observe(doc.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
@@ -60,5 +65,5 @@ export function mirror({ doc, room, send, every = 150, beat = 5000, now = () => 
   win.addEventListener('scroll', soon, { capture: true, passive: true });
   soon();
   const hb = setInterval(() => { if (now() - quiet >= beat - 50 && !timer) shoot(true); }, Math.min(beat, 1000));
-  return () => { obs.disconnect(); clearTimeout(timer); clearInterval(hb); doc.removeEventListener('input', soon, true); win.removeEventListener('scroll', soon, { capture: true }); };
+  return () => { stopped = true; obs.disconnect(); clearTimeout(timer); clearInterval(hb); doc.removeEventListener('input', soon, true); win.removeEventListener('scroll', soon, { capture: true }); };
 }
