@@ -227,7 +227,11 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:run|start|do)\s+(.+)$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'run_workflow', params: { name: m[1] } }]);
   if (/what (?:do you|does murmur) (?:know|remember) about me|what murmur knows about me/i.test(t)) return task([{ tool: 'recall', params: {} }]);
 
-  // The OS's own verbs
+  // The OS's own verbs. "Open <an app's name>" opens it, before any app's own words ("open bank" is not the balance).
+  if ((m = t.match(/^(?:open|go to|show)\s+(?:the\s+|my\s+)?(.+?)(?:\s+app)?$/i))) {
+    const app = apps.find((a) => [a.id, a.name.toLowerCase(), a.name.toLowerCase().replace(/^(?:the|your)\s+/, '')].includes(m[1].toLowerCase()));
+    if (app) return task([{ tool: 'open_app', params: { app: app.id } }]);
+  }
   // Install: "install X", "add X app", or "Add Northline Taxis" (capitalised words: a name, not "a flat white").
   if (((m = t.match(/^(?:install|download)\s+(?:the\s+)?(.+?)(?:\s+app)?$/i)) || (m = t.match(/^(?:add|get(?!\s+rid\b))\s+(?:the\s+)?(.+?)\s+app$/i)) ||
        (m = t.match(/^(?:[Aa]dd|[Gg]et)\s+(?:the\s+)?([A-Z][\w'&]*(?:\s+[A-Z][\w'&]*)+)$/))) && !apps.some((a) => a.name.toLowerCase() === m[1].toLowerCase())) {

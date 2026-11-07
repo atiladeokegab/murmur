@@ -122,7 +122,7 @@ test('demo lines: install, taxi, bank, the 9:40, leave for work', () => {
   for (const u of ['Move money to my savings', 'Log in to my Barclays account', "What's my sort code", 'What is my account number', 'Tell me my PIN number'])
     assert.equal(demoPlan(u, apps).kind, 'refuse', u);
   // The phone's own Bank (invented money) is in scope when it is installed; with no Bank app its words are refused
-  for (const [u, tool] of [['Open the bank', 'bank__balance'], ['Open Murmur Bank', 'bank__balance'], ["What's my balance", 'bank__balance'],
+  for (const [u, tool] of [['Open the bank', 'open_app'], ['Open Murmur Bank', 'bank__balance'], ["What's my balance", 'bank__balance'],
     ['Check my bank balance', 'bank__balance'], ['Read my recent payments', 'bank__recent']]) assert.equal(plan(u)[0]?.tool, tool, u);
   assert.deepEqual(plan('Pay Sam 20 pounds from Murmur Bank'), [{ tool: 'bank__payPerson', params: { who: 'Sam', amount: 20 } }]);
   assert.equal(demoPlan('Log in to my account', apps).kind, 'refuse');
