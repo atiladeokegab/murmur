@@ -219,7 +219,12 @@ const app = {
     root.append(el('h2', { id: 'look-h', textContent: 'Your look' }), ...rows);
     look = { ...DEFAULTS, ...((await kv.get('look')) || {}) };
     const { librarian } = await lib();
-    if (librarian) { try { Object.assign(look, await readLook(librarian)); } catch { /* keep the kv copy */ } }
+    if (librarian) {
+      try { // a fresh profile reads as light; seed it from ours (dark by default) instead, as public/app.js does
+        if (!(await librarian.getProfile())?.fields?.needs?.length) await writeLook(librarian, look);
+        Object.assign(look, await readLook(librarian));
+      } catch { /* keep the kv copy */ }
+    }
     apply();
     render();
   },
