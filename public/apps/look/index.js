@@ -5,14 +5,14 @@ import { readLook, writeLook, applyLook } from '../../look.js';
 
 export const STEPS = {
   size: { label: 'Text', more: 'bigger', less: 'smaller', values: [100, 150, 200, 300, 400], words: (v) => `${v} percent` },
-  rate: { label: 'Voice', more: 'faster', less: 'slower', values: [0.75, 1, 1.25, 1.5, 2], words: (v) => (v === 1 ? 'normal speed' : `${v} times`) },
+  rate: { label: 'Voice', more: 'faster', less: 'slower', values: [0.75, 1, 1.15, 1.25, 1.5, 2], words: (v) => (v === 1 ? 'normal speed' : `${v} times`) },
 };
 export const CHOICES = {
   theme: { label: 'Colours', options: { dark: 'Dark', light: 'Light', yellow: 'Yellow on black' } },
   speaker: { label: 'Who speaks', options: { murmur: 'Murmur', reader: 'My screen reader' } },
   agency: { label: 'How much Murmur does', options: { ask: 'Ask me', just: 'Just do it', teach: 'Teach me' } },
 };
-const DEFAULTS = { size: 100, rate: 1, theme: 'dark', speaker: 'murmur', agency: 'ask', learning: true };
+const DEFAULTS = { size: 100, rate: 1.15, theme: 'dark', speaker: 'murmur', agency: 'ask', learning: true };
 
 let root = null, kv = null, os = null, toolkit = null;
 let look = { ...DEFAULTS }, known = null, lastChange = null, pending = Promise.resolve();
@@ -92,7 +92,7 @@ async function save(change, sentence) {
   if (librarian && change.row === 'learning') { try { await librarian.setMemoryPaused(!look.learning); } catch { /* said below either way */ } }
   apply();
   render();
-  await os.say(sentence);
+  if (!byAgent) await os.say(sentence);
 }
 
 function step(key, dir) {
@@ -166,7 +166,9 @@ async function forget() {
 const on = (b, fn) => b.addEventListener('click', () => { pending = pending.then(fn, fn); });
 
 // Every action presses a row's control through ctx, then waits for that row to apply.
-const press = async (ctx, key) => { await ctx.tap(btn[key]); await pending; };
+// The agent's press keeps quiet: its done line says the change once ("Text 150 percent."). A tap by hand still hears it.
+let byAgent = false;
+const press = async (ctx, key) => { byAgent = true; try { await ctx.tap(btn[key]); await pending; } finally { byAgent = false; } };
 // Undo: press the row's own controls until it is back where it was before the action ran (the same door).
 const before = {};
 async function pressTo(ctx, row, value) {
@@ -179,7 +181,15 @@ const undoable = (row, action) => ({
   ...action,
   async run(p, ctx) { before[row] = look[row]; await action.run(p, ctx); },
   async undo(ctx) { if (row in before) await pressTo(ctx, row, before[row]); },
+  done: (s) => rowLine(row, s),
 });
+// The done line after a change says only that row ("Text 150 percent."): seconds count on stage.
+function rowLine(row, s) {
+  if (STEPS[row]) return `${STEPS[row].label} ${STEPS[row].words(s[row])}.`;
+  if (row === 'learning') return s.learning ? 'Learning on.' : 'Learning stopped.';
+  const words = CHOICES[row].options[s[row]];
+  return row === 'speaker' ? `${words} speaks.` : `${CHOICES[row].label}: ${words.toLowerCase()}.`;
+}
 const stepper = (key, dir) => undoable(key, {
   describe: `Make the ${key === 'size' ? 'text' : 'voice'} ${STEPS[key][dir]}`,
   doing: `${key === 'size' ? 'Text' : 'Voice'} ${STEPS[key][dir]}`,

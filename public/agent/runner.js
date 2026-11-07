@@ -90,7 +90,10 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
       if (!step.app) { // Murmur's own tool
         task.bus.emit('step:start', { action: step.tool, app: null, n, of, label: step.label || '', params: step.params, gate: null, dropped: [] });
         const ok = await builtin(step, task);
-        if (ok === false) { reason = 'Not done.'; task.bus.emit('step:failed', { action: step.tool, n, of, reason }); status = 'failed'; break; }
+        if (ok === false) {
+          reason = 'Not done.'; task.bus.emit('step:failed', { action: step.tool, n, of, reason }); status = 'failed';
+          failed = { utterance, steps: steps.slice(i) }; line = "That didn't work. Try again, or stop."; break;
+        }
         task.bus.emit('step:verified', { action: step.tool, n, of, ms: clock.now() - s0 });
         doneSteps.push(step);
         continue;
@@ -103,15 +106,22 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
       if (!x.gate) {
         // Just do it: the step earcon and the panel carry each step, and the voice keeps to questions and the result
         // (the lead's 6 s bar). Ask and Teach still say every step.
-        if (mode === 'ask' || mode === 'teach') await say(task, x.doing || gerund(x.describe));
+        // The line starts with the tap, never before it: speech is queued, so the step does not wait for it.
+        if (mode === 'ask' || mode === 'teach') say(task, x.doing || gerund(x.describe));
         // a spoken task is the yes for its first step; later changing steps get a beat to say stop
         if (mode === 'ask' && CHANGES(step.action) && i > 0) await beat(task, BEAT_MS);
         if (task.stopped) { status = task.takenOver ? 'taken-over' : 'stopped'; break; }
       }
 
+      // A gated action may resolve who it is for first ("Sam or Samira?"), so the one confirm reads the exact name.
+      let params = step.params;
+      if (x.gate && typeof x.resolve === 'function') {
+        params = await x.resolve(params, ctxFor(a, hooks(task)));
+        if (!params || task.stopped) { status = task.stopped ? 'stopped' : 'cancelled'; line = reason = task.stopped ? '' : `Not ${PAST[x.gate] || 'done'}.`; break; }
+      }
       const r = mode === 'teach' && !x.gate
         ? await teachStep(task, a, x, step, { action: step.tool, app: a.id, n, of })
-        : await runAction({ registry, name: step.tool, params: step.params, bus: task.bus, ctxFor: (app) => ctxFor(app, hooks(task)), n, of });
+        : await runAction({ registry, name: step.tool, params, bus: task.bus, ctxFor: (app) => ctxFor(app, hooks(task)), n, of });
       if (!r.ok) {
         if (r.stopped || task.stopped) status = task.takenOver ? 'taken-over' : 'stopped';
         else if (r.cancelled) { status = 'cancelled'; line = reason = r.reason; }
@@ -131,7 +141,9 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
     if (status === 'done' && lastApp) {
       const last = steps.at(-1);
       const x = last.app && lastApp.actions[last.action];
-      line = typeof x?.done === 'function' ? x.done(lastApp.state(), last.params) : lastApp.read();
+      // Short words: the app's own done line, else "Sent." or "Done." (the app already said what it read).
+      line = typeof x?.done === 'function' ? x.done(lastApp.state(), last.params)
+        : gatedRan ? `${PAST[gatedRan][0].toUpperCase()}${PAST[gatedRan].slice(1)}.` : CHANGES(last.action) ? 'Done.' : '';
     }
     const ms = clock.now() - t0;
     if (status === 'done' && lastUndo) lastUndo.until = clock.now() + UNDO_MS;
@@ -189,7 +201,7 @@ export function createGates({ say = async () => {}, clock = { now: () => Date.no
         open = { gate, readback, openedAt: clock.now(), checking: false,
           resolve: (r) => { open = null; onChange(null); resolve(r); } };
         onChange({ gate, readback, question });
-        say(`${readback} ${question}`);
+        say(/\?$/.test(readback) ? readback : `${readback} ${question}`); // "Send 'I'm late' to Sam?" is its own question
       });
     },
     /** A confirm word (already checked by hear()) or the Yes button. */
@@ -204,7 +216,7 @@ export function createGates({ say = async () => {}, clock = { now: () => Date.no
         try { ok = !!(await fingerprint()); } catch { ok = false; }
         g.checking = false;
         if (open !== g) return false;
-        if (!ok) { await say('Not you, or not read. Try again, or No.'); return false; }
+        if (!ok) { g.resolve(false); return false; } // fails closed: the step is cancelled and says "Not paid." 
       }
       g.resolve(true);
       return true;

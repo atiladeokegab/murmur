@@ -116,8 +116,14 @@ function plan(said, apps, context, dry) {
   if (/what do you (know|remember) about me/i.test(t)) return task([{ tool: 'recall', params: {} }]);
 
   // The OS's own verbs
+  // Install: "install X", "add X app", or "Add Northline Taxis" (capitalised words: a name, not "a flat white").
+  if (((m = t.match(/^(?:install|download)\s+(?:the\s+)?(.+?)(?:\s+app)?$/i)) || (m = t.match(/^(?:add|get)\s+(?:the\s+)?(.+?)\s+app$/i)) ||
+       (m = t.match(/^(?:[Aa]dd|[Gg]et)\s+(?:the\s+)?([A-Z][\w'&]*(?:\s+[A-Z][\w'&]*)+)$/))) && !apps.some((a) => a.name.toLowerCase() === m[1].toLowerCase())) {
+    return task([{ tool: 'install_app', params: { name: m[1] } }]);
+  }
   if (/^(?:what are |list |say )?(?:my |the )?(?:tiles|routines|workflows)$/i.test(t) || /^what (?:tiles|routines) do i have$/i.test(t)) return task([{ tool: 'list_workflows', params: {} }]);
   if ((m = t.match(/^(?:remove|delete|forget)\s+(?:the\s+|my\s+)?(.+?)(?:\s+(?:tile|routine|workflow))?$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'remove_workflow', params: { name: m[1] } }]);
+  if ((m = t.match(/^(?:remove|delete|uninstall)\s+(?:the\s+|my\s+)?(.+?)(?:\s+app)?$/i)) && apps.some((a) => a.name.toLowerCase() === m[1].toLowerCase() || a.id === m[1].toLowerCase())) return task([{ tool: 'remove_app', params: { name: m[1] } }]);
   if (/^(?:go )?(?:home|back to (?:the )?(?:board|home))$|^(?:show|open) (?:the )?(?:board|home)$/i.test(t)) return task([{ tool: 'go_home', params: {} }]);
   if ((m = t.match(/^(?:turn |switch )?(?:the )?(?:sounds?|haptics|vibrations?|sounds? and (?:haptics|vibrations?))\s+(on|off)$/i)) ||
       (m = t.match(/^(?:turn|switch)\s+(on|off)\s+(?:the )?(?:sounds?|haptics|vibrations?)/i))) return task([{ tool: 'sound', params: { on: m[1].toLowerCase() === 'on' } }]);
@@ -225,9 +231,18 @@ function plan(said, apps, context, dry) {
     return task([step('transit', ['nextBus', 'next', 'bus'], m?.[1] ? { place: cap(m[1].trim()) } : {})]);
   }
   if ((m = t.match(/^(?:directions|take me|get me|get)\s+(?:to\s+)?(?:the\s+)?(.+)$/i))) return task([step('transit', ['directions', 'route'], { place: cap(m[1]) })]);
-  if (/when (?:should|do) i leave/i.test(t)) return task([step('transit', ['whenToLeave', 'leave'])]);
+  if ((m = t.match(/when (?:should|do|can) i leave(?:\s+(?:for|to)\s+(?:the\s+)?([a-z' ]+))?$/i))) return task([step('transit', ['whenToLeave', 'leave'], m[1] ? { place: cap(m[1].trim()) } : {})]);
+
+  // Taxi (a plug-in) and the Bank
+  if ((m = t.match(/^(?:book|get|call|order)\s+(?:me\s+)?(?:a\s+)?(?:taxi|cab)(?:\s+(?:to\s+)?(?:the\s+)?(.+))?$/i))) {
+    return task([step('taxi', ['book'], m[1] ? { to: m[1].toLowerCase() } : {})]);
+  }
+  if ((m = t.match(/^(?:pay|send)\s+(\w+)\s+(?:£\s*)?(\d+(?:\.\d\d)?|[a-z -]+?)(?:\s+(?:pounds?|quid))?$/i)) && money(m[2]) > 0) {
+    return task([step('bank', ['payPerson', 'pay'], { who: name(m[1]), amount: money(m[2]) })]);
+  }
 
   // Travel
+  if ((m = t.match(/^(?:pick|choose|take|book|hold)\s+(?:the\s+)?(\d{1,2}[:.]\d\d)(?:\s+(?:flight|one))?$/i))) return task([step('travel', ['hold', 'book', 'pick'], { flight: m[1].replace('.', ':') })]);
   if ((m = t.match(/^(?:find|search|look for)\s+(?:me\s+)?(?:a\s+)?flights?\s+(?:from\s+(\w+)\s+)?to\s+(\w+)(?:\s+(?:for|on)\s+(.+))?$/i))) {
     const slots = { place: cap(m[2]) };
     if (m[1]) slots.origin = cap(m[1]);
@@ -252,6 +267,19 @@ export function corrected(text) {
   const m = text.match(/^([\s\S]*?\b)(\w+)((?:\s+\w+)?)([.!?])\s+no,?\s+(?:the\s+|a\s+|an\s+)?(\w+)((?:\s+\w+)?)[.!?]?$/i);
   if (!m || m[3].trim().toLowerCase() !== m[6].trim().toLowerCase()) return text;
   return `${m[1]}${m[5]}${m[3]}${m[4]}`;
+}
+
+const UNITS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15,
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100, a: 1 };
+/** "20", "twenty", "twenty five", "a hundred" -> a number; 0 if it is not money words. */
+function money(s) {
+  if (/^\d/.test(s)) return Number(s);
+  let n = 0;
+  for (const w of s.toLowerCase().split(/[\s-]+/).filter((x) => x !== 'and')) {
+    if (!(w in UNITS)) return 0;
+    n = w === 'hundred' ? (n || 1) * 100 : n + UNITS[w];
+  }
+  return n;
 }
 
 const isWorkflow = (n, ctx) => (ctx.workflows || []).some((w) => w.toLowerCase() === n.toLowerCase());

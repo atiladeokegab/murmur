@@ -33,7 +33,7 @@ const SETTINGS = [
   ['Change the colours to light', { theme: 'light' }],
   ['Dark mode', { theme: 'dark' }],
   ['Make the voice faster', { rate: 1.25 }],
-  ['Speak slower', { rate: 1 }],
+  ['Speak slower', { rate: 1.15 }],
   ['Let my screen reader speak', { speaker: 'reader' }],
   ['Murmur speaks', { speaker: 'murmur' }],
   ['Just do it', { agency: 'just' }],
@@ -103,4 +103,62 @@ test('OS verbs: home, sound off, and undo said in other words', async () => {
   assert.equal(r.status, 'reserved');
   assert.equal(s.ev('undo').at(-1)?.ok, true);
   assert.equal(s.state('hello').draft, '');
+});
+
+test('demo lines: install, taxi, bank, the 9:40, leave for work', () => {
+  const app = (id, name, acts) => ({ id, name, actions: acts.map(([n, props]) => ({ name: n, params: { type: 'object', properties: props } })) });
+  const S = { type: 'string' }, N = { type: 'number' };
+  const apps = [app('shop', 'Shop', [['add', { item: S, quantity: N }]]), app('taxi', 'Northline Taxis', [['book', { to: S }]]),
+    app('bank', 'Bank', [['payPerson', { who: S, amount: N }]]), app('travel', 'Travel', [['hold', { flight: S }]]), app('transit', 'Transit', [['whenToLeave', { place: S }]])];
+  const plan = (u, a = apps) => demoPlan(u, a).plan;
+  assert.deepEqual(plan('Add Northline Taxis', apps.filter((a) => a.id !== 'taxi')), [{ tool: 'install_app', params: { name: 'Northline Taxis' } }]);
+  assert.equal(plan('Add a flat white')[0].tool, 'shop__add');
+  assert.deepEqual(plan('Book me a taxi home'), [{ tool: 'taxi__book', params: { to: 'home' } }]);
+  assert.deepEqual(plan('Pay Sam twenty pounds'), [{ tool: 'bank__payPerson', params: { who: 'Sam', amount: 20 } }]);
+  assert.deepEqual(plan('Pick the 9:40'), [{ tool: 'travel__hold', params: { flight: '9:40' } }]);
+  assert.deepEqual(plan('Book the 9:40'), [{ tool: 'travel__hold', params: { flight: '9:40' } }]);
+  assert.deepEqual(plan('When should I leave for work'), [{ tool: 'transit__whenToLeave', params: { place: 'Work' } }]);
+});
+
+test('install_app goes through os.install and says its line; open_app "the board" is a no-op, not a failure', async () => {
+  const s = await setup({ os: { install: async (name) => ({ ok: true, say: `${name} is on your phone.` }) } });
+  await s.agent.hear('Install Corner Grocer');
+  assert.ok(s.spoken.includes('Corner Grocer is on your phone.'));
+  const r = await s.agent.runner.run({ utterance: 'x', steps: [{ tool: 'open_app', params: { app: 'the board' } }, { tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Hi.' } }] });
+  assert.equal(r.status, 'done');
+  const bad = await s.agent.runner.run({ utterance: 'x', steps: [{ tool: 'go_home', params: {} }] });
+  assert.equal(bad.status, 'failed');
+  assert.match(bad.line, /didn't work/, 'a failed task says so');
+});
+
+test('a gated action resolves its person before the one confirm', async () => {
+  const asked = [];
+  const p = await phone({ patch: { shop: (a) => ({ pay: { ...a.pay, readback: (st, prm) => `Pay ${prm.who} £3.20.`,
+    params: { type: 'object', properties: { who: { type: 'string' } } },
+    async resolve(prm, ctx) { const c = await ctx.choose('Sam or Samira?', [{ label: 'Sam' }, { label: 'Samira' }]); return c && { ...prm, who: c.label }; } } }) } });
+  const { librarian } = createToolkit({ kv: memoryKV() });
+  const agent = createAgent({ registry: p.registry, bus: p.bus, ctxFor: p.ctxFor, librarian, agency: () => 'just', fingerprint: async () => true,
+    planOpts: { offline: true }, speak: async (t) => { asked.push(t); } });
+  const done = agent.runner.run({ utterance: 'pay', steps: [{ tool: 'shop__pay', app: 'shop', action: 'pay', params: { who: 'Sam' } }] });
+  await until(() => asked.includes('Sam or Samira?'));
+  assert.equal(agent.gates.current, null, 'no confirm before the name is known');
+  await agent.hear('Samira');
+  await until(() => agent.gates.current);
+  assert.equal(agent.gates.current.readback, 'Pay Samira £3.20.');
+  await agent.yes(); await done;
+  assert.equal(asked.filter((t) => t === 'Sam or Samira?').length, 1);
+});
+
+test('remove_app: the agent gate asks, a spoken no keeps it, a tile of the same name wins', async () => {
+  const removed = [];
+  const s = await setup({ os: { remove: async (name, { confirm }) => (await confirm(`Remove ${name} from your phone?`)) ? (removed.push(name), { ok: true, say: `Removed ${name}.` }) : { ok: false, cancelled: true, say: 'Kept it.' } } });
+  let p = s.agent.hear('Remove Hello');
+  await until(() => s.agent.gates.current?.gate === 'delete');
+  assert.equal(s.spoken.at(-1), 'Remove Hello from your phone?');
+  s.agent.no(); await p;
+  assert.ok(s.spoken.includes('Kept it.')); assert.deepEqual(removed, []);
+  p = s.agent.hear('Uninstall the hello app');
+  await until(() => s.agent.gates.current); await s.agent.yes(); await p;
+  assert.deepEqual(removed, ['hello']);
+  assert.deepEqual(demoPlan('Remove pizza', describeRegistry(s.registry)).plan.map((x) => x.tool).includes('remove_app'), false);
 });

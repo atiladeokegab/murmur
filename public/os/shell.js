@@ -27,7 +27,7 @@ const store = {
   set(k, v) { try { localStorage.setItem('murmur:' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
 const QUIET = /[?&]quiet\b/.test(location.search); // the eval and the flows: no audio, no waiting for speech
-const look = Object.assign({ size: 100, theme: 'dark', rate: 1, speaker: 'murmur', agency: 'ask', planner: 'auto', nolook: false },
+const look = Object.assign({ size: 100, theme: 'dark', rate: 1.15, speaker: 'murmur', agency: 'ask', planner: 'auto', nolook: false },
   store.get('look', {}));
 const saveLook = () => store.set('look', look);
 let agent = null; // declared before the mount loop: Mine reads os.workflows during seed()
