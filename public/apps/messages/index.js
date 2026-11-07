@@ -59,12 +59,18 @@ const app = {
       },
     },
     read: {
-      describe: 'Read the new message in the open chat, sentence by sentence',
+      describe: 'Read the new message in the open chat, sentence by sentence. new: true opens the first chat with a new message ("Read my messages")',
       doing: 'Reading',
-      params: { type: 'object', properties: {} },
+      params: { type: 'object', properties: { new: { type: 'boolean', description: 'Go to the first chat with a new message first' } } },
       gate: null,
       hint: 'Read is the first button in the chat; each sentence is its own item after the chat',
       async run(p, ctx) {
+        if (p.new) {
+          const c = s.chats.find((x) => x.unread);
+          if (!c) throw new Error('No new messages.');
+          if (s.currentChat && s.currentChat !== c.id) await ctx.tap(q('#msg-back'));
+          if (s.currentChat !== c.id) await ctx.tap(q(`[data-chat="${c.id}"]`));
+        }
         await ctx.tap(q('#msg-read'));
         await speakItems((t) => ctx.say(t));
       },
