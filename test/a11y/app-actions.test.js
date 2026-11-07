@@ -13,7 +13,7 @@ async function mount(app, os = {}) {
   const registry = createRegistry();
   registry.register(app);
   const port = browserKV({ storage: fakeStorage(), prefix: `actions-${app.id}` });
-  const root = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say() {}, ...os });
+  const root = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say() {}, confirm: async () => true, ...os });
   await app.reset();
   const cursor = { async moveTo() {}, hide() {} };
   const ctxFor = (target) => createCtx({
@@ -67,10 +67,12 @@ test('Messages cannot send the same reply again from the Sent control', async ()
   draft.value = 'See you at lunch.';
   draft.dispatchEvent(new Event('input', { bubbles: true }));
   p.root.querySelector('#msg-send').click();
+  await new Promise(setImmediate);
 
   const afterFirstSend = messages.state().chats.find((chat) => chat.id === 'mum').messages.length;
   assert.equal(p.root.querySelector('#msg-send').textContent, 'Sent');
   p.root.querySelector('#msg-send').click();
+  await new Promise(setImmediate);
 
   assert.equal(messages.state().chats.find((chat) => chat.id === 'mum').messages.length, afterFirstSend,
     'repeated activation of the Sent control must not append a duplicate message');
