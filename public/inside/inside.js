@@ -111,6 +111,7 @@ src.onopen = () => { restart(); document.body.dataset.link = 'on'; $('link').tex
 src.onerror = () => { document.body.dataset.link = 'off'; $('link').textContent = 'Lost the phone. Reconnecting.'; };
 src.onmessage = (m) => {
   const e = JSON.parse(m.data);
+  if (e.type === 'mirror:frame') return; // the phone's screen is for /stage; Inside has no column for it
   if (e.type === 'reset') restart();
   add(e);
   if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; draw(); }); }

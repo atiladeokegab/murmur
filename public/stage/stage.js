@@ -46,7 +46,9 @@ function frame(e) {
   for (const [k, v] of Object.entries(th)) if (k !== 'className' && typeof v === 'string') root.dataset[k] = v;
   root.style.fontSize = typeof e.size === 'string' ? e.size : '';
   // Inert: parsed by DOMParser, and the iframe's sandbox has no allow-scripts.
-  d.body.replaceWith(d.adoptNode(new DOMParser().parseFromString(e.html, 'text/html').body));
+  const body = new DOMParser().parseFromString(e.html, 'text/html').body;
+  body.querySelectorAll('meta, base, iframe, frame, object, embed').forEach((n) => n.remove()); // a forged frame cannot refresh or embed
+  d.body.replaceWith(d.adoptNode(body));
   d.defaultView.scrollTo(0, Number(e.sy) || 0);
   const has = Number.isFinite(e.cx) && Number.isFinite(e.cy);
   cursor.hidden = !has;

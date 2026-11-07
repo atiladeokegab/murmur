@@ -34,19 +34,45 @@ test('mirror: at most one frame per 150 ms, none when nothing changed, none over
   globalThis.setInterval = (fn) => { tick = fn; return 1; }; globalThis.clearInterval = () => {};
   try {
     const stop = mirror({ doc, room: 'stage', every: 150, now: () => t, send: (f) => sent.push(f.html), frame: () => ({ html, cx: null, cy: null }) });
-    const fire = () => timers.shift().fn();
-    fire(); assert.deepEqual(sent, ['a'], 'the first frame at once');
+    const settle = () => new Promise((r) => real(r, 0)); // let the send's promise finish
+    const fire = async () => { timers.shift().fn(); await settle(); };
+    await fire(); assert.deepEqual(sent, ['a'], 'the first frame at once');
     html = 'b'; obs(); obs(); obs();
     assert.equal(timers.length, 1, 'a burst of mutations is one frame');
     assert.equal(timers[0].ms, 150, 'and it waits out the 150 ms');
-    t = 150; fire(); assert.deepEqual(sent, ['a', 'b']);
-    t = 400; obs(); assert.equal(timers[0].ms, 0, 'late enough: right away'); fire();
+    t = 150; await fire(); assert.deepEqual(sent, ['a', 'b']);
+    t = 400; obs(); assert.equal(timers[0].ms, 0, 'late enough: right away'); await fire();
     assert.deepEqual(sent, ['a', 'b'], 'nothing changed: no frame');
-    html = 'x'.repeat(200 * 1024 + 1); t = 600; obs(); fire();
+    html = 'x'.repeat(200 * 1024 + 1); t = 600; obs(); await fire();
     assert.deepEqual(sent, ['a', 'b'], 'over 200 KB: dropped');
-    t = 5000; tick(); assert.deepEqual(sent, ['a', 'b'], 'not yet 5 s since the last frame');
-    html = 'b'; t = 5200; tick(); assert.deepEqual(sent, ['a', 'b', 'b'], 'idle 5 s: a heartbeat of the same screen');
-    t = 5300; tick(); assert.equal(sent.length, 3, 'one heartbeat, then quiet again');
+    t = 5000; tick(); await settle(); assert.deepEqual(sent, ['a', 'b'], 'not yet 5 s since the last frame');
+    html = 'b'; t = 5200; tick(); await settle(); assert.deepEqual(sent, ['a', 'b', 'b'], 'idle 5 s: a heartbeat of the same screen');
+    t = 5300; tick(); await settle(); assert.equal(sent.length, 3, 'one heartbeat, then quiet again');
     stop();
   } finally { globalThis.setTimeout = real; globalThis.setInterval = realI; globalThis.clearInterval = realC; }
+});
+
+test('mirror: one POST in flight at a time; a change meanwhile goes right after, never out of order', async () => {
+  let obs = null, html = 'a', done = null;
+  const win = { MutationObserver: class { constructor(fn) { obs = fn; } observe() {} disconnect() {} }, addEventListener() {}, removeEventListener() {} };
+  const doc = { defaultView: win, addEventListener() {}, removeEventListener() {} };
+  const sent = [];
+  const stop = mirror({ doc, room: 'stage', every: 1, beat: 1e9, send: (f) => { sent.push(f.html); return new Promise((r) => { done = r; }); }, frame: () => ({ html, cx: null, cy: null }) });
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  await wait(10); assert.deepEqual(sent, ['a']);
+  html = 'b'; obs(); await wait(10); html = 'c'; obs(); await wait(10);
+  assert.deepEqual(sent, ['a'], 'held while the first is in flight');
+  done(); await wait(10);
+  assert.deepEqual(sent, ['a', 'c'], 'then the newest screen');
+  html = 'd'; obs(); await wait(10); stop(); done(); await wait(10);
+  assert.deepEqual(sent, ['a', 'c'], 'nothing after stop, even with a change queued behind a POST');
+});
+
+test('relay: a stalled laptop skips frames instead of buffering them', () => {
+  _screens.clear();
+  const slow = sink(); slow.res.writableLength = 2e6; stream(slow.req, slow.res, 'slow');
+  const n = slow.lines.length;
+  publish({ type: 'mirror:frame', html: '<body>x</body>' }, 'slow');
+  assert.equal(slow.lines.length, n);
+  for (const c of closers) c();
 });
