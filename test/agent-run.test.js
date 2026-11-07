@@ -4,7 +4,7 @@ import { createToolkit } from '../public/vendor/toolkit/index.js';
 import { createAgent } from '../public/agent/index.js';
 import { placeLine } from '../public/agent/narrate.js';
 import { createVoice } from '../public/voice/route.js';
-import { gerund, BEAT_MS } from '../public/agent/runner.js';
+import { gerund, BEAT_MS, createGates } from '../public/agent/runner.js';
 import { observationOf } from '../public/agent/memory.js';
 import { phone, memoryKV } from './agent-fixtures.js';
 
@@ -338,4 +338,12 @@ test('Ask me, Vertical 1: no clipped "Opening the chat" before "Sam or Samira?",
   const q = s.spoken.findIndex((t) => / or .+\?$/.test(t));
   assert.ok(!s.spoken.slice(0, q).includes('Opening the chat'), 'the question replaced the step line');
   assert.equal(s.clock.t - t0, 600, 'no 700 ms beat: the send gate is the moment to say no');
+});
+
+test('a travel hold (a pay gate that reads "held for 24 hours") asks "Hold?", a payment still asks "Pay?"', () => {
+  const said = [];
+  const g = createGates({ say: async (t) => { said.push(t); } });
+  g.ask({ gate: 'pay', readback: 'The 9:40 to Lisbon, £120, held for 24 hours.' }); g.cancel();
+  g.ask({ gate: 'pay', readback: 'Pay Sam £20. From Murmur Bank.' }); g.cancel();
+  assert.deepEqual(said, ['The 9:40 to Lisbon, £120, held for 24 hours. Hold?', 'Pay Sam £20. From Murmur Bank. Pay?']);
 });

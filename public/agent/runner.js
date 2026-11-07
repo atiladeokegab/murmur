@@ -198,7 +198,9 @@ export function createGates({ say = async () => {}, clock = { now: () => Date.no
     get current() { return open && { gate: open.gate, openedAt: open.openedAt, readback: open.readback }; },
     ask({ gate, readback }) {
       if (open) open.resolve(false);
-      const question = { send: 'Send it?', pay: 'Pay?', call: 'Call?', delete: 'Delete it?' }[gate] || 'Do it?';
+      // a travel hold is a pay gate whose readback says "held for 24 hours": the shell's sheet says Hold, so does the voice
+      const question = gate === 'pay' && /\b(hold|held)\b/i.test(readback || '') ? 'Hold?'
+        : { send: 'Send it?', pay: 'Pay?', call: 'Call?', delete: 'Delete it?' }[gate] || 'Do it?';
       return new Promise((resolve) => {
         open = { gate, readback, openedAt: clock.now(), checking: false,
           resolve: (r) => { open = null; onChange(null); resolve(r); } };
