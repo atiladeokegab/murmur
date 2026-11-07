@@ -15,7 +15,9 @@ const AREA = 'os.plugins';
 // An action named like money or messages must ask first with the right gate; a plug-in may not opt out or
 // downgrade (pay is the only gate that checks the fingerprint, so money must be pay, never send or call).
 const MONEY = /pay|buy|purchase|order|book|checkout|transfer|money/i;
-const needs = (k) => (MONEY.test(k) ? ['pay'] : /send/i.test(k) ? ['send', 'pay'] : /call/i.test(k) ? ['call', 'pay'] : null);
+// Anything named to destroy (deleteAll, clearData, removeItem) asks first with delete, or the stricter pay.
+const DESTROY = /delete|remove|clear|erase|wipe/i;
+const needs = (k) => (MONEY.test(k) ? ['pay'] : /send/i.test(k) ? ['send', 'pay'] : /call/i.test(k) ? ['call', 'pay'] : DESTROY.test(k) ? ['delete', 'pay'] : null);
 // One plug-in module: lower-case folders and a .js file, nothing else. No %, dots, query or hash: the server
 // decodes %2e%2e%2f after the URL check, so an encoded path could step outside /plugins/.
 const PATH = /^[a-z0-9-]+(\/[a-z0-9-]+)*\.js$/;

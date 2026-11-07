@@ -32,6 +32,8 @@ function render() {
     const b = el('button', { type: 'button', className: 'app-btn quiet', textContent: `Remove ${i}` });
     b.addEventListener('click', async (e) => {
       const had = root.ownerDocument.activeElement === b, at = basket.indexOf(i);
+      // Delete always asks, a person's own tap too (contract §7); the agent's press was already asked. No confirm, no change.
+      if (!(os?.confirm && await os.confirm({ gate: 'delete', readback: `Take ${i} out of your basket?` }))) return;
       basket = basket.filter((x) => x !== i); note = `Took ${i} out.`;
       await save(); render(); tell(e);
       // the pressed button is gone: keep the person's place on the next item, else the total
@@ -121,6 +123,8 @@ const app = {
     remove: {
       describe: 'Take one item out of the basket',
       doing: 'Removing from your basket',
+      gate: 'delete',
+      readback: (s, p) => `Take ${find(p.item)?.item ?? p.item} out of your basket?`,
       hint: 'Each item in the basket has its own Remove button.',
       params: { type: 'object', properties: { item: { type: 'string', description: 'The item to take out' } }, required: ['item'] },
       async run(p, ctx) {
