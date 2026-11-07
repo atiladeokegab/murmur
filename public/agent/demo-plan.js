@@ -4,7 +4,7 @@
 //   { kind: 'task' | 'teach' | 'refuse' | 'unknown', plan: [{ tool, params }], say? }
 // It covers the demo script (spec §6) and the eval's utterances; anything else is said, never guessed.
 
-import { whoAmI } from '../lib/profile.js';
+import { whoAmI, hereLine } from '../lib/profile.js';
 import { SEP } from './plan.js';
 
 const SYN = {
@@ -144,6 +144,7 @@ function planOrWords(said, apps, context, dry) {
 }
 
 export const EVERYTHING = 'Everything. Just tell me what you need.';
+export const IDENTITY = "I'm Murmur. I run this phone for you by voice: messages, calls, music, rides, reminders, anything.";
 // What the phone can infer (the seeded chats, calendar and tiles), never a readback of what Murmur did.
 const FRIENDS = "Book club on Thursday is a good start: say hello to someone new there. You could ask Sam to meet up this week, or look for a local group near you, like a walking group or a library talk.";
 const MISS = "I can't do that one yet.", NO_APP = "I don't have"; // MISS is the planner's own marker; the person never hears it (fakeLine)
@@ -382,6 +383,8 @@ function plan(said, apps, context, dry) {
   }
   if (/^who(?:'?s| is| was)? (?:my )?(?:latest|last|newest|new) message (?:from|by)$|^who (?:has |just )?(?:messaged|texted|written to|wrote to) me$/i.test(t)) return task([step('messages', ['read'], { new: true })]);
   if (/^what (?:can|could) (?:i|you) do(?: for me| here)?$|^what (?:are|is) you(?: for)?$/i.test(t)) return task([{ tool: 'say', params: { text: EVERYTHING } }]);
+  if (/^who are you$|^what(?:'s| is) your name$/i.test(t)) return task([{ tool: 'say', params: { text: IDENTITY } }]);
+  if (/^(?:what(?:'s| is) my (?:current )?location|where am i (?:right )?now|where am i at the moment)$/i.test(t)) return task([{ tool: 'say', params: { text: hereLine() } }]);
   if (/^who am i$|^what (?:do you|does murmur) know about who i am$/i.test(t)) return task([{ tool: 'say', params: { text: whoAmI() } }]);
   if (/^(?:(?:hello|hi|hey)(?: there| murmur)?[,.!]?\s*)?(?:is (?:any ?one|somebody|someone) there)?$|^(?:i can'?t see the screen[,.]?\s*)?how (?:do i|can i) (?:start|begin|use (?:this|it|murmur))$|^i can'?t see the screen$/i.test(t) && t) {
     return task([{ tool: 'say', params: { text: "Hello, I'm Murmur. Just say what you'd like, like \"read my messages\" or \"what's on today\". Say \"what can I do\" to hear more, and \"stop\" any time." } }]);
