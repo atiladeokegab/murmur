@@ -4,7 +4,7 @@ import { createBus, createRegistry, createCtx, appKv, mountApp, runAction, loadA
 import { browserKV } from '../public/ports/browser-kv.js';
 import look from '../public/apps/look/index.js';
 import { createDemo, bindDemo, CONTROLS } from '../public/os/demo/index.js';
-import { firstOpen, rearm, FIRST_WORDS, OFFER_HINT } from '../public/os/onboard/index.js';
+import { firstOpen, rearm, FIRST_WORDS } from '../public/os/onboard/index.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
 
 const memKv = () => { const m = new Map(); return { get: async (k) => m.get(k), set: async (k, v) => (v === undefined ? m.delete(k) : m.set(k, v)) }; };
@@ -34,9 +34,8 @@ test('first open says one sentence, only once, and reset re-arms it', async () =
   const say = async (t) => said.push(t);
   assert.equal(await firstOpen({ kv, say }), true);
   assert.equal(await firstOpen({ kv, say }), false);
-  assert.deepEqual(said, [FIRST_WORDS, OFFER_HINT], 'then, once, how to hear what is possible');
+  assert.deepEqual(said, [FIRST_WORDS]);
   assert.equal(FIRST_WORDS, 'Tap anywhere and speak.');
-  assert.equal(OFFER_HINT, "Say 'what can I do' any time.");
   await rearm({ kv });
   assert.equal(await firstOpen({ kv, say }), true);
 });

@@ -79,7 +79,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
     const t0 = clock.now();
     const doneSteps = [];
     const of = steps.length;
-    let status = 'done', lastApp = null, gatedRan = null, line = '', reason = '', madeUndo = null;
+    let status = 'done', lastApp = null, gatedRan = null, line = '', reason = '', madeUndo = null, more = '';
     failed = null;
     task.bus.emit('task:start', { utterance, plan: steps.map(({ tool, params }) => ({ name: tool, params })), ...plan });
 
@@ -96,7 +96,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
           failed = { utterance, steps: steps.slice(i) }; line = "That didn't work. Try again, or stop."; break;
         }
         task.bus.emit('step:verified', { action: step.tool, n, of, ms: clock.now() - s0 });
-        doneSteps.push(step);
+        doneSteps.push(step); more = '';
         continue;
       }
       const a = registry.get(step.app);
@@ -141,6 +141,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
         break;
       }
       doneSteps.push(step);
+      more = r.more || ''; // the last step's longer answer, for "tell me more"
       if (x.gate) { gatedRan = x.gate; lastUndo = null; } // a gated step is final: nothing before it may be undone
       else if (typeof x.undo === 'function') madeUndo = lastUndo = { app: a, action: x, name: step.tool, label: `Undo ${(x.doing || gerund(x.describe)).toLowerCase()}`, params: r.params || step.params, until: 0 };
     }
@@ -162,7 +163,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
       ...(madeUndo && lastUndo === madeUndo ? { undo: { label: lastUndo.label, until: lastUndo.until } } : {}) });
     // the done line is said after the task ends: Stop has nothing left to stop
     if (line) { try { await speak(line, undefined, { said: () => task.bus.emit('say', { text: line }) }); } catch { /* hushed */ } }
-    return { status, ms, line, task: id, actions: doneSteps.map((s) => s.tool) };
+    return { status, ms, line, task: id, actions: doneSteps.map((s) => s.tool), more: status === 'done' ? more : '' };
   }
 
   function halt(task) { task.stopped = true; task.controller.abort(); task.nudge?.(); }
