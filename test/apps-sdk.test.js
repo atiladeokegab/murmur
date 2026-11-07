@@ -223,3 +223,28 @@ test('the Writer: undo puts back the last change, then the last dictate, through
   assert.ok(writer.state().chapters[1].text.endsWith('The train was late.'));
   assert.notEqual(writer.state().chapters[1].text, before);
 });
+
+// public/apps/<id>/state.example.json is the shape the eval reads: state() after seed(), then after a typical action.
+// This test fails if a field changes; WRITE_EXAMPLES=1 rewrites the files.
+test('state.example.json matches what state() returns', async () => {
+  const fs = await import('node:fs');
+  const cases = {
+    messages: { steps: [['messages__openChat', { who: 'Sam' }], ['messages__reply', { text: "I'm ten minutes late." }], ['messages__send', {}]], opts: { picks: [0], answers: [true] } },
+    writer: { steps: [['writer__readLastPage', {}]], opts: { stopAfter: 4 } },
+    mine: { steps: [['mine__explain', { name: 'My morning' }]], proposal: 'You message Mum most mornings. Add a tile?' },
+    calendar: { steps: [['calendar__move', { what: 'lunch with Mum', to: 'Wednesday' }]] },
+  };
+  const apps = { messages, writer, mine, calendar };
+  for (const [id, c] of Object.entries(cases)) {
+    const p = await phone(c.opts);
+    const app = apps[id];
+    await app.seed();
+    const afterSeed = app.state();
+    for (const [name, params] of c.steps) await p.run(name, params);
+    if (c.proposal) p.bus.emit('memory', { proposal: c.proposal });
+    const example = { afterSeed, afterAction: { said: c.steps.map(([name, params]) => ({ name, params })), state: app.state() } };
+    const file = new URL(`../public/apps/${id}/state.example.json`, import.meta.url);
+    if (process.env.WRITE_EXAMPLES) fs.writeFileSync(file, JSON.stringify(example, null, 2) + '\n');
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), JSON.parse(JSON.stringify(example)), id);
+  }
+});

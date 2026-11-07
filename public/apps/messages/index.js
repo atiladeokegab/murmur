@@ -50,12 +50,12 @@ const app = {
           r = { id: pick.id };
         }
         if (r.none) throw new Error(r.none);
-        if (s.open && s.open !== r.id) await ctx.tap(q('#msg-back'));
-        if (s.open !== r.id) await ctx.tap(q(`[data-chat="${r.id}"]`));
+        if (s.currentChat && s.currentChat !== r.id) await ctx.tap(q('#msg-back'));
+        if (s.currentChat !== r.id) await ctx.tap(q(`[data-chat="${r.id}"]`));
       },
       verify: (st, p) => {
         const ok = p.id ? [p.id] : M.candidates(st, p.who).map((c) => c.id);
-        return (!!st.open && ok.includes(st.open)) || `The chat with ${p.who || p.id} didn't open.`;
+        return (!!st.currentChat && ok.includes(st.currentChat)) || `The chat with ${p.who || p.id} didn't open.`;
       },
     },
     read: {
@@ -68,7 +68,7 @@ const app = {
         await ctx.tap(q('#msg-read'));
         await speakItems((t) => ctx.say(t));
       },
-      verify: (st) => (!!st.open && st.reading?.chat === st.open) || 'Nothing was read.',
+      verify: (st) => (!!st.currentChat && st.reading?.chat === st.currentChat) || 'Nothing was read.',
     },
     reply: {
       describe: 'Write a reply in the open chat',
@@ -77,7 +77,7 @@ const app = {
       gate: null,
       hint: 'The reply box is after the chat, with Send right under it',
       async run(p, ctx) { const box = q('#msg-draft'); await ctx.tap(box); await ctx.type(box, p.text); },
-      verify: (st, p) => (!!st.open && st.draft === p.text) || 'The reply box did not take it.',
+      verify: (st, p) => (!!st.currentChat && st.draft === p.text) || 'The reply box did not take it.',
     },
     replace: {
       describe: 'Change one word in the reply to another',
@@ -104,7 +104,7 @@ const app = {
       hint: 'Send is the button right after the reply box',
       readback: (st) => `Send to ${M.chatOf(st)?.name || 'no one'}: ${st.draft || 'nothing yet'}`,
       async run(p, ctx) { await ctx.tap(q('#msg-send')); },
-      verify: (st) => (!!st.draft && st.lastSent?.text === st.draft && st.lastSent.to === st.open) || 'It did not send.',
+      verify: (st) => (!!st.draft && st.lastSent?.text === st.draft && st.lastSent.to === st.currentChat) || 'It did not send.',
     },
   },
 };
@@ -176,7 +176,7 @@ function chatView(c) {
       // A person's own tap on Send is their yes (contract §7); the agent is gated by the runner before it taps.
       if (M.send(s)) { save(); render(); }
     } }),
-    button('Back to your chats', { id: 'msg-back', onclick: () => { s.open = null; save(); render(); } }),
+    button('Back to your chats', { id: 'msg-back', onclick: () => { s.currentChat = null; save(); render(); } }),
   );
 }
 

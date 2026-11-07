@@ -17,11 +17,11 @@ export const seedChats = () => [
   ] },
 ];
 
-export const fresh = () => ({ chats: seedChats(), open: null, draft: '', changed: null, reading: null, lastSent: null });
+export const fresh = () => ({ chats: seedChats(), currentChat: null, draft: '', changed: null, reading: null, lastSent: null });
 
 const norm = (s) => String(s || '').trim().toLowerCase();
 export const possessive = (name) => (/s$/i.test(name) ? `${name}'` : `${name}'s`);
-export const chatOf = (s, id = s.open) => s.chats.find((c) => c.id === id) || null;
+export const chatOf = (s, id = s.currentChat) => s.chats.find((c) => c.id === id) || null;
 
 /** Every chat a spoken name could mean: "Sam" is Sam and Samira, so the caller must ask. */
 export function candidates(s, who) {
@@ -44,7 +44,7 @@ export function resolve(s, p = {}) {
 }
 
 export function open(s, id) {
-  s.open = id; s.draft = ''; s.changed = null; s.reading = null;
+  s.currentChat = id; s.draft = ''; s.changed = null; s.reading = null;
 }
 
 /** What "read" reads: the unread messages from them, else the last one from them. One item per sentence. */
@@ -58,7 +58,7 @@ export function readItems(s) {
 
 export function startReading(s) {
   const items = readItems(s);
-  s.reading = { chat: s.open, at: 0, of: items.length, items: items.map((x) => x.text) };
+  s.reading = { chat: s.currentChat, at: 0, of: items.length, items: items.map((x) => x.text) };
   const c = chatOf(s);
   if (c) c.unread = 0;
   return items;
@@ -100,7 +100,7 @@ export function send(s) {
   return true;
 }
 
-export const sent = (s) => !!s.lastSent && s.lastSent.text === s.draft && s.lastSent.to === s.open;
+export const sent = (s) => !!s.lastSent && s.lastSent.text === s.draft && s.lastSent.to === s.currentChat;
 
 export function read(s) {
   const c = chatOf(s);

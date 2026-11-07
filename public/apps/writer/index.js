@@ -37,7 +37,8 @@ const app = {
   },
   async seed() { await save(); render(); },
   async reset() { s = W.fresh(); await save(); render(); },
-  state: () => structuredClone(s),
+  // current is derived, for the eval and the agent: chapter and sentence counted from 1, and the open chapter's text.
+  state: () => ({ ...structuredClone(s), current: { chapter: s.chapter + 1, title: W.current(s).title, sentence: s.sentence + 1, of: W.count(s), text: W.current(s).text } }),
   read: () => W.read(s),
   place: () => W.place(s),
 

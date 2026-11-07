@@ -24,7 +24,11 @@ const app = {
     root = r; os = o;
     root.append(el('h2', { id: 'mine-h' }, 'Mine'), body = el('div', { className: 'app-body' }));
     // The bus only nudges a re-read of the store after a save; what Mine shows still comes from the store.
-    os.bus?.on?.('memory', (e) => { if (e.workflow) refresh(); });
+    // A proposal (contract memory event) is only shown here; the agent's sheet answers it.
+    os.bus?.on?.('memory', (e) => {
+      if (e.proposal) { s.proposals.push({ text: typeof e.proposal === 'string' ? e.proposal : e.proposal.text || e.proposal.question || '' }); render(); }
+      if (e.workflow) refresh();
+    });
     await refresh();
   },
   async seed() { if (!os?.workflows) s.workflows = s.workflows.length ? s.workflows : Mi.SEED(); await refresh(); },
@@ -101,8 +105,10 @@ const button = (text, props = {}) => el('button', { type: 'button', className: '
 
 function render() {
   if (!body) return;
-  body.replaceChildren(
+  body.replaceChildren(...[
     el('p', { className: 'app-place' }, Mi.read(s)),
+    s.proposals.length ? el('h3', { className: 'app-h3' }, 'Offered to you') : null,
+    s.proposals.length ? el('ul', { className: 'app-list', 'aria-label': 'Offered to you' }, s.proposals.map((x) => el('li', {}, x.text))) : null,
     ...s.workflows.map((w) => el('div', { className: 'app-card' },
       el('h3', { className: 'app-h3' }, w.name),
       el('ol', { className: 'app-sentences', 'aria-label': `${w.name}, step by step` },
@@ -117,7 +123,7 @@ function render() {
       } }),
       button(`Delete ${w.name}`, { 'data-delete': w.name, onclick: () => { removing = remove(w); } }),
     )),
-  );
+  ].filter(Boolean));
 }
 
 // A person's own tap on Delete is their yes (contract §7); the agent is gated by the runner before it taps.

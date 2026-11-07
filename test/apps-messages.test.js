@@ -31,8 +31,8 @@ test('"Sam" is ambiguous: ask, never pick', () => {
   assert.deepEqual(M.resolve(s, { who: 'mum' }), { id: 'mum' });
   assert.deepEqual(M.resolve(s, { id: 'sam' }), { id: 'sam' });
   assert.match(M.resolve(s, { who: 'Bob' }).none, /no chat with Bob/);
-  assert.equal(A.openChat.verify({ ...s, open: 'samira' }, { who: 'Sam' }), true, 'after the person chose, either is right');
-  assert.notEqual(A.openChat.verify({ ...s, open: 'mum' }, { who: 'Sam' }), true);
+  assert.equal(A.openChat.verify({ ...s, currentChat: 'samira' }, { who: 'Sam' }), true, 'after the person chose, either is right');
+  assert.notEqual(A.openChat.verify({ ...s, currentChat: 'mum' }, { who: 'Sam' }), true);
 });
 
 test('the race: open Mum, read, reply, change Tuesday to Wednesday, send', () => {
@@ -95,6 +95,6 @@ test('send refuses an empty draft and no open chat', () => {
 test('seed and reset bring the demo data back', () => {
   app.seed();
   app.reset();
-  assert.equal(app.state().open, null);
+  assert.equal(app.state().currentChat, null);
   assert.equal(app.state().chats.length, 3);
 });

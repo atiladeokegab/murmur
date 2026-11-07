@@ -1,0 +1,103 @@
+{
+  "afterSeed": {
+    "today": "Saturday",
+    "events": [
+      {
+        "id": "lunch-mum",
+        "title": "Lunch with Mum",
+        "day": "Tuesday",
+        "time": "13:00",
+        "with": [
+          "mum"
+        ],
+        "invited": []
+      },
+      {
+        "id": "dentist",
+        "title": "Dentist",
+        "day": "Thursday",
+        "time": "09:30",
+        "with": [],
+        "invited": []
+      },
+      {
+        "id": "choir",
+        "title": "Choir",
+        "day": "Saturday",
+        "time": "18:00",
+        "with": [
+          "samira"
+        ],
+        "invited": []
+      },
+      {
+        "id": "quiz",
+        "title": "Quiz with Sam",
+        "day": "Saturday",
+        "time": "19:30",
+        "with": [
+          "sam"
+        ],
+        "invited": []
+      }
+    ],
+    "showing": "Saturday",
+    "selected": null
+  },
+  "afterAction": {
+    "said": [
+      {
+        "name": "calendar__move",
+        "params": {
+          "what": "lunch with Mum",
+          "to": "Wednesday"
+        }
+      }
+    ],
+    "state": {
+      "today": "Saturday",
+      "events": [
+        {
+          "id": "lunch-mum",
+          "title": "Lunch with Mum",
+          "day": "Wednesday",
+          "time": "13:00",
+          "with": [
+            "mum"
+          ],
+          "invited": []
+        },
+        {
+          "id": "dentist",
+          "title": "Dentist",
+          "day": "Thursday",
+          "time": "09:30",
+          "with": [],
+          "invited": []
+        },
+        {
+          "id": "choir",
+          "title": "Choir",
+          "day": "Saturday",
+          "time": "18:00",
+          "with": [
+            "samira"
+          ],
+          "invited": []
+        },
+        {
+          "id": "quiz",
+          "title": "Quiz with Sam",
+          "day": "Saturday",
+          "time": "19:30",
+          "with": [
+            "sam"
+          ],
+          "invited": []
+        }
+      ],
+      "showing": "Wednesday",
+      "selected": "lunch-mum"
+    }
+  }
+}

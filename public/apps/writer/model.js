@@ -46,6 +46,7 @@ export const fresh = () => ({
   readFrom: null,  // where the last read started
   changed: null,   // { chapter, sentence, to } after "change X to Y"
   lastSaid: '',
+  undo: null,      // { chapter, text, sentence } before the last dictate or change
 });
 
 export const current = (s) => s.chapters[s.chapter];

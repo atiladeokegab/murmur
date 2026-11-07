@@ -10,7 +10,7 @@ export const SEED = () => [
   ] },
 ];
 
-export const fresh = (workflows = SEED()) => ({ workflows, selected: null, explained: null, lastRun: null });
+export const fresh = (workflows = SEED()) => ({ workflows, proposals: [], selected: null, explained: null, lastRun: null });
 
 const norm = (t) => String(t || '').trim().toLowerCase().replace(/^(my|the)\s+/, '');
 export const find = (s, name) => s.workflows.find((w) => norm(w.name) === norm(name)) || null;
