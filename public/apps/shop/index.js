@@ -1,6 +1,6 @@
 // Shop: order your usual, reorder, add to basket, pay (gate: pay, fingerprint), track.
 // Simulated shops, invented names. No card data anywhere: paying is a fingerprint plus a record.
-import { controls, h, memKV, money, spokenTime, style } from './ui.js';
+import { controls, h, placeLine, swap, memKV, money, spokenTime, style } from './ui.js';
 
 const SHOPS = {
   'demo-cafe': { name: 'Demo Café', menu: {
@@ -89,7 +89,7 @@ export function createShop({ now = () => Date.now() } = {}) {
     if (!root) return;
     ui.clear();
     const E = (t, p, ...k) => h(doc, t, p, ...k), o = lastOrder();
-    const kids = [E('p', { className: 'm-app-place' }, app.place().where)];
+    const kids = [placeLine(doc, app.place().where, 'Shop')];
     if (s.view === 'track' && o) {
       kids.push(E('p', {}, `${say(o.items)}.`), E('p', {}, trackLine(o)), ui.btn('back', 'Back to the shops', on.back));
     } else {
@@ -107,7 +107,7 @@ export function createShop({ now = () => Date.now() } = {}) {
           E('ul', {}, Object.entries(sh.menu).map(([iid, it]) => E('li', {}, E('span', {}, `${it.name}, ${money(it.price)}`), ui.btn('add', `Add ${it.name}`, on.add, { arg: `${id}/${iid}` })))));
       }
     }
-    body.replaceChildren(...kids.filter(Boolean)); // the h2 stays put, so focus on it survives a re-render
+    swap(body, kids);
   }
 
   const tap = (ctx, act, arg) => ctx.tap(ui.find(act, arg));

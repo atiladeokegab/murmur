@@ -24,6 +24,21 @@ export function controls(doc) {
   };
 }
 
+/** Swap a view's content. If focus was in the old view (a person pressed a button there), move it to the
+ * new view's first line so TalkBack reads what changed instead of dropping to the top of the page. */
+export function swap(body, kids) {
+  const doc = body.ownerDocument, had = !!doc.activeElement && body.contains?.(doc.activeElement);
+  body.replaceChildren(...kids.filter(Boolean));
+  if (!had) return;
+  const first = body.children[0];
+  if (!first) return;
+  if (first.tabIndex == null || first.tabIndex < 0) first.tabIndex = -1;
+  first.focus();
+}
+
+/** The place line, unless it only repeats the app's name (the h2 already says it). */
+export const placeLine = (doc, where, name) => (where === name ? null : h(doc, 'p', { className: 'm-app-place' }, where));
+
 export const money = (p) => `£${p % 100 ? (p / 100).toFixed(2) : p / 100}`; // "£88", not "£88.00", when spoken
 
 const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven',
@@ -45,12 +60,20 @@ export function spokenTime(d) {
 }
 
 export const CSS = `
+.m-app-body { padding: 0 var(--gutter); container-type: inline-size; }
+.m-app > h2 { padding: 0 var(--gutter); }
 .m-app-body ul, .m-app-body ol { list-style: none; padding: 0; margin: 0; }
 .m-app-body li { border-top: var(--bw-talk) solid var(--c-slat); padding: var(--pad-tile); display: flex; flex-wrap: wrap; gap: var(--ring); align-items: center; justify-content: space-between; }
 .m-app .m-app-place { color: var(--c-quiet); }
-.m-app-btn { min-height: var(--h-link); min-width: var(--h-link); padding: var(--pad-tile); font: inherit; font-weight: 700; color: var(--c-ink); background: var(--c-board); border: var(--bw-talk) solid var(--c-slat); border-radius: var(--r-btn); cursor: pointer; }
+.m-app-btn { min-height: var(--h-link); min-width: var(--h-link); padding: var(--pad-tile); font: inherit; font-weight: 700; color: var(--c-ink); background: var(--c-board); border: var(--bw-talk) solid var(--c-quiet); border-radius: var(--r-btn); cursor: pointer; }
 .m-app-btn:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-off); }
 .m-app-main { background: var(--c-accent); color: var(--c-on-accent); border-color: var(--c-accent); }
+.m-app-body [tabindex="-1"]:focus { outline: none; }
+/* 400% zoom: one control per line, full width, so no label breaks mid-word or runs off the screen. */
+@container (max-width: 15em) {
+  .m-app-body li { padding: var(--ring) 0; }
+  .m-app-btn { flex: 1 1 100%; width: 100%; padding: var(--ring); }
+}
 .m-app-total { font-family: var(--f-time); font-size: var(--fs-title); }
 `;
 let styled = false;

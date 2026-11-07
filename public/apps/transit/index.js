@@ -1,5 +1,5 @@
 // Transit: next bus, directions to a saved place, when to leave. A simulated timetable that starts at seed().
-import { controls, h, minutes, num, spokenTime, style } from '../shop/ui.js';
+import { controls, h, placeLine, swap, minutes, num, spokenTime, style } from '../shop/ui.js';
 
 const STOPS = { library: 'the stop by the library', market: 'the stop on Market Street' };
 // first: minutes after seed() of the first bus; every: minutes between buses.
@@ -60,10 +60,10 @@ export function createTransit({ now = () => Date.now() } = {}) {
     if (!root) return;
     ui.clear();
     const E = (t, p, ...k) => h(doc, t, p, ...k);
-    const kids = [E('p', { className: 'm-app-place' }, app.place().where)];
+    const kids = [placeLine(doc, app.place().where, 'Transit')];
     if (s.view === 'home') {
       kids.push(E('h3', {}, 'Next bus'),
-        E('ul', {}, Object.entries(ROUTES).map(([r, R]) => E('li', {}, E('span', {}, `The ${r} from ${STOPS[R.stop]}, ${minutes(next(r).inMin)}`), ui.btn('next', `Next ${r}`, on.next, { arg: r })))),
+        E('ul', {}, Object.entries(ROUTES).map(([r, R]) => E('li', {}, E('span', {}, `The ${r} from ${STOPS[R.stop]}, ${minutes(next(r).inMin)}`), ui.btn('next', `When does the ${r} leave`, on.next, { arg: r })))),
         E('h3', {}, 'Saved places'),
         E('ul', {}, Object.entries(PLACES).map(([k, P]) => E('li', {}, E('span', {}, P.name),
           ui.btn('directions', `Directions to ${P.name}`, on.directions, { arg: k }), ui.btn('leave', `When to leave for ${P.name}`, on.leave, { arg: k })))));
@@ -71,7 +71,7 @@ export function createTransit({ now = () => Date.now() } = {}) {
       kids.push(s.view === 'directions' ? E('ol', {}, steps(s.shown.place).map((t) => E('li', {}, t))) : E('p', {}, line()),
         ui.btn('back', 'Back to Transit', on.back));
     }
-    body.replaceChildren(...kids);
+    swap(body, kids);
   }
 
   const go = async (ctx, act, arg) => { if (s.view !== 'home') await ctx.tap(ui.find('back')); await ctx.tap(ui.find(act, arg)); };

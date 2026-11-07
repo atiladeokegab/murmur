@@ -73,3 +73,12 @@ test('after paying, the next order goes back through Back; reset brings the demo
   assert.equal(app.state().orders.length, 1);
   assert.equal(app.state().usual['demo-cafe'].count, 6);
 });
+
+test('a person\'s press moves focus to the new view\'s first line, not the top of the page', async () => {
+  const { doc, roots, press } = await shopPhone();
+  const usual = [...roots.shop.all()].find((n) => n.tagName === 'BUTTON' && n.textContent.startsWith('Your usual'));
+  usual.focus();
+  press('shop', 'Your usual: Flat white');
+  assert.ok(roots.shop.contains(doc.activeElement) && doc.activeElement.tagName !== 'BUTTON');
+  assert.equal(doc.activeElement.textContent, 'Shop, Demo Café');
+});

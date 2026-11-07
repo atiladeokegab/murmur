@@ -1,6 +1,6 @@
 // Travel: find flights, pick one, hold it (gate: pay, simulated; nothing is charged). Invented airlines.
 // shortcut: offline results for London to Lisbon only; swap findFlights' source for Gemini grounded search when the key lands.
-import { controls, h, money, style } from '../shop/ui.js';
+import { controls, h, placeLine, swap, money, style } from '../shop/ui.js';
 
 const ROUTES = {
   'london-lisbon': { from: 'London', to: 'Lisbon', flights: [
@@ -48,14 +48,14 @@ export function createTravel() {
     if (!root) return;
     ui.clear();
     const E = (t, p, ...k) => h(doc, t, p, ...k);
-    const kids = [E('p', { className: 'm-app-place' }, app.place().where)];
+    const kids = [placeLine(doc, app.place().where, 'Travel')];
     if (s.view === 'search') kids.push(E('p', {}, 'Flights from London to Lisbon.'),
       E('ul', {}, DAYS.slice(4).map((d) => E('li', {}, E('span', {}, cap(d)), ui.btn('search', `Find flights on ${cap(d)}`, on.search, { arg: `london-lisbon|${d}` })))));
-    else if (s.view === 'results') kids.push(E('ul', {}, s.results.map((f) => E('li', {}, E('span', {}, sentence(f)), ui.btn('pick', `Pick the ${f.time}`, on.pick, { arg: f.id })))),
+    else if (s.view === 'results') kids.push(E('ul', {}, s.results.map((f) => E('li', {}, E('span', {}, sentence(f)), ui.btn('pick', `Pick the ${f.time}, ${f.airline}`, on.pick, { arg: f.id })))),
       ui.btn('newSearch', 'New search', on.newSearch));
     else if (s.view === 'flight') kids.push(E('p', {}, sentence(sel())), ui.btn('hold', 'Hold this flight', on.hold, { main: true }), ui.btn('back', 'Back to the flights', on.back));
     else kids.push(E('p', {}, app.read()), ui.btn('back', 'Back to the flights', on.back));
-    body.replaceChildren(...kids);
+    swap(body, kids);
   }
 
   const app = {
