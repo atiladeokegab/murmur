@@ -9,6 +9,7 @@ import { createWorkflows, lastChain } from './workflows.js';
 import { attachMemory } from './memory.js';
 import { placeLine } from './narrate.js';
 import { offerLine } from './offer.js';
+import { EVERYTHING } from './demo-plan.js';
 import { installToken } from './token.js';
 
 if (globalThis.window) installToken(); // /api/* carries the device token from here on
@@ -194,7 +195,8 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
       }
       case 'again': await say(lastSaid); return;
       case 'more': await say(lastMore || "That's all there is."); return;
-      case 'offer': await say(offerLine(appsList(), os.current ? os.current() : lastApp)); return; // on the board, the board
+      case 'offer': if (w.all) { await say(EVERYTHING); return; } // "what can I do?" is everything, never a list
+        await say(offerLine(appsList(), os.current ? os.current() : lastApp)); return; // on the board, the board
       case 'confirm': await gates.yes(); return;
       case 'deny': gates.no(); return;
       case 'ignored': return; // an early yes, or the wrong confirm word: the sheet stays open
@@ -205,7 +207,8 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   async function hear(text, { path = 'typed' } = {}) {
     bus.emit('heard', { text: String(text), path });
     const { words, rest } = reserved(text, { gate: gates.current, now: clock.now() });
-    for (const w of words) await reservedWord(w);
+    const all = /^\s*what can (?:i|you) do\s*[?.!]*\s*$/i.test(String(text));
+    for (const w of words) await reservedWord(all && w.kind === 'offer' ? { ...w, all } : w);
     if (!rest) return { status: words.length ? 'reserved' : 'empty' };
     if (gates.current) { say(`${gates.current.gate === 'pay' ? 'Pay' : 'Yes'}, or no?`); return { status: 'gated' }; }
 

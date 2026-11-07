@@ -90,6 +90,8 @@ test('asking only reads: nothing runs, nothing is remembered, and the board is t
   const before = Object.fromEntries(p.apps.map((a) => [a.id, JSON.stringify(a.state())]));
 
   assert.equal((await agent.hear('What can I do?')).status, 'reserved');
+  assert.equal(spoken.at(-1), 'Everything. Just tell me what you need.', 'the lead 15:50: never a list');
+  await agent.hear('options');
   assert.equal(spoken.at(-1), offerLine(p.registry.list(), null));
   here = 'messages';
   await agent.hear('help');
