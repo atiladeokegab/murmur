@@ -98,7 +98,7 @@ const app = {
     },
     replace: {
       describe: 'Change one word in the reply to another',
-      say: '',   // no words plan it without the word itself
+      say: (st) => (st.draft ? 'change a word' : ''),
       doing: 'Changing the word',
       params: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] },
       gate: null,

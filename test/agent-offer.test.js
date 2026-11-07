@@ -39,8 +39,8 @@ test('every app offers at most four of its own actions, in its own order, in its
   }
   assert.equal(offerLine(APPS, 'hello'), 'Here you can: send it. Or say go home.');
   assert.equal(offerLine(APPS, 'calendar'), "Here you can: what's on today, what's next, add an event on Friday, or move lunch to Wednesday. Or say go home.");
-  assert.equal(offerLine(APPS, 'writer'), 'Here you can: read the last page, where am I, carry on, or new chapter. Or say go home.');
-  assert.equal(offerLine(APPS, 'mine'), 'In Mine, ask in your own words. Or say go home.', 'nothing plans offline yet, so nothing is offered');
+  assert.equal(offerLine(APPS, 'writer'), 'Here you can: open chapter two, read the last page, where am I, or carry on. Or say go home.');
+  assert.equal(offerLine(APPS, 'mine'), 'Here you can: read the steps of a tile or delete a tile. Or say go home.', 'nothing plans offline yet, so nothing is offered');
 });
 
 test("an action's say wins over describe, follows the app's state, and '' leaves it out for now", async () => {
@@ -50,7 +50,7 @@ test("an action's say wins over describe, follows the app's state, and '' leaves
   await m.actions.openChat.run({ id: 'mum' }, ctx);
   assert.equal(offerLine(p.registry.list(), 'messages'), "Here you can: read Mum's message or reply to Mum. Or say go home.");
   await m.actions.reply.run({ text: 'On my way' }, ctx);
-  assert.equal(offerLine(p.registry.list(), 'messages'), "Here you can: read Mum's message, reply to Mum, or send it. Or say go home.");
+  assert.equal(offerLine(p.registry.list(), 'messages'), "Here you can: read Mum's message, reply to Mum, change a word, or send it. Or say go home.");
   const odd = { id: 'odd', name: 'Odd', state: () => ({}), actions: {
     a: { describe: 'Do the first thing, slowly', say: () => { throw new Error('boom'); } },
     b: { describe: 'Do the second thing', say: 42 },
@@ -59,9 +59,9 @@ test("an action's say wins over describe, follows the app's state, and '' leaves
   assert.equal(offerLine([odd], 'odd'), 'Here you can: do the first thing, do the second thing, or do it my way. Or say go home.', 'a throw or a non-string falls back; null leaves it out');
 });
 
-test('a plug-in offers only what plans offline; an app with nothing yet says to ask in your own words', () => {
-  assert.equal(offerLine(APPS, 'taxi'), 'Here you can: book a taxi home. Or say go home.');
-  assert.equal(offerLine(APPS, 'grocer'), 'In Corner Grocer, ask in your own words. Or say go home.');
+test('a plug-in offers its own phrases; an app with nothing to offer says to ask in your own words', () => {
+  assert.equal(offerLine(APPS, 'taxi'), 'Here you can: get a taxi price, book a taxi home, track my taxi, or cancel my taxi. Or say go home.');
+  assert.equal(offerLine(APPS, 'grocer'), 'Here you can: read my basket, put an item in my basket, take an item out, or order my basket. Or say go home.');
   const bare = { id: 'bare', name: 'Bare', actions: { go: { describe: 'Go somewhere' } } };
   assert.equal(offerLine([bare], 'bare'), 'Here you can: go somewhere. Or say go home.', 'no say: describe, shortened');
   assert.equal(offerLine([{ id: 'none', name: 'None', actions: {} }], 'none'), 'In None, ask in your own words. Or say go home.');

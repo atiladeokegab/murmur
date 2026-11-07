@@ -21,27 +21,38 @@ function lands(phrase, app, apps) {
     if (k === 'where' && app.place) return `${app.id}__where`;
     return `reserved:${k}`;
   }
-  return demoPlan(phrase, describeRegistry(apps), { app: app.id, workflows: [] }).plan?.[0]?.tool || 'nothing';
+  const first = demoPlan(phrase, describeRegistry(apps), { app: app.id, workflows: [] }).plan?.[0];
+  // A phrase with a blank in it ("take an item out") opens this app and asks for the blank: that lands here too.
+  if (first?.tool === 'open_app') return first.params.app === app.id ? `${app.id}__open` : `open_app:${first.params.app}`;
+  return first?.tool || 'nothing';
 }
+
+// The one action with nothing to offer: offline, every "write ..." plans Writer's or Messages' tools first, and the planner
+// finds an app's own action only by its verb (write). Kept unsaid rather than offered wrong.
+const UNSAID = new Set(['hello.write']);
 
 test('every phrase offered in every app plans that app\'s own tool, offline', async () => {
   const p = await phone();
-  const apps = [...p.registry.list(), writer, mine, taxi, grocer]; // with a Shop on the phone too, so its words compete
+  // The phone's real apps: the fixture's stub Shop is not one (no public/apps/shop), and its "add" would take Grocer's words.
+  const apps = [...p.registry.list().filter((a) => a.id !== 'shop'), writer, mine, taxi, grocer];
   const m = p.registry.get('messages'), ctx = p.ctxFor(m, { bus: p.bus });
   const states = { messages: [m.state()] };
   await m.actions.openChat.run({ id: 'mum' }, ctx); states.messages.push(m.state());
   await m.actions.reply.run({ text: 'On my way' }, ctx); states.messages.push(m.state());
-  const wrong = [];
-  for (const app of apps.filter((a) => a.id !== 'shop')) { // the fixture's stub Shop is not a real app
+  const wrong = [], said = new Set();
+  for (const app of apps) {
     let st; try { st = app.state?.(); } catch { /* not mounted */ }
     for (const s of states[app.id] || [st]) {
       for (const x of Object.values(app.actions)) {
         const phrase = spokenAs(x, s);
         if (!phrase) continue;
+        said.add(`${app.id}.${Object.keys(app.actions).find((k) => app.actions[k] === x)}`);
         const got = lands(phrase, app, apps);
         if (!got.startsWith(`${app.id}__`)) wrong.push(`${app.id}: "${phrase}" -> ${got}`);
       }
     }
   }
   assert.deepEqual([...new Set(wrong)], []);
+  const quiet = apps.flatMap((a) => Object.keys(a.actions).map((k) => `${a.id}.${k}`)).filter((k) => !said.has(k));
+  assert.deepEqual(quiet, [...UNSAID], 'every action offers a phrase in at least one state');
 });

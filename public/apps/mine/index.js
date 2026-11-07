@@ -41,7 +41,7 @@ const app = {
   actions: {
     explain: {
       describe: 'Read the steps of a saved workflow in plain words',
-      say: '',   // offline, "what's in" plans the agent's own explain, not Mine's
+      say: 'read the steps of a tile',
       doing: "Reading what's in it",
       params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
       gate: null,
@@ -58,7 +58,7 @@ const app = {
     },
     delete: {
       describe: 'Delete a saved workflow and its tile',
-      say: '',
+      say: 'delete a tile',
       doing: 'Deleting it',
       params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
       gate: 'delete',

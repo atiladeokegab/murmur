@@ -45,7 +45,7 @@ const app = {
   actions: {
     openChapter: {
       describe: 'Open a chapter of the book by its number',
-      say: '',   // offline, no words plan it yet; what a person would say (offer.js)
+      say: 'open chapter two',
       doing: 'Opening the chapter',
       params: { type: 'object', properties: { n: { type: 'integer', minimum: 1 } }, required: ['n'] },
       gate: null,
@@ -91,7 +91,7 @@ const app = {
     },
     dictate: {
       describe: 'Add dictated sentences to the end of the open chapter',
-      say: '',
+      say: 'write in the book',
       doing: 'Writing it down',
       params: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       gate: null,
@@ -106,7 +106,7 @@ const app = {
     },
     change: {
       describe: 'Change one word in the open chapter to another, nearest where you are',
-      say: '',
+      say: 'change a word',
       doing: 'Changing the word',
       params: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] },
       gate: null,
