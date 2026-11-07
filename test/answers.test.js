@@ -105,6 +105,10 @@ test('3. the planner maps "give me longer answers" and "keep it short" to the An
   for (const [t, length] of [['give me longer answers', 'detailed'], ['detailed answers', 'detailed'], ['keep it short', 'short'], ['short answers', 'short']]) {
     assert.deepEqual(demoPlan(t, apps).plan, [{ tool: 'look__answers', params: { length } }], t);
   }
+  // the lines Look's longer answer tells people to say all plan
+  for (const [t, tool] of [['yellow on black', 'look__colours'], ['voice faster', 'look__voiceFaster'], ['keep it short', 'look__answers']]) {
+    assert.equal(demoPlan(t, apps).plan[0]?.tool, tool, t);
+  }
 });
 
 test('3. Your look has an Answers row a person can press: Short or Detailed, pressed state shown', async () => {
