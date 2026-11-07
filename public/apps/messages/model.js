@@ -110,10 +110,12 @@ export function read(s) {
     return `Messages, ${s.chats.length} chats.${lead ? ' ' + lead : ''}`;
   }
   const last = c.messages.at(-1);
-  let line = `${possessive(c.name)} chat, ${c.messages.length} messages, the last ${last.from === 'me' ? 'from you' : 'says'} "${last.text}"`;
-  if (sent(s)) line += '. Sent.';
-  else if (s.draft) line += `. Your reply: ${s.draft}`;
-  return line.endsWith('.') ? line : line + '.';
+  const said = last.text.trim().replace(/[.!]+$/, ''); // the quote keeps a ? but not a closing full stop, so no ".".
+  const stop = said.endsWith('?') ? ' ' : '. ';
+  let line = `${possessive(c.name)} chat, ${c.messages.length} messages, the last ${last.from === 'me' ? 'from you' : 'says'} "${said}"`;
+  if (sent(s)) line += `${stop}Sent.`;
+  else if (s.draft) line += `${stop}Your reply: ${s.draft}`;
+  return /[.?!]"?$/.test(line) ? line : line + '.';
 }
 
 export function place(s) {

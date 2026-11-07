@@ -1,0 +1,4 @@
+[
+  { "id": "taxi", "name": "Northline Taxis", "url": "taxi/index.js", "words": ["taxi", "cab", "northline"], "describe": "book a taxi, get a price, track it or cancel it" },
+  { "id": "grocer", "name": "Corner Grocer", "url": "grocer/index.js", "words": ["grocer", "grocery", "groceries", "shopping", "corner"], "describe": "read your usual basket, add or take out an item, or order it" }
+]
