@@ -77,3 +77,9 @@ src.onmessage = (m) => {
   else if (e.type === 'step:failed') line("Didn't work", e.reason || e.action || '');
   else if (e.type === 'task:done') { line('Done', heard); heard = ''; }
 };
+
+// Inside follows the bottom of Actions, which on a short screen hides the newest step's name: keep that name at the top.
+$('inside-frame').addEventListener('load', (ev) => {
+  const ol = ev.target.contentDocument?.getElementById('c-Actions');
+  if (ol) new MutationObserver(() => { const li = ol.lastElementChild; if (li) ol.scrollTo({ top: ol.scrollTop + li.getBoundingClientRect().top - ol.getBoundingClientRect().top, behavior: 'instant' }); }).observe(ol, { childList: true, subtree: true });
+});
