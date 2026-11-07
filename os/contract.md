@@ -2,7 +2,7 @@
 
 This is the contract between the shell, the agent and the apps. It is the source of truth on `main`. To
 change it, send a change request to Zeus; never edit it silently. Rev 3 (13:30): `step:next`, `task:done`
-`line` and `undo`, `confirm` `fingerprint` and `byHand`, the hand-tap rule for gates (§7) and the host (§9). Rev 4 (15:10): an action's optional `more`. Rev 5: the `reset` event. Rev 6: `mirror:frame`. Rev 7: `app:import`. Spec: Murmur OS §3.3 and §8.1.
+`line` and `undo`, `confirm` `fingerprint` and `byHand`, the hand-tap rule for gates (§7) and the host (§9). Rev 4 (15:10): an action's optional `more`. Rev 5: the `reset` event. Rev 6: `mirror:frame`. Rev 7: `app:import`. Rev 8: `app:open`. Spec: Murmur OS §3.3 and §8.1.
 
 The code is in `public/sdk/` (import everything from `public/sdk/index.js`). The worked example is
 `public/apps/hello/`, and `test/sdk.test.js` runs it end to end.
@@ -149,6 +149,7 @@ plain JSON.
 | `reset` | `{}`: the demo panel's Reset; the Inside relay clears that room's ring, and /inside starts over | os (demo panel) |
 | `mirror:frame` | `{ html, w, h, cx, cy, sy, theme, at }`: the phone's screen (os/mirror.js, ?room only, at most one per 150 ms, ≤ 200 KB). Posted to the relay directly, never through the bus log; the relay keeps only the latest per room and gives it to a laptop on connect | os (mirror) |
 | `app:import` | `{ name }`: an app this phone lacks, being brought over (Inside Plan column) | agent |
+| `app:open` | `{ name }`: a popular app the phone lacks, acted out (agent/phone-apps.js): a task:start, its step ticks and a task:done follow; nothing is sent, paid, called or deleted | agent |
 
 `task` is a string id the agent makes (`t-<timestamp>`). runAction leaves it out, and the agent adds it by
 wrapping the bus it passes in. The shell's work panel numbers steps from `n` and `of`. Its "Done in N s"
