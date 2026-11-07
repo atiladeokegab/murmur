@@ -4,16 +4,7 @@ const qs = new URLSearchParams(location.search);
 const room = qs.get('room') || 'stage'; // a phone with no room forwards nothing, so the stage always has one
 const pass = `?room=${encodeURIComponent(room)}`;
 $('phone-frame').src = `/${pass}`;
-const inside = $('inside-frame');
-inside.src = `/inside${pass}`;
-// Same origin, so Inside takes a bigger-type sheet without any change to Inside itself.
-inside.addEventListener('load', () => {
-  const d = inside.contentDocument;
-  if (!d) return;
-  const l = d.createElement('link');
-  l.rel = 'stylesheet'; l.href = '/stage/inside-stage.css';
-  d.head.append(l);
-});
+$('inside-frame').src = `/inside?big&room=${encodeURIComponent(room)}`; // Inside's own projector view
 
 // The phone at phone size, scaled to the height it has; observed, since the top line settles after the font loads.
 const main = document.querySelector('.stage main'), phone = $('phone');
