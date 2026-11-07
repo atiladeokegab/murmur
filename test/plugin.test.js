@@ -335,3 +335,23 @@ test('a spoken name matches whole words only, and only when it means one app', a
   assert.deepEqual(appsHeard(two, 'the corner cafe').map((x) => x.id), ['b']);
   assert.deepEqual(appsHeard(two, 'x'.repeat(90) + ' cafe'), [], 'bounded: only the first 80 characters are heard');
 });
+
+test("one voice: no live region of their own; a person's tap says the result through the shell, an agent's press says nothing", async () => {
+  const p = await phone();
+  const said = [];
+  const plug = { ...p.plug, os: (app, kv) => ({ kv, bus: p.bus, say: (t) => said.push(t), confirm: async () => true }) };
+  const g = p.add(await installApp(GROCER, plug)), t = p.add(await installApp(TAXI, plug));
+  for (const id of ['#grocer-line', '#taxi-line']) assert.equal((g.root.querySelector(id) || t.root.querySelector(id)).role, undefined, `${id}: the shell's status is the only live region`);
+  const person = { type: 'click', isTrusted: true };
+  const milk = [...g.root.all()].find((b) => b.textContent === 'Remove milk');
+  milk.click(); await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(said, [], 'an untrusted click (the agent) says nothing: the runner narrates');
+  [...g.root.all()].find((b) => b.textContent === 'Remove bread').dispatchEvent(person);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(said, ['Took bread out.']);
+  t.root.querySelector('#taxi-to').value = 'Home';
+  t.root.querySelector('#taxi-to').dispatchEvent(new Event('input'));
+  t.root.querySelector('#taxi-book').dispatchEvent(person);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.match(said.at(-1), /^Your taxi to Home is booked, arriving in \d+ minutes\.$/);
+});
