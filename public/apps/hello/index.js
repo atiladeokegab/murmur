@@ -22,7 +22,7 @@ const app = {
     root = r; kv = os.kv;
     box = el('textarea', { id: 'hello-box' });
     box.addEventListener('input', () => { draft = box.value; });
-    sendBtn = el('button', { type: 'button', id: 'hello-send', textContent: 'Send to Sam' });
+    sendBtn = el('button', { type: 'button', className: 'app-btn primary', id: 'hello-send', textContent: 'Send to Sam' });
     sendBtn.addEventListener('click', async () => {   // a person's tap is their own yes; the agent is gated by the runner
       if (!draft.trim()) return;
       sent.push(draft);

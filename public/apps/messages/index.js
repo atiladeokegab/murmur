@@ -59,12 +59,18 @@ const app = {
       },
     },
     read: {
-      describe: 'Read the new message in the open chat, sentence by sentence',
+      describe: 'Read the new message in the open chat, sentence by sentence. new: true opens the first chat with a new message ("Read my messages")',
       doing: 'Reading',
-      params: { type: 'object', properties: {} },
+      params: { type: 'object', properties: { new: { type: 'boolean', description: 'Go to the first chat with a new message first' } } },
       gate: null,
       hint: 'Read is the first button in the chat; each sentence is its own item after the chat',
       async run(p, ctx) {
+        if (p.new) {
+          const c = s.chats.find((x) => x.unread);
+          if (!c) throw new Error('No new messages.');
+          if (s.currentChat && s.currentChat !== c.id) await ctx.tap(q('#msg-back'));
+          if (s.currentChat !== c.id) await ctx.tap(q(`[data-chat="${c.id}"]`));
+        }
         await ctx.tap(q('#msg-read'));
         await speakItems((t) => ctx.say(t));
       },
@@ -175,7 +181,7 @@ function chatView(c) {
     text.length ? el('h4', { className: 'app-h3' }, `${who} message, sentence by sentence`) : null,
     text.length ? sentenceList(`${who} message`, text, { current: at, keep: true }) : null,
     el('h4', { className: 'app-h3' }, 'Your reply'),
-    el('label', { for: 'msg-draft', className: 'app-label', style: 'display: block; margin-block: 0.25rem 0.375rem' }, 'Your reply, edit it here'),
+    el('label', { for: 'msg-draft', className: 'sr' }, 'Your reply, edit it here'), // the heading above is the visible label
     box,
     button(M.sent(s) ? 'Sent' : 'Send', { id: 'msg-send', className: 'app-btn primary', onclick: () => { sending = sendAsked(); } }),
     button('Back to your chats', { id: 'msg-back', style: `${PAD}; border-color: var(--c-quiet)`, onclick: () => { s.currentChat = null; save(); render(); } }),

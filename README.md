@@ -76,6 +76,24 @@ decide.
 </p>
 <p align="center"><sub>The board · ask first, with the readback · sent, every step ticked</sub></p>
 
+## Why not computer use?
+
+Computer use clicks pixels it reads from screenshots, which suits a sighted supervisor who can watch it and
+catch its mistakes. In Murmur each app declares its actions: the OS gates send, pay, call and delete behind
+an ask (pay also needs a fingerprint), every step is checked against the app's own state, and words Murmur
+already knows are planned on the phone and never leave it. The closest prior
+work is Apple's App Intents and Android's App Actions; Murmur makes that kind of declared action the only way
+an app can be driven, by a person or the agent.
+
+Measured on 7 Nov 2026 in headless Chromium, three runs per line, on main and on the live app:
+
+| | |
+|---|---|
+| Screenshots sent off the phone | **0**, in every run |
+| Model calls to plan the demo lines | **0**. "Text Sam", "What's on today", "Make the text bigger" and "Stop" are planned on the phone |
+| When the model is needed | one call of about 9.6 KB of text: the list of apps and what they can do. No image |
+| Time to "On it." | **1 to 6 ms** after the words reach the phone |
+
 ## How it works
 
 ```mermaid
@@ -133,8 +151,8 @@ PLAYWRIGHT=<path to the playwright package> node docs/readme/capture.mjs   # nee
   people. Nothing is actually sent, paid or called.
 - **It is a web app, not a phone OS yet.** Murmur runs in the browser as a simulated phone. It is not an
   Android accessibility service, and it cannot drive other apps on a real phone.
-- **The numbers are still being measured.** Task time, steps per task and accuracy on our eval set:
-  measuring. We won't quote a figure until it has a source.
+- **Some numbers are still being measured.** Time to Done and accuracy on our eval set: measuring. The
+  numbers under "Why not computer use?" are measured; we won't quote any other figure until it has a source.
 - **Voice-owner detection is not built.** The fingerprint guards pay; recognising the owner's voice is next.
 - **Built in one day**, with two co-designers. That is two people, not a study.
 

@@ -56,6 +56,10 @@ test('Vertical 1: "Text Sam I\'m ten minutes late" asks Sam or Samira, writes, g
   assert.deepEqual(p.taps, ["Sam. New: Are you still coming to the quiz tonight? We start at seven.", 'Your reply, edit it here', 'Send']);
   const ev = p.bus.log.map((e) => e.name);
   assert.ok(ev.indexOf('confirm') < ev.lastIndexOf('step:verified'), 'asked before it sent');
+  r = await p.run('messages__read', { new: true });
+  assert.ok(r.ok, r.reason);
+  assert.equal(messages.state().currentChat, 'mum', '"Read my messages" goes back from Sam to the first new message, Mum');
+  assert.ok(p.said.some((t) => /Tuesday/.test(t)), 'and reads it');
 });
 
 test('no pick, no chat: the step fails in words', async () => {
@@ -147,13 +151,12 @@ test('the Writer: dictate, change, new chapter, open chapter', async () => {
   assert.equal(r.reason, "There's no chapter 9. The book has 3.");
 });
 
-test('Mine: explain, run, and delete only after the yes', async () => {
+test('Mine: explain, and delete only after the yes; running is the OS run_workflow', async () => {
   const p = await phone({ answers: [false, true] });
   let r = await p.run('mine__explain', { name: 'my morning' });
   assert.ok(r.ok, r.reason);
   assert.equal(p.said.at(-1), "My morning: say what's on today, then open Mum's chat, then read the new message.");
-  r = await p.run('mine__run', { name: 'My morning' });
-  assert.ok(r.ok, r.reason);
+  assert.equal(p.registry.get('mine').actions.run, undefined, 'no mine__run: a spoken run is the OS run_workflow, which really runs the steps');
   r = await p.run('mine__delete', { name: 'My morning' });
   assert.deepEqual([r.ok, r.reason], [false, 'Kept it.']);
   assert.equal(mine.state().workflows.length, 1);
