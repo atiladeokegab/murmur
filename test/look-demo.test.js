@@ -1,10 +1,11 @@
+globalThis.webkitSpeechRecognition ||= function Rec() {}; // the phone can hear: the welcome is the talking one
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBus, createRegistry, createCtx, appKv, mountApp, runAction, loadApps } from '../public/sdk/index.js';
 import { browserKV } from '../public/ports/browser-kv.js';
 import look from '../public/apps/look/index.js';
 import { createDemo, bindDemo, CONTROLS } from '../public/os/demo/index.js';
-import { firstOpen, rearm, FIRST_WORDS, OFFER_HINT } from '../public/os/onboard/index.js';
+import { firstOpen, rearm, FIRST_WORDS, FIRST_WIN, OFFER_HINT } from '../public/os/onboard/index.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
 
 const memKv = () => { const m = new Map(); return { get: async (k) => m.get(k), set: async (k, v) => (v === undefined ? m.delete(k) : m.set(k, v)) }; };
@@ -34,9 +35,9 @@ test('first open says one sentence, only once, and reset re-arms it', async () =
   const say = async (t) => said.push(t);
   assert.equal(await firstOpen({ kv, say }), true);
   assert.equal(await firstOpen({ kv, say }), false);
-  assert.deepEqual(said, [FIRST_WORDS, OFFER_HINT], 'then, once, how to hear what is possible');
-  assert.equal(FIRST_WORDS, 'Tap anywhere and speak.');
-  assert.equal(OFFER_HINT, "Say 'what can I do' any time.");
+  assert.deepEqual(said, [FIRST_WORDS], 'the what-can-I-do hint is not said at open');
+  assert.ok(FIRST_WIN.includes(OFFER_HINT.replace(/\.$/, '')), 'it is step 2, said once after the first success');
+  assert.equal(FIRST_WORDS, "Hi, I'm Murmur. I run this phone for you by voice. Tap anywhere and speak. Try saying: read Mum's message.");
   await rearm({ kv });
   assert.equal(await firstOpen({ kv, say }), true);
 });

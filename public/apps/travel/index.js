@@ -22,6 +22,10 @@ function pickOf(q, flights) {
   const ord = ['first', 'second', 'third'].findIndex((w) => n.includes(w));
   if (ord >= 0) return flights[ord];
   if (/^\d$/.test(n)) return flights[Number(n) - 1];
+  if (/cheap/.test(n)) return flights.reduce((a, f) => (f.price < a.price ? f : a));
+  if (/earliest|morning/.test(n)) return flights[0];
+  if (/latest|afternoon|\blast\b/.test(n)) return flights.at(-1);
+  if (/direct|non ?stop/.test(n)) return flights.find((f) => !f.stops);
   const digits = n.replace(/\D/g, '');
   return flights.find((f) => (digits.length >= 3 && f.time.replace(/\D/g, '').replace(/^0/, '') === digits.replace(/^0/, ''))
     || n.includes(f.spoken) || n.includes(norm(f.airline)) || n === norm(f.id));

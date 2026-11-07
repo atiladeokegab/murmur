@@ -117,9 +117,9 @@ export const server = http.createServer(async (req, res) => {
   try {
     if (url.pathname === '/health') return send(res, 200, { ok: true, provider: PROVIDER, live: (!!KEY || !!LIVE_URL) && !process.env.MURMUR_NO_LIVE, tts: !!KEY || !!ELEVEN });
     if (url.pathname.startsWith('/api/bus') && !relay.allowed(req, url)) return send(res, 403, { error: 'forbidden' });
-    if (url.pathname === '/api/bus/stream' && req.method === 'GET') return relay.stream(req, res);
+    if (url.pathname === '/api/bus/stream' && req.method === 'GET') return relay.stream(req, res, relay.roomOf(url) || 'stage');
     // The phone forwards every bus event: same-origin checked above, no model behind it, so it skips the rate limit and the daily cap.
-    if (url.pathname === '/api/bus' && req.method === 'POST') return send(res, 200, await relay.api['POST /api/bus'](await readJson(req)));
+    if (url.pathname === '/api/bus' && req.method === 'POST') return send(res, 200, await relay.api['POST /api/bus'](await readJson(req), relay.roomOf(url)));
     const handler = api[`${req.method} ${url.pathname}`];
     if (url.pathname.startsWith('/api/')) {
       const no = guard(req, { model: !!KEY || !!ELEVEN }); // every /api route may spend a key once one is set

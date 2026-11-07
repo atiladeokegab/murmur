@@ -1,7 +1,14 @@
 // Phone side: send every bus event to the relay so /inside sees it. Batches; never throws into the OS.
-// Usage from the shell: const off = forward(bus);
+// Usage: const room = roomFrom(location); if (room) forward(bus, { room }). A phone with no room forwards nothing.
 // The device token (MURMUR_TOKEN) rides on main's fetch wrapper (public/agent/token.js), so fetch is looked up per call.
-export function forward(bus, { url = '/api/bus', fetchFn = (...a) => globalThis.fetch(...a) } = {}) {
+// ?room=stage or #stage -> 'stage'; anything else -> null.
+export function roomFrom(loc) {
+  let r = '';
+  try { r = new URLSearchParams(loc.search).get('room') || String(loc.hash || '').replace(/^#/, ''); } catch {}
+  return /^[\w-]{1,32}$/.test(r) ? r.toLowerCase() : null;
+}
+
+export function forward(bus, { room = 'stage', url = `/api/bus?room=${encodeURIComponent(room)}`, fetchFn = (...a) => globalThis.fetch(...a) } = {}) {
   const headers = { 'content-type': 'application/json' };
   let queue = [], timer = null;
   const flush = () => {
