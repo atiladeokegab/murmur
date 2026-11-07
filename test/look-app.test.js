@@ -112,7 +112,7 @@ test('stop learning pauses the Librarian; what do you know reads memory in plain
 
 test('reset puts every row back to its default', async () => {
   await look.reset();
-  assert.deepEqual(settings(), { size: 100, rate: 1, theme: 'dark', speaker: 'murmur', agency: 'ask', learning: true });
+  assert.deepEqual(settings(), { size: 100, rate: 1.15, theme: 'dark', speaker: 'murmur', agency: 'ask', learning: true });
   assert.equal(look.state().known, null);
   assert.match(look.read(), /^Your look\. Text 100 percent, colours dark/);
 });

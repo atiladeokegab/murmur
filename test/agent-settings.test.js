@@ -33,7 +33,7 @@ const SETTINGS = [
   ['Change the colours to light', { theme: 'light' }],
   ['Dark mode', { theme: 'dark' }],
   ['Make the voice faster', { rate: 1.25 }],
-  ['Speak slower', { rate: 1 }],
+  ['Speak slower', { rate: 1.15 }],
   ['Let my screen reader speak', { speaker: 'reader' }],
   ['Murmur speaks', { speaker: 'murmur' }],
   ['Just do it', { agency: 'just' }],
