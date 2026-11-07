@@ -3,7 +3,7 @@
 // the task: its id, the pacing between steps, Stop, undo, the done line and task:done.
 import { runAction } from '../sdk/run.js';
 
-const CHANGES = (name) => !/^(read|open|show|list|next|whats|find|track|where|search|today)/i.test(name);
+const CHANGES = (name) => !/^(read|open|show|list|next|whats|find|track|where|search|today|balance|recent)/i.test(name);
 const DOUBLE = new Set(['stop', 'get', 'run', 'set', 'put', 'shop', 'plan', 'drop', 'swap']);
 
 /** "Open a chat" -> "Opening a chat"; for apps that left out `doing`. */
@@ -43,11 +43,11 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
   const history = [];   // finished tasks: [{ utterance, at, steps }], newest last; workflows read this
 
   const hooks = (task) => ({ bus: task.bus, ask: gates.ask, choose, signal: task.controller.signal,
-    speak: (text, signal) => speak(text, signal) });
+    speak: Object.assign((text, signal, o) => speak(text, signal, o), { records: true }) });
   const say = async (task, text, o) => {
     if (!text) return;
-    task.bus.emit('say', { text });
-    try { await speak(text, task.controller.signal, o); } catch { /* stopped mid-sentence */ }
+    // speak puts a line on the record when it starts, so a held or dropped line is never on it
+    try { await speak(text, task.controller.signal, { ...o, said: () => task.bus.emit('say', { text }) }); } catch { /* stopped mid-sentence */ }
   };
 
   async function beat(task, ms) {
@@ -79,12 +79,13 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
     const t0 = clock.now();
     const doneSteps = [];
     const of = steps.length;
-    let status = 'done', lastApp = null, gatedRan = null, line = '', reason = '';
+    let status = 'done', lastApp = null, gatedRan = null, line = '', reason = '', madeUndo = null, more = '';
     failed = null;
     task.bus.emit('task:start', { utterance, plan: steps.map(({ tool, params }) => ({ name: tool, params })), ...plan });
 
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i], n = i + 1;
+      let stepEnded = false;
       if (task.stopped) { status = task.takenOver ? 'taken-over' : 'stopped'; break; }
       const s0 = clock.now();
       if (!step.app) { // Murmur's own tool
@@ -95,7 +96,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
           failed = { utterance, steps: steps.slice(i) }; line = "That didn't work. Try again, or stop."; break;
         }
         task.bus.emit('step:verified', { action: step.tool, n, of, ms: clock.now() - s0 });
-        doneSteps.push(step);
+        doneSteps.push(step); more = '';
         continue;
       }
       const a = registry.get(step.app);
@@ -107,7 +108,11 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
         // Just do it: the step earcon and the panel carry each step, and the voice keeps to questions and the result
         // (the lead's 6 s bar). Ask and Teach still say every step.
         // The line starts with the tap, never before it: speech is queued, so the step does not wait for it.
-        if (mode === 'ask' || mode === 'teach') say(task, x.doing || gerund(x.describe), { narration: mode === 'ask' }); // Teach waits for the person anyway
+        // Ask mode: a step's line is dropped once the step is done (a late "Text bigger" after "Text 150 percent."),
+        // and before a gate's readback, which says the text anyway ("Writing your reply" then "... Send it?").
+        const next = steps[i + 1], readbackNext = !!(next?.app && registry.get(next.app)?.actions?.[next.action]?.gate);
+        if (mode === 'teach') say(task, x.doing || gerund(x.describe)); // Teach waits for the person anyway
+        else if (mode === 'ask' && !readbackNext) say(task, x.doing || gerund(x.describe), { narration: true, stale: () => stepEnded });
         // a spoken task is the yes for its first step; later changing steps get a beat to say stop, unless a gate
         // later in the plan asks anyway (the send's "Send it?" is the moment to say no, so typing starts at once)
         const gateAhead = steps.slice(i + 1).some((s) => s.app && registry.get(s.app)?.actions?.[s.action]?.gate);
@@ -118,12 +123,13 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
       // A gated action may resolve who it is for first ("Sam or Samira?"), so the one confirm reads the exact name.
       let params = step.params;
       if (x.gate && typeof x.resolve === 'function') {
-        params = await x.resolve(params, ctxFor(a, hooks(task)));
+        try { params = await x.resolve(params, ctxFor(a, hooks(task))); } catch { params = null; } // Stop rejects with AbortError
         if (!params || task.stopped) { status = task.stopped ? 'stopped' : 'cancelled'; line = reason = task.stopped ? '' : `Not ${PAST[x.gate] || 'done'}.`; break; }
       }
       const r = mode === 'teach' && !x.gate
         ? await teachStep(task, a, x, step, { action: step.tool, app: a.id, n, of })
         : await runAction({ registry, name: step.tool, params, bus: task.bus, ctxFor: (app) => ctxFor(app, hooks(task)), n, of });
+      stepEnded = true;
       if (!r.ok) {
         if (r.stopped || task.stopped) status = task.takenOver ? 'taken-over' : 'stopped';
         else if (r.cancelled) { status = 'cancelled'; line = reason = r.reason; }
@@ -135,8 +141,9 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
         break;
       }
       doneSteps.push(step);
+      more = r.more || ''; // the last step's longer answer, for "tell me more"
       if (x.gate) { gatedRan = x.gate; lastUndo = null; } // a gated step is final: nothing before it may be undone
-      else if (typeof x.undo === 'function') lastUndo = { app: a, action: x, name: step.tool, label: `Undo ${(x.doing || gerund(x.describe)).toLowerCase()}`, params: r.params || step.params, until: 0 };
+      else if (typeof x.undo === 'function') madeUndo = lastUndo = { app: a, action: x, name: step.tool, label: `Undo ${(x.doing || gerund(x.describe)).toLowerCase()}`, params: r.params || step.params, until: 0 };
     }
 
     if (status === 'stopped' || status === 'taken-over') { reason = 'Stopped.'; line = gatedRan ? `Already ${PAST[gatedRan]}.` : status === 'stopped' ? 'Stopped.' : ''; }
@@ -148,15 +155,15 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
         : gatedRan ? `${PAST[gatedRan][0].toUpperCase()}${PAST[gatedRan].slice(1)}.` : CHANGES(last.action) ? 'Done.' : '';
     }
     const ms = clock.now() - t0;
-    if (status === 'done' && lastUndo) lastUndo.until = clock.now() + UNDO_MS;
-    else lastUndo = null;
+    // A read-only, refused or No'd task keeps the last change undoable, still 8 s from that change.
+    if (madeUndo && lastUndo === madeUndo) { if (status === 'done') lastUndo.until = clock.now() + UNDO_MS; else lastUndo = null; }
     if (doneSteps.length && status === 'done') history.push({ utterance, at: clock.now(), steps: doneSteps.map(({ tool, app, action, params, gate }) => ({ tool, app, action, params, gate })) });
     if (current === task) current = null;
     task.bus.emit('task:done', { ms, ok: status === 'done', ...(status === 'done' ? {} : { reason }), line,
-      ...(lastUndo ? { undo: { label: lastUndo.label, until: lastUndo.until } } : {}) });
+      ...(madeUndo && lastUndo === madeUndo ? { undo: { label: lastUndo.label, until: lastUndo.until } } : {}) });
     // the done line is said after the task ends: Stop has nothing left to stop
-    if (line) { task.bus.emit('say', { text: line }); try { await speak(line); } catch { /* hushed */ } }
-    return { status, ms, line, task: id, actions: doneSteps.map((s) => s.tool) };
+    if (line) { try { await speak(line, undefined, { said: () => task.bus.emit('say', { text: line }) }); } catch { /* hushed */ } }
+    return { status, ms, line, task: id, actions: doneSteps.map((s) => s.tool), more: status === 'done' ? more : '' };
   }
 
   function halt(task) { task.stopped = true; task.controller.abort(); task.nudge?.(); }
@@ -171,7 +178,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
     nudge() { current?.nudge?.(); },
     async undo() {
       const u = lastUndo;
-      const said = (text) => { bus.emit('say', { text }); return speak(text); };
+      const said = (text) => speak(text, undefined, { said: () => bus.emit('say', { text }) });
       if (!u || clock.now() > u.until) { await said('Nothing to undo.'); return false; }
       lastUndo = null;
       const task = { bus, controller: new AbortController() };
@@ -198,7 +205,9 @@ export function createGates({ say = async () => {}, clock = { now: () => Date.no
     get current() { return open && { gate: open.gate, openedAt: open.openedAt, readback: open.readback }; },
     ask({ gate, readback }) {
       if (open) open.resolve(false);
-      const question = { send: 'Send it?', pay: 'Pay?', call: 'Call?', delete: 'Delete it?' }[gate] || 'Do it?';
+      // a travel hold is a pay gate whose readback says "held for 24 hours": the shell's sheet says Hold, so does the voice
+      const question = gate === 'pay' && /\b(hold|held)\b/i.test(readback || '') ? 'Hold?'
+        : { send: 'Send it?', pay: 'Pay?', call: 'Call?', delete: 'Delete it?' }[gate] || 'Do it?';
       return new Promise((resolve) => {
         open = { gate, readback, openedAt: clock.now(), checking: false,
           resolve: (r) => { open = null; onChange(null); resolve(r); } };

@@ -7,7 +7,9 @@ const NOT = { send: 'Not sent.', pay: 'Not paid.', call: 'Not called.', delete: 
 const now = () => (globalThis.performance ? performance.now() : Date.now());
 
 /**
- * @returns {Promise<{ok: boolean, reason?: string, cancelled?: boolean, stopped?: boolean, params?: object}>}
+ * @returns {Promise<{ok: boolean, reason?: string, cancelled?: boolean, stopped?: boolean, params?: object, more?: string}>}
+ * `more`: an action's optional more(state, params), the longer answer said on "tell me more" (or straight away
+ * when Answers is Detailed). Any app or plug-in gets it by adding the function.
  */
 export async function runAction({ registry, name, params, bus, ctxFor, n = 1, of = 1 }) {
   const r = registry.resolve(name);
@@ -32,8 +34,9 @@ export async function runAction({ registry, name, params, bus, ctxFor, n = 1, of
     if (gate) {
       const readback = r.action.readback ? r.action.readback(r.app.state(), v.params) : r.app.read();
       if (!(await ctx.confirm(gate, readback))) {
-        bus.emit('step:failed', { ...base, reason: NOT[gate], cancelled: true });
-        return { ok: false, reason: NOT[gate], cancelled: true };
+        const no = gate === 'pay' && /\b(hold|held)\b/i.test(readback || '') ? 'Not held.' : NOT[gate]; // same test as the "Hold?" question
+        bus.emit('step:failed', { ...base, reason: no, cancelled: true });
+        return { ok: false, reason: no, cancelled: true };
       }
     }
     await r.action.run(v.params, ctx);
@@ -42,7 +45,8 @@ export async function runAction({ registry, name, params, bus, ctxFor, n = 1, of
     if (res === true) {
       bus.emit('step:verified', { ...base, ms: Math.round(now() - t0) });
       bus.emit('place', { app: r.app.id, ...r.app.place() });
-      return { ok: true, params: v.params };
+      const more = typeof r.action.more === 'function' ? String(r.action.more(r.app.state(), v.params) || '') : '';
+      return { ok: true, params: v.params, ...(more ? { more } : {}) };
     }
     reason = typeof res === 'string' ? res : `${r.app.name}: that didn't work.`;
   } catch (e) {

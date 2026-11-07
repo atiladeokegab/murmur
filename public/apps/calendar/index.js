@@ -86,6 +86,26 @@ function dayLine(list, day) {
   const n = nextOf(list);
   return `Nothing ${name}.${day === TODAY && n ? ` Next is ${n.title} on ${n.day} at ${spoken(n.time)}.` : ''}`;
 }
+// The longer answer ("tell me more"): the day's first event still to come (else the next one), when to leave, the
+// rest of that day, and how to move it.
+const LEAVE = 15; // shortcut: events have no place, so leave a fixed 15 minutes before; Transit could give the real trip
+const clockOf = (m) => spoken(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+function inTime(m) {
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), r = m % 60, n = (k, w) => k && `${k} ${w}${k > 1 ? 's' : ''}`;
+  return m <= 0 ? 'now' : `in ${[n(d, 'day'), n(h, 'hour'), n(r, 'minute')].filter(Boolean).join(' ')}`;
+}
+export function moreLine(list, day) {
+  const later = (e) => DAYS.indexOf(e.day) > DAYS.indexOf(TODAY) || (e.day === TODAY && mins(e.time) >= mins(NOW));
+  const on = list.filter((e) => e.day === day).sort(order);
+  const f = on.find(later) ?? nextOf(list);
+  if (!f) return `Nothing ${day === TODAY ? 'today' : `on ${day}`}, and nothing else this week. Say "add" and what, to add an event.`;
+  const leave = mins(f.time) - LEAVE;
+  const rest = on.filter((e) => e !== f);
+  return [`${f.day === day ? '' : `Nothing on ${day}. Next is `}${f.title}, ${f.day} at ${spoken(f.time)} for ${f.mins} minutes${f.with && !f.title.includes(f.with) ? `, with ${f.with}` : ''}.`,
+    /^call\b/i.test(f.title) ? '' : `Leave by ${clockOf(leave)}, ${inTime((DAYS.indexOf(f.day) - DAYS.indexOf(TODAY)) * 1440 + leave - mins(NOW))}.`,
+    rest.length ? `Also on ${f.day}: ${rest.map(at).join(', then ')}.` : `Nothing else on ${f.day}.`,
+    `To change it, say "move ${f.title} to" another day.`].filter(Boolean).join(' ');
+}
 const clashLine = (c, e) => `${c.day} has ${c.with.map(at).join(' and ')}. Move ${e.title} anyway?`;
 
 // ---------- the screen ----------
@@ -343,6 +363,7 @@ const app = {
         const d = dayOf(p.day, s.today);
         return (s.shown === d && s.open === null && !s.adding) || `Calendar shows ${s.shown}, not ${d}.`;
       },
+      more: (s, p) => moreLine(s.events, dayOf(p.day, s.today)),
     },
     next: {
       describe: "Say what's next in the calendar",
@@ -356,6 +377,7 @@ const app = {
         await ctx.say(e ? `Next is ${e.title}, ${e.day} at ${spoken(e.time)}.` : 'Nothing else this week.');
       },
       verify: (s) => s.open === s.next || "Calendar didn't open what's next.",
+      more: (s) => { const e = s.events.find((x) => x.id === s.next); return e ? moreLine(s.events, e.day) : moreLine(s.events, s.today); },
     },
     add: {
       describe: 'Add an event to the calendar',

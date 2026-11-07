@@ -3,20 +3,29 @@
 // reserved phrase ("Stop. Where am I?"). Inside content ("tell Mum to stop worrying") it is content.
 
 const PHRASES = {
-  stop: ['stop', 'stop it', 'stop that', 'stop reading', 'stop now', 'cancel', 'hang on', 'wait'],
+  stop: ['stop', 'stop it', 'stop that', 'stop reading', 'stop now', 'cancel', 'hang on', 'wait', 'shut up', 'be quiet', 'quiet'],
   where: ['where am i', 'where was i', 'where are we'],
-  undo: ['undo', 'undo that', 'undo it', 'take that back'],
+  undo: ['undo', 'undo that', 'undo it', 'take that back', 'go back'],
   carry_on: ['carry on', 'continue', 'keep going', 'go on', 'resume'],
   again: ['again', 'say again', 'say that again', 'repeat', 'repeat that', 'sorry again', 'pardon'],
+  more: ['more', 'tell me more', 'say more', 'explain', 'explain that', 'longer', 'more detail', 'in more detail'],
   take_over: ["i'll do it", 'i will do it', 'let me do it', "i'll take over", 'let me'],
   offer: ['what can i do', 'what can i do here', 'what can i say', 'help', 'options', 'what are my options'],
 };
 // Confirm words open nothing by themselves: they only count while a gate is open (see hear()). Never ok or mm.
-const CONFIRM = { yes: ['yes', 'yes please', 'yes send it', 'yes do it', 'yes pay', 'yes call'],
-  send: ['send', 'send it', 'send that'], pay: ['pay', 'pay it', 'pay now'], call: ['call', 'call them', 'call now'] };
-const DENY = ['no', 'no thanks', "don't", "don't send it", 'not now', 'leave it'];
+const CONFIRM = { yes: ['yes', 'yes please', 'yes send it', 'yes do it', 'yes pay', 'yes call', 'yeah', 'yep', 'yup'],
+  send: ['send', 'send it', 'send that'], pay: ['pay', 'pay it', 'pay now'], call: ['call', 'call them', 'call now'],
+  hold: ['hold', 'hold it', 'hold that', 'hold the flight', 'yes hold'] };
+const DENY = ['no', 'no thanks', "don't", "don't send it", 'not now', 'leave it', 'nope', 'nah'];
 const FILLER = new Set(['um', 'uh', 'er', 'erm', 'please', 'murmur', 'hey', 'now', 'okay', 'ok', 'so']);
 export const GATE_GRACE_MS = 500;
+
+// Dictation's padding, off the planner's words: leading fillers, the wake word and "can you", a trailing "please",
+// and a first word or phrase said twice ("text text Sam", "what's on what's on today"). Only at the ends, so a
+// message keeps its own words.
+const LEAD = /^(?:(?:um+|uh+|erm?|hey|okay|ok|so|murmur(?!\s+(?:speaks?|talks?)\b)|please|now|(?:can|could|would|will) you(?: please)?)\b[\s,.]*)+/i;
+export const tidy = (s) => String(s || '').trim().replace(LEAD, '').replace(/[\s,]+please(?=[.!?]*$)/i, '')
+  .replace(/^(\S+(?:\s+\S+){0,2}?)\s+\1(?=\s|$)/i, '$1');
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z0-9' .,!?;:]/g, ' ');
 const tokens = (s) => s.split(/\s+/).filter(Boolean);
@@ -57,17 +66,18 @@ export function hear(text, { gate = null, now = Date.now() } = {}) {
     if (j < ws.length && ws[j] !== '.' && !matchAt(ws, j, table)) break;
     if (row.kind === 'confirm') {
       const early = now - gate.openedAt < GATE_GRACE_MS;
-      const fits = row.word === 'yes' || row.word === gate.gate; // "pay" cannot confirm a send
+      // "pay" cannot confirm a send; "hold" answers only a pay gate that holds ("... held for 24 hours. Hold?")
+      const fits = row.word === 'yes' || row.word === gate.gate || (row.word === 'hold' && gate.gate === 'pay' && /\b(hold|held)\b/i.test(gate.readback || ''));
       found.push(early ? { kind: 'ignored', reason: 'early' } : fits ? { kind: 'confirm', word: row.word } : { kind: 'ignored', reason: 'wrong-word' });
     } else found.push({ kind: row.kind });
     i = j;
   }
-  if (!found.length) return { words: [], rest: String(text || '').trim() };
+  if (!found.length) return { words: [], rest: tidy(text) };
   // Rest keeps the person's own words: drop as many leading words as were consumed.
   const consumed = ws.slice(0, i).filter((w) => w !== '.').length;
   const original = tokens(String(text || '').replace(/[.,!?;:]+/g, ' '));
   let k = 0;
   for (let n = 0; k < original.length && n < consumed; k++) if (!FILLER.has(norm(original[k]).trim())) n++;
   while (k < original.length && FILLER.has(norm(original[k]).trim())) k++;
-  return { words: found, rest: original.slice(k).join(' ') };
+  return { words: found, rest: tidy(original.slice(k).join(' ')) };
 }

@@ -69,8 +69,9 @@ export function createCtx({ app, root, bus, kv, cursor, ask, choose = async () =
     /** Says one sentence and settles when it has been said; rejects with AbortError on Stop. */
     async say(text) {
       live();
-      bus.emit('say', { app: app.id, text: String(text) });
-      await speak(String(text), signal);
+      const said = () => bus.emit('say', { app: app.id, text: String(text) });
+      if (speak.records) await speak(String(text), signal, { said }); // the agent's voice records a line as it starts
+      else { said(); await speak(String(text), signal); }
       live();
     },
     /**

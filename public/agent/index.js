@@ -25,35 +25,43 @@ if (globalThis.window) installToken(); // /api/* carries the device token from h
  * @param {{ open?(id), current?(): string|null }} [o.os]  the shell: open an app, which one is open
  * @param {()=>Promise<boolean>} [o.fingerprint]  passkey.confirm
  * @param {(step)=>'ask'|'just'|'teach'} [o.agency]
+ * @param {()=>'short'|'detailed'} [o.answers]  Your look's Answers row: Detailed says a result's longer answer straight away
  * @param {(gate)=>boolean} [o.risky]  send/call need the fingerprint too (screen just locked, earphone out)
  */
 export const ACK = 'On it.';
 export const NARRATION_HOLD_MS = 150; // a question this soon after a step starts replaces the step's line
 
 export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, fingerprint = async () => false,
-  agency = () => 'ask', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
+  agency = () => 'ask', answers = () => 'short', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
   speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {} }) {
   const appsList = () => (Array.isArray(registry) ? registry : typeof registry?.list === 'function' ? registry.list() : Object.values(registry || {}));
   const app = (id) => (typeof registry?.get === 'function' ? registry.get(id) : appsList().find((a) => a.id === id));
-  let lastSaid = '';
+  let lastSaid = '', lastMore = ''; // lastMore: the last result's longer answer ("tell me more")
   // One voice, one line at a time: each line waits for the one before, so steps can act while a line is spoken.
   // Stop empties the queue (gen moves on), so nothing queued is said after it.
   // A step's narration ("Opening the chat") is dropped if a question is asked before it starts: it waits a short
   // hold when nothing else is being said, so "Sam or Samira?" 60 ms later is said whole, not after a clipped line.
   let chain = Promise.resolve(), gen = 0, pending = 0, asked = 0;
   const holds = new Set();
-  const hold = () => new Promise((r) => { const t = setTimeout(done, NARRATION_HOLD_MS); function done() { clearTimeout(t); holds.delete(done); r(); } holds.add(done); });
+  let ackGo = null; // lets a held "On it." go at once, when no question can come first
+  const hold = (ack) => new Promise((r) => { const t = setTimeout(done, NARRATION_HOLD_MS); function done() { clearTimeout(t); holds.delete(done); if (ackGo === done) ackGo = null; r(); } holds.add(done); if (ack) ackGo = done; });
+  const releaseAck = () => ackGo?.();
   const speak = (text, signal, o) => {
     const g = gen, a = asked;
-    const out = () => g !== gen || signal?.aborted || (o?.narration && a !== asked);
-    const go = () => (out() ? false : o?.narration ? hold().then(() => (out() ? false : rawSpeak(text, signal))) : rawSpeak(text, signal));
+    const out = () => g !== gen || signal?.aborted || (o?.narration && (a !== asked || o.stale?.()));
+    const start = () => { o?.said?.(); return rawSpeak(text, signal); }; // on the record when it is said, in the order heard
+    const go = () => (out() ? false : o?.narration ? hold(o.ack).then(() => (out() ? false : start())) : start());
     const p = pending ? chain.then(go) : Promise.resolve(go()); // nothing being said: start now, not a tick later
     pending++;
     chain = p.catch(() => {}).finally(() => { pending--; });
     return p;
   };
   const hush = () => { gen++; };
-  const say = (text) => { if (!text) return Promise.resolve(); lastSaid = text; bus.emit('say', { text }); return Promise.resolve(speak(text)).catch(() => {}); };
+  const say = (text, o) => {
+    if (!text) return Promise.resolve();
+    const said = () => { lastSaid = text; bus.emit('say', { text }); };
+    return Promise.resolve(speak(text, undefined, { ...o, said })).catch(() => {});
+  };
   const sayQuestion = (q) => { asked++; for (const done of [...holds]) done(); return say(q); };
   const describeStep = (s) => {
     const x = s.app && app(s.app)?.actions?.[s.action];
@@ -64,7 +72,8 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   let lastApp = null, savedAt = 0, offer = null, question = null, proposal = null, taskMode = null, choice = null;
   const current = () => os.current?.() || lastApp;
 
-  bus.on('step:start', (e) => { if (e.app) lastApp = e.app; });
+  // A first step's question ("Sam or Samira?") comes within the same turn as its start; after that, "On it." goes.
+  bus.on('step:start', (e) => { if (e.app) lastApp = e.app; if (ackGo) { if (e.app) setTimeout(releaseAck, 0); else releaseAck(); } }); // Murmur's own tools never ask
   bus.on('memory', (e) => { if (e.proposal) { proposal = e.proposal; say(`${e.proposal.text} Yes, not now, or never?`); } });
 
   const gates = createGates({ say: (t) => (t === 'Check your fingerprint.' ? say(t) : sayQuestion(t)), clock, fingerprint, risky, onChange: onGate });
@@ -141,7 +150,12 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
 
   async function runPlan(utterance, steps, mode = null, plan = {}) {
     taskMode = mode;
-    try { return await runner.run({ utterance, steps, plan }); } finally { taskMode = null; }
+    try {
+      const r = await runner.run({ utterance, steps, plan });
+      lastMore = r.more || '';
+      if (lastMore && answers() === 'detailed') await say(lastMore);
+      return r;
+    } finally { taskMode = null; }
   }
 
   async function runWorkflow(name, utterance) {
@@ -170,6 +184,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
         return;
       }
       case 'again': await say(lastSaid); return;
+      case 'more': await say(lastMore || "That's all there is."); return;
       case 'offer': await say(offerLine(appsList(), os.current ? os.current() : lastApp)); return; // on the board, the board
       case 'confirm': await gates.yes(); return;
       case 'deny': gates.no(); return;
@@ -212,16 +227,18 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     offer = null;
 
     // The first sound within 300 ms of the last word: the shell's heard earcon, then "On it." while the plan runs.
-    say(ACK);
+    // Held like a step's line, so a question that comes first ("Sam or Samira?") is the ack instead.
+    say(ACK, { narration: true, ack: true });
     const p = await planFor(rest);
-    if (!p.steps.length) { say(p.say || p.dropped.find((d) => d.say)?.say || "I can't do that one yet."); return { status: p.kind === 'refuse' ? 'refused' : 'unknown', say: p.say }; }
+    if (!p.steps.length || p.kind === 'teach') releaseAck();
+    if (!p.steps.length) { await say(p.say || p.dropped.find((d) => d.say)?.say || "I can't do that one yet."); return { status: p.kind === 'refuse' ? 'refused' : 'unknown', say: p.say }; }
     const unsaid = p.dropped.find((d) => d.say);
     if (unsaid) say(unsaid.say);
 
     if (p.kind === 'teach') {
       const lines = p.steps.map((s) => { const x = s.app && app(s.app)?.actions?.[s.action]; return x?.hint || (x ? x.describe : s.tool); });
       const apps = [...new Set(p.steps.filter((s) => s.app).map((s) => app(s.app)?.name))];
-      say(`${['Open ' + apps.join(' and '), ...lines].join(', then ')}. Shall I do it, or walk you through?`);
+      await say(`${['Open ' + apps.join(' and '), ...lines].join(', then ')}. Shall I do it, or walk you through?`);
       const reg = describeRegistry(appsList());
       offer = { utterance: rest, steps: p.steps.map((s) => ({ ...s, complete: isComplete(s, reg) })) };
       return { status: 'taught', hints: lines };
