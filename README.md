@@ -94,6 +94,8 @@ Every action an app registers becomes a tool named `app__action` (for example `s
 }
 ```
 
+To watch it, open the phone at `/?room=mcp-demo` and run `node scripts/mcp-demo.mjs`: an MCP client opens Mum's chat, writes "I'll be home by six" and sends it, and the send waits on the phone's "Send it?" until you tap yes.
+
 That goes in Claude Desktop's `claude_desktop_config.json` or Cursor's `.cursor/mcp.json`. With Claude Code: `claude mcp add murmur -- node mcp/server.js`. Clients that speak streamable HTTP can use `POST /mcp` on the server directly. It answers this machine only, or anyone sending `MURMUR_TOKEN` as `x-murmur-token` or a Bearer token when that is set.
 
 ## Why not computer use?
