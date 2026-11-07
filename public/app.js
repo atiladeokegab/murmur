@@ -6,6 +6,7 @@ import { daypart, dailyMenu, usualTime, reason, proposals, seedWeek, dayKey } fr
 import { buildLink } from './lib/links.js';
 import { sentences, whereAmI, replaceWord } from './lib/notes.js';
 import { createLive, playPcm, stopAudio, audioOut } from './live.js';
+import * as passkey from './passkey.js';
 
 const $ = (s) => document.querySelector(s);
 function el(tag, props = {}, ...kids) {
@@ -252,9 +253,22 @@ function openPay() {
     yes: `Yes, pay ${price}`, onYes: () => pay(item) });
   speak(`Your usual beans from Hill Street Roasters, ${price}, arriving ${item.arrives}. Shall I pay?`);
 }
-async function pay(item) {
-  // Step 4 puts the passkey check here.
+async function pay(item, again = false) {
+  if (!(await passkey.available())) {
+    closeSheet();
+    return speak("This phone can't check your face here, so I haven't paid.");
+  }
+  let ok = false;
+  try { ok = await passkey.confirm(); }
+  catch (e) {
+    if (e.name === 'NotAllowedError' && !again) {
+      // A spoken "yes" may arrive without a tap, and Face ID needs one: offer the one big button.
+      openSheet({ title: "Check it's you", lines: ['Use Face ID or your fingerprint to pay.'], yes: 'Check with Face ID', onYes: () => pay(item, true) });
+      return speak("Tap the big button and I'll check it's you.");
+    }
+  }
   closeSheet();
+  if (!ok) return speak("That didn't check out, so I haven't paid.");
   speak(`Paid. Your beans arrive ${item.arrives}.`);
 }
 
