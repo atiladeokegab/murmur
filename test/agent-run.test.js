@@ -150,9 +150,16 @@ test('undo works for 8 seconds after a change, then is gone', async () => {
   const write = [{ tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Lunch on Tuesday.' } }];
   await s.agent.runner.run({ utterance: 'write', steps: write });
   assert.equal(s.state('hello').draft, 'Lunch on Tuesday.');
+  const done = s.ev('task:done')[0];
+  assert.equal(done.line, s.registry.get('hello').read(), 'the done line is on task:done for the panel');
+  assert.equal(done.undo.until, s.clock.t + 8000);
+  assert.match(done.undo.label, /^Undo /);
+  await s.agent.undo();
+  assert.equal(s.state('hello').draft, '');
+  await s.agent.runner.run({ utterance: 'write', steps: write });
   await s.agent.hear('undo');
   assert.equal(s.state('hello').draft, '');
-  assert.deepEqual(s.ev('undo').map((e) => [e.action, e.ok]), [['hello__write', true]]);
+  assert.deepEqual(s.ev('undo').map((e) => [e.action, e.ok]), [['hello__write', true], ['hello__write', true]]);
   await s.agent.runner.run({ utterance: 'write', steps: write });
   s.clock.t += 8001;
   await s.agent.hear('undo');
@@ -177,6 +184,15 @@ test('the race, then "save that as Reply to Mum", then run it', async () => {
   assert.equal(out.status, 'done');
   assert.deepEqual(s.state('messages').lastSent, { to: 'mum', text: "Wednesday's fine." });
   assertGatesHonoured(s.log);
+  // Mine's Run and Delete buttons
+  await s.registry.get('messages').reset();
+  const again = s.agent.runWorkflow('Reply to Mum');
+  await until(() => s.agent.gates.current);
+  s.agent.no();
+  assert.equal((await again).status, 'cancelled');
+  assert.equal(await s.agent.workflows.remove('reply to mum'), true);
+  assert.equal((await s.agent.workflows.all()).length, 0);
+  assert.equal(await s.agent.workflows.remove('reply to mum'), false);
 });
 
 test('a workflow with a slot asks who at run time', async () => {
