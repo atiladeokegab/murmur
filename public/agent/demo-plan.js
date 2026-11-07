@@ -184,6 +184,13 @@ function plan(said, apps, context, dry) {
   if (/^send(?: it| that| the reply)?$/i.test(t)) return task([step(here || 'messages', ['send'])]);
   if ((m = t.match(/^(?:call|ring|phone)\s+(\w+)$/i))) return task([step('messages', ['call'], { who: name(m[1]) })]);
 
+  // Clock: the timer, the alarm and the time
+  if ((m = t.match(/^(?:set|start)\s+(?:a\s+|the\s+|my\s+)?timer\s+(?:for\s+)?(.+)$/i)) || (m = t.match(/^(?:set\s+)?(?:a\s+)?timer\s+for\s+(.+)$/i))) return task([step('clock', ['setTimer'], { length: m[1] })]);
+  if (/^how (?:long|much time)(?:'s| is| have i got)? (?:left|remaining)(?: on (?:the |my )?timer)?$/i.test(t)) return task([step('clock', ['timeLeft'])]);
+  if (/^(?:cancel|stop|end|clear)\s+(?:the\s+|my\s+)?timer$/i.test(t)) return task([step('clock', ['cancelTimer'])]);
+  if ((m = t.match(/^(?:wake me(?: up)?|set (?:an |my |the )?alarm)\s+(?:at|for)\s+(.+)$/i))) return task([step('clock', ['setAlarm'], { time: m[1] })]);
+  if (/^(?:what time is it|what'?s the time)(?: now)?$/i.test(t)) return task([step('clock', ['time'])]);
+
   // Calendar (before the generic "change X to Y")
   if ((m = t.match(/^invite\s+(\w+)\s+to\s+(.+)$/i))) return task([step('calendar', ['invite'], { who: name(m[1]), event: clean(m[2]) })]);
   if ((m = t.match(/^(?:move|reschedule|shift)\s+(?:my\s+)?(.+?)\s+(?:to|until)\s+(.+)$/i)) && (here === 'calendar' || !here || /lunch|meeting|dinner|appointment|coffee|event/i.test(m[1]))) {
