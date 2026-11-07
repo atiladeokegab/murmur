@@ -1,10 +1,15 @@
-/* Phone chrome: the status bar, the app icons and the open/close zoom. Loaded after app.css; colours are app.css tokens only. */
+/* Phone chrome: the status bar, the app icons and the open/close zoom. Loaded after app.css; colours are tokens only (app.css, plus --c-edge here). */
 :root {
   --h-status: 32px;          /* reserved from first paint, so nothing below it ever moves */
   --fs-status: min(0.9375rem, 16px); /* decorative: it stays phone-sized at 400% text; "what time is it" is the real clock */
-  --s-icon: 3rem;
+  --s-icon: clamp(32px, 3rem, 56px); /* never under 32px, never crowding the words at 200% */
   --r-icon: 14px;
+  --fs-tile-title: 1.75rem;  /* 28px tile titles */
+  /* tile edges: 2px, at least 3:1 against the page and a hovered card */
+  --c-edge: #6B7280;         /* 4.0:1 on the page, 3.7:1 on the board, 3.5:1 hovered */
 }
+:root[data-theme="light"] { --c-edge: #767C88; } /* 3.9:1 on the page, 4.2:1 on the board, 3.8:1 hovered */
+:root[data-theme="yellow"] { --c-edge: #FFFF00; }
 
 /* ---------- status bar: purely visual, aria-hidden in the markup ---------- */
 .statusbar {
@@ -22,6 +27,11 @@
 h1 .day:empty::before { content: "\a0"; }
 #board:empty ~ .look { visibility: hidden; }
 
+/* ---------- tiles: a visible edge and bigger titles ---------- */
+.tile { box-shadow: inset 0 0 0 var(--bw-now) var(--c-edge); } /* inset: drawn, never laid out; Now keeps its honey edge */
+.look { border-color: var(--c-edge); }
+#board li:not(.now) .title { font-size: var(--fs-tile-title); }
+
 /* ---------- app icons: a honey square with the glyph cut through it ---------- */
 .tile .what { display: grid; grid-template-columns: var(--s-icon) minmax(0, 1fr); column-gap: 0.875rem; row-gap: 0.2rem; align-items: center; }
 .tile .what > * { grid-column: 2; }
@@ -32,13 +42,17 @@ h1 .day:empty::before { content: "\a0"; }
   -webkit-mask-composite: xor;
   mask: var(--glyph) center / 62% no-repeat exclude, linear-gradient(var(--c-ink) 0 0);
 }
-.look::before { --s-icon: 2.25rem; --r-icon: 10px; margin-right: 0.875rem; }
+.look::before { --s-icon: clamp(32px, 2.25rem, 44px); --r-icon: 10px; margin-right: 0.875rem; }
 /* Calendar shows today's date, set by statusbar.js as --today */
 .tile[data-app="calendar"] .what::before {
   content: var(--today, ""); -webkit-mask: none; mask: none; display: grid; place-items: center;
   color: var(--c-on-accent); font: 700 1.375rem/1 var(--f-read); font-variant-numeric: tabular-nums;
 }
-@container board (max-width: 15em) { /* big text: the words get the room; icons are decoration */
+@container board (max-width: 15em) { /* big text, about 160% and up: titles follow the big-text size */
+  .column { --fs-tile-title: var(--fs-title); }
+  .tile .what { column-gap: 0.5rem; }
+}
+@container board (max-width: 8.5em) { /* about 290% and up on a phone: the words get the room; icons are decoration */
   .tile .what { display: flex; }
   .tile .what::before, .look::before { display: none; }
 }
