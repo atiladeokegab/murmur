@@ -1,18 +1,18 @@
 // Your look: text, colours, voice, who speaks, how much Murmur does, and what Murmur remembers.
 // An app on the contract (os/contract.md). Each row applies on touch and says itself; each row is a voice action.
 // Text size, colours and voice speed live in the toolkit's ability profile (public/look.js); the rest in this app's kv.
-import { readLook, writeLook, applyLook } from '../../look.js';
+import { loadLook, writeLook, applyLook, PHONE_LIGHT } from '../../look.js';
 
 export const STEPS = {
   size: { label: 'Text', more: 'bigger', less: 'smaller', values: [100, 150, 200, 300, 400], words: (v) => `${v} percent` },
   rate: { label: 'Voice', more: 'faster', less: 'slower', values: [0.75, 1, 1.15, 1.25, 1.5, 2], words: (v) => (v === 1 ? 'normal speed' : `${v} times`) },
 };
 export const CHOICES = {
-  theme: { label: 'Colours', options: { dark: 'Dark', light: 'Light', yellow: 'Yellow on black' } },
+  theme: { label: 'Colours', options: { auto: 'Match my phone', dark: 'Dark', light: 'Light', yellow: 'Yellow on black' } },
   speaker: { label: 'Who speaks', options: { murmur: 'Murmur', reader: 'My screen reader' } },
   agency: { label: 'How much Murmur does', options: { ask: 'Ask me', just: 'Just do it', teach: 'Teach me' } },
 };
-const DEFAULTS = { size: 100, rate: 1.15, theme: 'dark', speaker: 'murmur', agency: 'ask', learning: true };
+const DEFAULTS = { size: 100, rate: 1.15, theme: 'auto', speaker: 'murmur', agency: 'ask', learning: true };
 
 let root = null, kv = null, os = null, toolkit = null;
 let look = { ...DEFAULTS }, known = null, lastChange = null, pending = Promise.resolve();
@@ -246,9 +246,11 @@ const app = {
     if (librarian) {
       try { // a fresh profile reads as light; seed it from ours (dark by default) instead, as public/app.js does
         if (!(await librarian.getProfile())?.fields?.needs?.length) await writeLook(librarian, look);
-        Object.assign(look, await readLook(librarian));
+        await loadLook(librarian, look);
       } catch { /* keep the kv copy */ }
     }
+    // No colours chosen: follow the phone's light or dark setting as it changes.
+    globalThis.matchMedia?.(PHONE_LIGHT).addEventListener?.('change', () => { if (look.theme === 'auto') apply(); });
     apply();
     render();
   },
@@ -293,7 +295,7 @@ const app = {
     }),
     voiceFaster: stepper('rate', 'more'),
     voiceSlower: stepper('rate', 'less'),
-    colours: chooser('theme', 'colours', 'Change the colours: dark, light, or yellow on black', 'Changing the colours', 'Colours is the third row in Your look.'),
+    colours: chooser('theme', 'colours', 'Change the colours: match my phone, dark, light, or yellow on black', 'Changing the colours', 'Colours is the third row in Your look.'),
     whoSpeaks: chooser('speaker', 'who', 'Choose who speaks: Murmur, or my screen reader', 'Choosing who speaks', 'Who speaks is after Colours in Your look.'),
     howMuch: chooser('agency', 'mode', 'Choose how much Murmur does: ask me, just do it, or teach me', 'Changing how much I do', 'How much Murmur does is after Who speaks.'),
     learning: undoable('learning', {
