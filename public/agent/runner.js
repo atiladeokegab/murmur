@@ -72,7 +72,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
     return r;
   }
 
-  async function run({ utterance = '', steps = [] }) {
+  async function run({ utterance = '', steps = [], plan = {} }) {
     if (current) halt(current);
     const id = `t-${clock.now()}${seq++ ? '-' + seq : ''}`;
     const task = current = { id, bus: tagged(bus, id), controller: new AbortController(), stopped: false, takenOver: false, nudge: null };
@@ -81,7 +81,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
     const of = steps.length;
     let status = 'done', lastApp = null, gatedRan = null, line = '', reason = '';
     failed = null;
-    task.bus.emit('task:start', { utterance, plan: steps.map(({ tool, params }) => ({ name: tool, params })) });
+    task.bus.emit('task:start', { utterance, plan: steps.map(({ tool, params }) => ({ name: tool, params })), ...plan });
 
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i], n = i + 1;
@@ -122,7 +122,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
       }
       doneSteps.push(step);
       if (x.gate) { gatedRan = x.gate; lastUndo = null; } // a gated step is final: nothing before it may be undone
-      else if (typeof x.undo === 'function') lastUndo = { app: a, action: x, name: step.tool, params: r.params || step.params, until: 0 };
+      else if (typeof x.undo === 'function') lastUndo = { app: a, action: x, name: step.tool, label: `Undo ${(x.doing || gerund(x.describe)).toLowerCase()}`, params: r.params || step.params, until: 0 };
     }
 
     if (status === 'stopped' || status === 'taken-over') { reason = 'Stopped.'; line = gatedRan ? `Already ${PAST[gatedRan]}.` : status === 'stopped' ? 'Stopped.' : ''; }
@@ -136,7 +136,8 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
     else lastUndo = null;
     if (doneSteps.length && status === 'done') history.push({ utterance, at: clock.now(), steps: doneSteps.map(({ tool, app, action, params, gate }) => ({ tool, app, action, params, gate })) });
     if (current === task) current = null;
-    task.bus.emit('task:done', { ms, ok: status === 'done', ...(status === 'done' ? {} : { reason }) });
+    task.bus.emit('task:done', { ms, ok: status === 'done', ...(status === 'done' ? {} : { reason }), line,
+      ...(lastUndo ? { undo: { label: lastUndo.label, until: lastUndo.until } } : {}) });
     // the done line is said after the task ends: Stop has nothing left to stop
     if (line) { task.bus.emit('say', { text: line }); try { await speak(line); } catch { /* hushed */ } }
     return { status, ms, line, task: id, actions: doneSteps.map((s) => s.tool) };

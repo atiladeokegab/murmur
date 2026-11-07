@@ -10,6 +10,11 @@ import { createToolkit } from '../vendor/toolkit/index.js';
 import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
 import * as passkey from '../passkey.js';
+import { byHand } from './gate.js';
+import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
+// Optional modules from other branches: boot never depends on them. The token must wrap fetch before any /api call.
+const optional = (p) => import(p).catch(() => null);
+(await optional('../agent/token.js'))?.installToken();
 
 const $ = (s) => document.querySelector(s);
 function el(tag, props = {}, ...kids) {
@@ -25,6 +30,7 @@ const QUIET = /[?&]quiet\b/.test(location.search); // the eval and the flows: no
 const look = Object.assign({ size: 100, theme: 'dark', rate: 1, speaker: 'murmur', agency: 'ask', planner: 'auto', nolook: false },
   store.get('look', {}));
 const saveLook = () => store.set('look', look);
+let agent = null; // declared before the mount loop: Mine reads os.workflows during seed()
 
 // ---------- the Librarian: Your look lives in the ability profile; Stop learning pauses memory ----------
 let librarian;
@@ -89,7 +95,8 @@ const ding = (name) => earcon(name, { sound: sound() });
 // ---------- Back: every open, sheet and task is a history entry ----------
 const stack = [];
 let skipPops = 0;
-function push(kind) { stack.push(kind); history.pushState({ d: stack.length }, ''); }
+const queued = []; // pushes made while a history.go() is still travelling land after it, or they would be undone
+function push(kind) { stack.push(kind); if (skipPops) queued.push(stack.length); else history.pushState({ d: stack.length }, ''); }
 function drop(kind) {
   const i = stack.lastIndexOf(kind);
   if (i < 0) return;
@@ -99,7 +106,7 @@ function drop(kind) {
   if (n) { skipPops++; history.go(-n); }
 }
 addEventListener('popstate', (e) => {
-  if (skipPops) { skipPops--; return; }
+  if (skipPops) { if (!--skipPops) while (queued.length) history.pushState({ d: queued.shift() }, ''); return; }
   const d = e.state?.d ?? 0;
   let handled = false;
   while (stack.length > d) { const k = stack.pop(); if (k) { onBack(k); handled = true; break; } }
@@ -114,26 +121,35 @@ function onBack(kind) {
 
 // ---------- the apps ----------
 const bus = createBus();
+(await optional('../inside/forward.js'))?.forward(bus); // /inside watches the bus
 const registry = createRegistry();
 await loadApps(registry, appIds);
 const port = browserKV({ prefix: 'murmur' });
 const appsEl = $('#apps');
 const roots = {}, kvs = {};
 let current = null, agentPress = false;
-let agent = null; // declared before the mount loop: Mine reads os.workflows during seed()
 let personal = new AbortController(); // the person's own reads (Read it); Stop aborts it too
 const cursor = createCursor(document);
+const osFor = (app, kv) => ({
+    kv, bus, registry,
+    say: (t) => speak(t, personal.signal),
+    // A person's own tap on a gated control is their yes (Pay still checks the fingerprint); when the agent
+    // pressed it, the runner already asked.
+    confirm: ({ gate, readback }) => (agentPress ? Promise.resolve(true) : byHand({ app: app.id, gate, readback, bus,
+      passkey: { usable: fingerprintUsable, confirm: () => passkey.confirm() },
+      sheet: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true) })),
+    get workflows() { return agent?.workflows; },
+});
 for (const app of registry.list()) {
   kvs[app.id] = appKv(app.id, port);
-  roots[app.id] = await mountApp(app, appsEl, {
-    kv: kvs[app.id], bus, registry,
-    say: (t) => speak(t, personal.signal),
-    // A person's own tap on a gated control asks here; when the agent pressed it, the runner already asked.
-    confirm: ({ gate, readback }) => (agentPress ? Promise.resolve(true) : sheetConfirm({ app: app.id, gate, readback })),
-    get workflows() { return agent?.workflows; },
-  });
+  roots[app.id] = await mountApp(app, appsEl, osFor(app, kvs[app.id]));
   await app.seed();
 }
+// Plug-ins (sdk/plugin.js): added apps come back on boot and mount exactly like the built-in ones.
+const plug = { registry, host: appsEl, port, os: osFor };
+const added = (r) => { roots[r.id] = r.root; kvs[r.id] = r.kv; return r; };
+for (const r of await restoreApps(plug)) added(r); // no renderBoard here: `day` is declared below (TDZ)
+async function install(name) { const r = await installByName(name, plug); if (r.root) { added(r); renderBoard(); } return r; }
 
 function open(id, { focus = true } = {}) {
   const app = registry.get(id);
@@ -189,7 +205,18 @@ function renderBoard() {
     [...btn.children].forEach((c) => c.setAttribute('aria-hidden', 'true'));
     btn.addEventListener('click', () => { open(app.id); if (line.say) speak(line.say, personal.signal); });
     return el('li', { className: now ? 'now' : '' }, btn);
-  }));
+  }), addTile());
+}
+function addTile() {
+  const btn = el('button', { className: 'tile', type: 'button' }, el('span', { className: 'when' }),
+    el('span', { className: 'what' }, el('span', { className: 'title', textContent: 'Add an app' })), el('span', { className: 'key' }));
+  btn.addEventListener('click', async () => {
+    const l = (await availableApps(plug)).filter((p) => !p.installed);
+    if (!l.length) return speak('Every app is already added.', personal.signal);
+    const i = await sheetChoose({ question: 'Which app do you want to add?', choices: l.map((p) => p.name) });
+    if (i != null) speak((await install(l[i].id)).say, personal.signal);
+  });
+  return el('li', {}, btn);
 }
 setInterval(() => { const f = $('#board .now .flap'); if (f) f.replaceWith(flap(nowTime())); }, 15000);
 
@@ -292,15 +319,20 @@ function showSheet(kind, q, answer) {
 }
 function hideSheet(kind) { if (pending?.kind === kind) { pending = null; closeSheet(); } }
 
-// The person's own path (an app's own gated button): the shell keeps the grace, the fingerprint and the voice.
+// The sheet: every gate the runner asks through ctx.confirm, and a hand-tapped Pay with no fingerprint to check.
+// The shell keeps the grace, the fingerprint and the voice, and resolves { result, fingerprint } for pay.
 function sheetConfirm({ gate, readback }) {
   return new Promise((resolve) => {
     showSheet('confirm', { gate, readback }, (v) => {
       if (v === true && performance.now() - pending.at < GRACE_MS) return false;
       pending = null;
-      if (v === true && gate === 'pay' && passkey.hasPasskey()) {
-        show('Check your fingerprint.');
-        passkey.confirm().catch(() => false).then((ok) => { closeSheet(); resolve(!!ok); });
+      if (v === true && gate === 'pay') { // pay always needs the fingerprint (spec §3.7)
+        fingerprintUsable().then((usable) => {
+          // shortcut: no platform authenticator means the sheet's yes stands alone (fingerprint:false)
+          if (!usable) { closeSheet(); resolve({ result: true, fingerprint: false }); return; }
+          show('Check your fingerprint.');
+          passkey.confirm().then((ok) => ok === true, () => false).then((ok) => { closeSheet(); resolve({ result: ok, fingerprint: true }); });
+        });
         return true;
       }
       closeSheet(); resolve(v === true);
@@ -309,6 +341,7 @@ function sheetConfirm({ gate, readback }) {
     speak(`${readback}. ${VERB[gate] || 'Yes'}?`, personal.signal);
   });
 }
+async function fingerprintUsable() { return passkey.hasPasskey() || await passkey.available(); }
 function sheetChoose({ question, choices }) {
   return new Promise((resolve) => {
     showSheet('choose', { question, choices }, (v) => { pending = null; closeSheet(); resolve(Number.isInteger(v) ? v : null); });
@@ -394,7 +427,7 @@ const gestures = recogniser({
   doubleTap() { again(); },
   swipe(dir) {
     if (dir === 'down') stopAll();
-    else if (dir === 'right') agent?.hear('carry on', { path: 'gesture' });
+    else if (dir === 'right') (agent?.carryOn ? agent.carryOn() : agent?.hear('carry on', { path: 'gesture' }));
     else if (dir === 'up') where();
   },
   holdStart() { summon(); },   // holding still works; letting go ends it
@@ -529,7 +562,7 @@ try {
   const { createAgent } = await import('../agent/index.js');
   agent = await createAgent({
     registry, bus, ctxFor, speak, librarian,
-    os: { open: (id) => open(id), current: () => current },
+    os: { open: (id) => open(id), current: () => current, install },
     fingerprint: () => passkey.confirm(),
     agency: () => look.agency,
     onGate: agentGate, onChoose: agentChoose,
@@ -547,5 +580,5 @@ if (look.nolook) { nl.hidden = false; document.documentElement.classList.add('no
 const first = !store.get('welcomed', false);
 show(first ? 'Tap anywhere and tell me what you need.' : '');
 if (first) store.set('welcomed', true);
-window.murmur = { bus, registry, host, agent, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, ready: Promise.resolve(true) };
+window.murmur = { bus, registry, host, agent, install, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, ready: Promise.resolve(true) };
 document.documentElement.dataset.ready = 'true';

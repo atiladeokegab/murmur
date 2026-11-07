@@ -1,6 +1,11 @@
 // Loading and mounting. The app list is public/apps/apps.js; each app mounts once into its own section.
 export async function loadApps(registry, ids, base = new URL('../apps/', import.meta.url)) {
-  for (const id of ids) registry.register((await import(new URL(`${id}/index.js`, base))).default);
+  for (const id of ids) {
+    let app;
+    // An app that is missing or fails to load is left off the board; the phone still boots.
+    try { app = (await import(new URL(`${id}/index.js`, base))).default; } catch (e) { console.error(`app ${id} did not load:`, e?.message); continue; }
+    registry.register(app);
+  }
   return registry.list();
 }
 

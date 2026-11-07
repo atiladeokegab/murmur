@@ -7,6 +7,7 @@ import * as demo from './lib/demo.js';
 import * as gemini from './lib/gemini.js';
 import * as relay from './lib/relay.js';
 import * as agent from './lib/agent/planner.js';
+import { createGuard } from './lib/guard.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const KEY = process.env.GEMINI_API_KEY || '';
@@ -65,6 +66,8 @@ const api = {
 };
 Object.assign(api, relay.api);
 
+const guard = createGuard();
+
 export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
@@ -72,6 +75,10 @@ export const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/bus') && !relay.allowed(req, url)) return send(res, 403, { error: 'forbidden' });
     if (url.pathname === '/api/bus/stream' && req.method === 'GET') return relay.stream(req, res);
     const handler = api[`${req.method} ${url.pathname}`];
+    if (url.pathname.startsWith('/api/')) {
+      const no = guard(req, { model: !!KEY }); // every /api route may call the model once a key is set
+      if (no) return send(res, no.status, { error: no.error, say: no.say });
+    }
     if (handler) return send(res, 200, await handler(await readJson(req)));
     if (url.pathname.startsWith('/api/')) return send(res, 404, { error: 'not found' });
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'method' });
