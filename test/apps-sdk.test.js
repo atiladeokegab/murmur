@@ -19,7 +19,8 @@ async function phone({ answers = [], picks = [], stopAfter = Infinity } = {}) {
   const roots = {}, taps = [], said = [], asked = [], chose = [];
   const cursor = { async moveTo(el, name) { taps.push(name); }, hide() {} };
   for (const app of APPS) {
-    roots[app.id] = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say: (text) => said.push(text) });
+    // The shell's confirm says yes at once for the agent's own press: the runner already asked.
+    roots[app.id] = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say: (text) => said.push(text), confirm: async () => true });
     await app.reset();
   }
   let controller = new AbortController();
@@ -167,12 +168,14 @@ test('Mine reads the agent store: skills with recipe.actions, slots said as some
     { tool: 'messages__openChat', app: 'messages', action: 'openChat', params: { who: '$who' }, gate: null },
     { tool: 'messages__send', app: 'messages', action: 'send', params: {}, gate: 'send' }] } }];
   const heard = [];
-  const os = { kv: null, bus: createBus(), say() {}, hear: (t) => heard.push(t), workflows: { all: async () => skills, remove: async (n) => { removed = n; } } };
+  const os = { kv: null, bus: createBus(), say() {}, hear: (t) => heard.push(t), agent: { runWorkflow: async (n) => heard.push(`runWorkflow ${n}`) }, confirm: async () => true, workflows: { all: async () => skills, remove: async (n) => { removed = n; } } };
   await mountApp(mine, host, os);
   assert.equal(mine.read(), 'Mine, 1 saved: Message someone.');
   assert.equal(host.querySelector('[data-explain="Message someone"]').textContent, "What's in Message someone");
   host.querySelector('[data-run="Message someone"]').click();
   assert.deepEqual(heard, [], 'an agent tap on Run does not start a second task');
+  host.querySelector('[data-run="Message someone"]').dispatchEvent({ type: 'click', isTrusted: true });
+  assert.deepEqual(heard, ['runWorkflow Message someone'], "a person's tap runs it through the agent");
   host.querySelector('[data-delete="Message someone"]').click();
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(removed, 'Message someone');
@@ -229,4 +232,29 @@ test("a person's tap on Read stops when the shell's say says Stop (resolves fals
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(said.length, 2, 'stopped after the sentence that was cut off');
   assert.equal(writer.place().say, 'Chapter 2, sentence 12 of 30, the part about the station.');
+});
+
+test("a person's own tap on Send or Delete asks first, with the readback; No sends and deletes nothing", async () => {
+  const doc = fakeDocument(); const asked = []; let answer = false;
+  const os = { kv: null, bus: createBus(), say: async () => true, confirm: async (c) => { asked.push(c); return answer; } };
+  await mountApp(messages, doc.body, os);
+  await messages.reset();
+  const tap = (sel) => doc.body.querySelector(sel).dispatchEvent({ type: 'click', isTrusted: true });
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  tap('[data-chat="sam"]');
+  const box = doc.body.querySelector('#msg-draft');
+  box.value = "I'm ten minutes late."; box.dispatchEvent({ type: 'input' });
+  tap('#msg-send'); await settle();
+  assert.deepEqual(asked, [{ gate: 'send', readback: "Send to Sam: I'm ten minutes late." }]);
+  assert.equal(messages.state().lastSent, null, 'No sends nothing');
+  answer = true; tap('#msg-send'); await settle();
+  assert.deepEqual(messages.state().lastSent, { to: 'sam', text: "I'm ten minutes late." });
+
+  const doc2 = fakeDocument(); const asked2 = [];
+  await mountApp(mine, doc2.body, { kv: null, bus: createBus(), say() {}, confirm: async (c) => { asked2.push(c); return false; } });
+  await mine.reset();
+  doc2.body.querySelector('[data-delete="My morning"]').dispatchEvent({ type: 'click', isTrusted: true }); await settle();
+  assert.equal(asked2[0].gate, 'delete');
+  assert.match(asked2[0].readback, /^Delete My morning\?/);
+  assert.equal(mine.state().workflows.length, 1, 'No deletes nothing');
 });
