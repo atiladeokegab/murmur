@@ -25,7 +25,7 @@ check('board has a Now tile on top', await page.locator('#board li.now:first-chi
 check('first open says the one onboarding line', /Tap anywhere and speak\./.test(await page.locator('#say').textContent()));
 
 await page.locator('#board .tile').first().click();
-check('a tile opens its app and focuses its heading', await page.evaluate(() => document.activeElement.tagName === 'H2' && !document.querySelector('#app-hello').hidden));
+check('a tile opens its app and focuses its heading', await page.evaluate(() => document.activeElement.tagName === 'H2' && !document.querySelector(`#app-${window.murmur.current()?.id}`)?.hidden)); // the Now tile's app changes with the day
 check('the place line shows', (await page.locator('#place').textContent()).length > 0, await page.locator('#place').textContent());
 await page.goBack(); await page.waitForTimeout(100);
 check('Back closes the app', await page.evaluate(() => !document.querySelector('#board-view').hidden && document.querySelector('#app-hello').hidden));
