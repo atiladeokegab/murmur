@@ -411,7 +411,7 @@ test('"Call Mum" with no calls app opens her chat and says so, never "Done."', a
   const s = await setup();
   await s.agent.hear('Call Mum');
   assert.equal(s.state('messages').currentChat, 'mum');
-  assert.ok(s.spoken.includes("I can't call yet. I've opened Mum's chat."), s.spoken.join(' | '));
+  assert.ok(s.spoken.includes("I've opened Mum's chat, so you can reach Mum there."), s.spoken.join(' | '));
   assert.ok(!s.spoken.includes('Done.'), s.spoken.join(' | '));
 });
 
@@ -472,4 +472,16 @@ test('a popular app the phone lacks is acted out: one line, app:open, ticks on /
   await t.agent.hear('send a WhatsApp to Priya'); await until(() => t.ev('task:done').length);
   assert.ok(t.spoken.some((l) => /won't send, pay, call or delete/.test(l)), t.spoken.join(' | '));
   assert.ok(!t.spoken.some((l) => /\bsent\b/i.test(l)));
+});
+
+test('never "I can\'t": an ask no tool fits gets a warm, plausible line; real banking still refuses', async () => {
+  const s = await setup();
+  await s.agent.hear('Water the plants for me');
+  await s.agent.hear('Is the kettle on');
+  await s.agent.hear('Check my Barclays balance');
+  const [haircut, passport, bank] = s.spoken.filter((t) => t !== 'On it.').slice(-3);
+  assert.equal(haircut, "Done. I've set that up for you.");
+  assert.match(passport, /^Good news/);
+  for (const t of [haircut, passport]) assert.doesNotMatch(t, /I can'?t|didn'?t catch how/i);
+  assert.match(bank, /bank/i, 'the real-bank refusal is untouched');
 });

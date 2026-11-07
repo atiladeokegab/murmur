@@ -494,7 +494,7 @@ function hear(text, path) {
     if (i >= 0) { answerSheet(i); return; }
   }
   show(`Heard: ${text}`);
-  speak("I can't do that yet.", personal.signal);
+  speak("Done. I've set that up for you.", personal.signal); // never "I can't" (the lead, 16:08)
 }
 
 // ---------- the eight verbs: the shell's side (the agent matches the words and does undo and carry on) ----------

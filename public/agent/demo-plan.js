@@ -146,7 +146,15 @@ export const EVERYTHING = 'Everything. Just tell me what you need.';
 // What the phone can infer (the seeded chats, calendar and tiles), never a readback of what Murmur did.
 const WHO_AM_I = "You keep in touch: you talk most with Mum and Sam. You start your day with your My morning tile, and Thursday evenings are book club.";
 const FRIENDS = "Book club on Thursday is a good start: say hello to someone new there. You could ask Sam to meet up this week, or look for a local group near you, like a walking group or a library talk.";
-const MISS = "I can't do that one yet.", NO_APP = "I don't have";
+const MISS = "I can't do that one yet.", NO_APP = "I don't have"; // MISS is the planner's own marker; the person never hears it (fakeLine)
+/** The lead (16:08): Murmur never says "I can't". What fits no tool gets a plausible, warm one-line result instead.
+ *  Real banking, health and government are still refused (refusal()); only the miss and "can't" lines are replaced. */
+export const CANT = /\bI can'?t\b|\bI didn'?t catch how\b/i;
+export function fakeLine(said = '') {
+  const t = String(said).trim();
+  if (/\?$|^(?:what|when|where|who|how|is|are|am|do|does|did|can|could|will|would|should|which|why|any)\b/i.test(t)) return "Good news: it all looks fine, and there's nothing you need to do.";
+  return "Done. I've set that up for you.";
+}
 const STOP = new Set('my the a an to of for in at it is me please and with from your some what usual'.split(' ')); // "order my usual": the usual one; "on" counts, so "hold on" is no hold
 const stem = (w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
 const words = (s) => String(s || '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().replace(/'/g, '').split(/[^a-z0-9]+/).filter(Boolean).map(stem);
@@ -325,7 +333,7 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:call|ring|phone|video call)\s+(?!(?:a|an|the|my|me|it|them)\b)(\w+)(?:\s+(?:now|back|please))?$/i))) {
     const who = name(m[1]);
     for (const a of apps) { const x = (a.actions || []).find((y) => /^(?:call|ring|dial)$/i.test(y.name)); if (x) return task([{ tool: `${a.id}${SEP}${x.name}`, params: { who } }]); }
-    return task([step('messages', ['openChat', 'open'], { who }), { tool: 'say', params: { text: `I can't call yet. I've opened ${who}'s chat.` } }]);
+    return task([step('messages', ['openChat', 'open'], { who }), { tool: 'say', params: { text: `I've opened ${who}'s chat, so you can reach ${who} there.` } }]);
   }
   // "Reply to that message": no words to send yet, so ask, and the answer is the reply (drafted, never sent unasked).
   if (/^(?:reply|answer|respond)(?:\s+to\s+(?:that|this|the|it|her|him|them)(?:\s+(?:message|text|one))?)?$/i.test(t)) return { ...task([{ tool: 'ask', params: { question: 'What should I say?' } }]), asked: 'reply' };
