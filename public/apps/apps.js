@@ -23,4 +23,5 @@ export default [
   'sounds',
   'netflix',
   'youtube',
+  'notifications',
 ];
