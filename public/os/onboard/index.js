@@ -42,8 +42,11 @@ export async function firstOpen({ kv, say, bus, caption, win, ears = hasEars(), 
   await kv.set('said', true); // marked first, so an interrupted welcome is never said twice
   const line = ears ? FIRST_WORDS : NO_EARS;
   caption?.(line);
-  if (waitTap && win) onFirstTap(win, () => say(line));
-  else await say(line);
+  // Hushed the moment anything is heard, so "On it." is never queued behind a welcome the person has talked over.
+  const ctl = new AbortController(), off = bus?.on('heard', () => ctl.abort());
+  const welcome = () => Promise.resolve(ctl.signal.aborted || say(line, ctl.signal)).finally(() => off?.());
+  if (waitTap && win) onFirstTap(win, welcome);
+  else await welcome();
   return true;
 }
 
@@ -71,6 +74,7 @@ function onFirstTap(win, fn) {
   let spent = false;
   const off = () => types.forEach((t) => win.removeEventListener(t, swallow, true));
   function swallow(e) {
+    if (!e.isTrusted) return; // the agent's own synthetic clicks are not the person's first tap
     const key = e.type.startsWith('key');
     if (key && e.key !== ' ' && e.key !== 'Enter') return; // Tab and the rest still move about
     e.stopImmediatePropagation?.(); e.stopPropagation?.();

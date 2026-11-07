@@ -120,7 +120,7 @@ export function read(s) {
   if (!c) {
     const news = s.chats.filter((x) => x.unread);
     const lead = news.map((x) => `${x.name} wrote: ${x.messages.at(-1).text}`).join(' ');
-    return `Messages, ${s.chats.length} chats.${lead ? ' ' + lead : ''}`;
+    return `${s.chats.length} chats.${lead ? ' ' + lead : ''}`; // no app name: the board shows it under the title
   }
   const last = c.messages.at(-1);
   const said = last.text.trim().replace(/[.!]+$/, ''); // the quote keeps a ? but not a closing full stop, so no ".".

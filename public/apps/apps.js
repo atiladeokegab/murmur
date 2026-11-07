@@ -8,4 +8,7 @@ export default [
   'shop',
   'transit',
   'travel',
+  'places',
+  'weather',
+  'clock',
 ];
