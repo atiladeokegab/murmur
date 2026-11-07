@@ -15,9 +15,9 @@ async function setup() {
   const started = [], cut = [];
   let playing = null;
   const speak = (t) => new Promise((r) => { started.push(t); const end = (ok) => { clearTimeout(timer); playing = null; if (!ok) cut.push(t); r(ok); }; const timer = setTimeout(() => end(true), 60); playing = end; });
-  const onStop = () => playing?.(false);
-  const agent = createAgent({ registry: p.registry, bus: p.bus, ctxFor: p.ctxFor, librarian, agency: () => 'just', planOpts: { offline: true }, speak, onStop });
-  return { ...p, agent, started, cut };
+  const onCut = () => playing?.(false), stops = [];
+  const agent = createAgent({ registry: p.registry, bus: p.bus, ctxFor: p.ctxFor, librarian, agency: () => 'just', planOpts: { offline: true }, speak, onCut, onStop: () => stops.push('stopAll') });
+  return { ...p, agent, started, cut, stops };
 }
 
 test('said "stop" cuts the line already playing', async () => {
@@ -28,6 +28,9 @@ test('said "stop" cuts the line already playing', async () => {
   assert.deepEqual(s.cut, [ACK], 'the playing line was cut, not left to finish');
   await wait(150);
   assert.deepEqual(s.started, [ACK], 'and nothing queued plays after it');
+  assert.deepEqual(s.stops, ['stopAll'], "a said or typed Stop runs the shell's whole Stop (sheets, a pending fingerprint)");
+  await s.agent.stop();
+  assert.deepEqual(s.stops, ['stopAll'], "the shell's own Stop button does not loop back into it");
 });
 
 test('undo cuts the stale lines and says "Undone." at once', async () => {
@@ -43,6 +46,7 @@ test('undo cuts the stale lines and says "Undone." at once', async () => {
   await until(() => s.started.includes('Undone.'));
   assert.deepEqual(s.started.slice(at), ['Undone.'], 'no queued line plays before "Undone."');
   assert.equal(s.cut.length, cutBefore + 1, 'the line playing when Undo was said is cut');
+  assert.deepEqual(s.stops, [], 'Undo cuts the line, it does not stop everything');
   assert.equal(s.state('look').size, 150);
   const after = s.started.slice(s.started.indexOf('Undone.') + 1);
   assert.deepEqual(after, [], `nothing stale after Undone.: ${after}`);
