@@ -420,10 +420,11 @@ talk.addEventListener('click', summon);
 $('#talk-first').addEventListener('click', summon);
 talkAnywhere({ start: summon, listening: () => listening });
 typed.addEventListener('submit', (e) => { e.preventDefault(); const i = $('#typed-text'); const t = i.value.trim(); i.value = ''; if (t) hear(t, 'typed'); });
+const PRESSABLE = 'button, a, select, input, textarea, summary, [role="button"], [role="link"]';
 addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); if (stack.length) history.back(); else if (look.nolook) setNoLook(false); return; }
   if (e.target.closest?.('input, textarea, [contenteditable]')) return;
-  if (e.key === ' ' && !e.repeat && !dialog.open) { e.preventDefault(); summon(); }
+  if (e.key === ' ' && !e.repeat && !dialog.open && !e.target.closest?.(PRESSABLE)) { e.preventDefault(); summon(); } // Space on a control presses it
   if (/^[1-9]$/.test(e.key) && !current && !dialog.open) $(`#board li:nth-child(${e.key}) .tile`)?.click();
 });
 
