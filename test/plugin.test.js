@@ -103,10 +103,24 @@ test('an installed app, and its booking, come back after a reload', async () => 
   assert.equal(t.ok, true, t.reason);
 });
 
+test('registry.unregister drops an app and its tools; an unknown id is a no-op', () => {
+  const r = createRegistry();
+  const f = () => {};
+  r.register({ id: 'x', name: 'X', mount: f, read: f, place: f, state: f, seed: f, reset: f, actions: { go: { describe: 'Go', doing: 'Going', run: f, verify: f } } });
+  assert.ok(r.resolve('x__go'));
+  assert.equal(r.unregister('x'), true);
+  assert.equal(r.unregister('x'), false);
+  assert.equal(r.resolve('x__go'), null);
+  assert.equal(r.get('x'), undefined);
+  assert.ok(!r.tools().some((t) => t.name.startsWith('x__')));
+});
+
 test('uninstall removes the tools and stays gone after a reload; built-in apps cannot be uninstalled', async () => {
   const p = await phone();
   p.add(await installApp(TAXI, p.plug));
+  await p.plug.port.set('app.taxi', 'booking', { name: 'Home' });
   await uninstallApp('taxi', p.plug);
+  assert.deepEqual(await p.plug.port.getAll('app.taxi'), {}, 'its kv area is wiped');
   assert.ok(!p.names().some((n) => n.startsWith('taxi__')));
   assert.equal((await p.run('taxi__quote', { to: 'Home' })).reason, "I can't do that here.");
   assert.ok(!(await phone({ storage: p.storage })).names().includes('taxi__book'));

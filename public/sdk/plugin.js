@@ -56,13 +56,15 @@ export async function installApp(url, o) {
   return { id: app.id, name: app.name, actions: Object.keys(app.actions), url, root, kv };
 }
 
-/** Remove a plug-in: its tools, its section and its place in the installed list. Built-in apps are refused. */
+/** Remove a plug-in: its tools, its section, its kv data and its place in the installed list. Built-in apps are refused. */
 export async function uninstallApp(id, o) {
   const list = await installed(o);
   if (!list.some((x) => x.id === id)) throw new Error(`${id} is not an added app.`);
   o.registry.unregister(id);
   o.host?.querySelector(`#app-${id}`)?.remove?.();
   await port(o).set(AREA, 'installed', list.filter((x) => x.id !== id));
+  const kv = appKv(id, port(o));   // its data goes with it: a reinstall starts clean
+  for (const k of Object.keys(await kv.all())) await kv.set(k, undefined);
   return { id };
 }
 
