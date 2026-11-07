@@ -1,0 +1,76 @@
+{
+  "afterSeed": {
+    "workflows": [
+      {
+        "name": "My morning",
+        "steps": [
+          {
+            "app": "calendar",
+            "action": "whatsOn",
+            "params": {}
+          },
+          {
+            "app": "messages",
+            "action": "openChat",
+            "params": {
+              "id": "mum"
+            }
+          },
+          {
+            "app": "messages",
+            "action": "read",
+            "params": {}
+          }
+        ]
+      }
+    ],
+    "proposals": [],
+    "selected": null,
+    "explained": null,
+    "lastRun": null
+  },
+  "afterAction": {
+    "said": [
+      {
+        "name": "mine__explain",
+        "params": {
+          "name": "My morning"
+        }
+      }
+    ],
+    "state": {
+      "workflows": [
+        {
+          "name": "My morning",
+          "steps": [
+            {
+              "app": "calendar",
+              "action": "whatsOn",
+              "params": {}
+            },
+            {
+              "app": "messages",
+              "action": "openChat",
+              "params": {
+                "id": "mum"
+              }
+            },
+            {
+              "app": "messages",
+              "action": "read",
+              "params": {}
+            }
+          ]
+        }
+      ],
+      "proposals": [
+        {
+          "text": "You message Mum most mornings. Add a tile?"
+        }
+      ],
+      "selected": "My morning",
+      "explained": "My morning",
+      "lastRun": null
+    }
+  }
+}

@@ -45,11 +45,11 @@ export function validate(schema = EMPTY, value) {
         if (!v || typeof v !== 'object' || Array.isArray(v)) { errors.push(`${path} must be an object`); return undefined; }
         const out = {};
         for (const k of Object.keys(v)) {
-          if (!s.properties || !(k in s.properties)) { dropped.push(path ? `${path}.${k}` : k); continue; }
+          if (!s.properties || !Object.hasOwn(s.properties, k)) { dropped.push(path ? `${path}.${k}` : k); continue; }
           const w = walk(s.properties[k], v[k], path ? `${path}.${k}` : k);
           if (w !== undefined) out[k] = w;
         }
-        for (const k of s.required || []) if (!(k in out)) errors.push(`${path ? path + '.' : ''}${k} is required`);
+        for (const k of s.required || []) if (!Object.hasOwn(out, k)) errors.push(`${path ? path + '.' : ''}${k} is required`);
         return out;
       }
       case 'array':
