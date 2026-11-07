@@ -218,6 +218,10 @@ function renderPanel() {
   $('#place').textContent = p.place || (current ? placeLine(registry.get(current).place()) : '');
   $('#step').textContent = p.on ? p.step : '';
   $('#step').hidden = !p.on;
+  $('#slot-a').hidden = $('#slot-b').hidden = !(p.on || p.done);
+  $('#done-line').hidden = p.on || !p.done;
+  // While Murmur works or reports, the panel replaces the board rather than pushing it down.
+  $('#board-view').hidden = !!(current || ((p.on || p.done) && stack.length));
   const stop = $('#stop');
   stop.hidden = !p.on;
   stop.setAttribute('aria-label', `Stop. Murmur is ${(p.step || 'working').replace(/\.$/, '').toLowerCase()}`);
@@ -230,10 +234,11 @@ function renderPanel() {
     u.hidden = !p.done.undo;
     if (p.done.undo) u.setAttribute('aria-label', `${p.done.line} Undo ${p.done.undo.label || ''}`.trim());
   }
-  $('#lines').hidden = !p.on; // once done, the ticks are the record; the sentences would repeat them
   $('#lines').replaceChildren(...p.lines.map((t, i) => el('li', {}, el('span', { className: 'sr', textContent: `Sentence ${i + 1} of ${p.lines.length}: ` }), t)));
-  $('#ticks').replaceChildren(...p.ticks.map((t) => el('li', { className: t.ok ? 'ok' : 'no' },
-    el('span', { className: 'sr', textContent: t.ok ? 'Done: ' : 'Failed: ' }), t.label)));
+  // One row of marks, one per step, drawn in as each verify passes; the labels are for the screen reader.
+  const ticks = $('#ticks');
+  for (const [i, t] of p.ticks.entries()) if (!ticks.children[i]) ticks.append(el('li', { className: t.ok ? 'ok' : 'no' }, el('span', { className: 'sr', textContent: `${t.ok ? 'Done' : 'Failed'}: ${t.label}` })));
+  while (ticks.children.length > p.ticks.length) ticks.lastChild.remove();
 }
 bus.on('*', (name, e) => {
   const was = panel;

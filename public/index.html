@@ -25,15 +25,20 @@
   <div class="column">
     <section class="work" id="work" aria-label="What Murmur is doing" hidden>
       <p class="place" id="place"></p>
-      <p class="step" id="step" hidden></p>
-      <button class="stop" id="stop" type="button" hidden>Stop</button>
-      <div class="done" id="done" hidden>
-        <p class="done-line" id="done-line" tabindex="-1"></p>
-        <button class="choice yes undo" id="undo" type="button" hidden>Undo</button>
-        <p class="done-ms" id="done-ms" aria-hidden="true"></p>
+      <!-- Two fixed slots: the step, then the Done line, in the first; Stop, then Undo, in the second. Nothing jumps. -->
+      <div class="slot slot-a" id="slot-a" hidden>
+        <p class="step" id="step" hidden></p>
+        <p class="done-line" id="done-line" tabindex="-1" hidden></p>
       </div>
       <ol class="ticks" id="ticks" aria-label="Steps"></ol>
-      <ol class="lines" id="lines" aria-label="What Murmur said"></ol>
+      <div class="slot slot-b" id="slot-b" hidden>
+        <button class="stop" id="stop" type="button" hidden>Stop</button>
+        <div class="done" id="done" hidden>
+          <button class="choice yes undo" id="undo" type="button" hidden>Undo</button>
+          <p class="done-ms" id="done-ms" aria-hidden="true"></p>
+        </div>
+      </div>
+      <ol class="lines sr" id="lines" aria-label="What Murmur said"></ol>
     </section>
     <div id="board-view">
       <div class="top">
