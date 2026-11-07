@@ -471,7 +471,7 @@ function plan(said, apps, context, dry) {
     const said = m[1].toLowerCase().replace(/\s+app$/, ''); // "open the travel app"
     const app = apps.find((a) => [a.id, a.name.toLowerCase(), a.name.toLowerCase().replace(/^the\s+/, '')].includes(said));
     if (app) return task([{ tool: 'open_app', params: { app: app.id } }]);
-    if (/^(?:open|go to)\b/i.test(t)) return { kind: 'unknown', plan: [], say: `I don't have ${cap(m[1])} on this phone.` };
+    if (/^(?:open|go to)\b/i.test(t)) return { kind: 'unknown', plan: [], say: `I don't have ${cap(m[1])} yet. I'm starting to bring it over from your phone now.` };
   }
 
   const names = ['messages', 'calendar', 'look'].map((id) => apps.find((a) => a.id === id)?.name).filter(Boolean);

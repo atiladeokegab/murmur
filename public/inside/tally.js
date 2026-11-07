@@ -66,6 +66,7 @@ export function createTally() {
         cols.Memory.push({ kind, fields: e[kind] ?? {} });
         break;
       }
+      case 'app:import': cols.Plan.push({ plan: [{ name: `Bringing ${e.name ?? 'the app'} over from the phone`, params: {} }], dropped: [], provider: null }); break;
       case 'task:done': unasked(); step = null; break;
       default: break;
     }

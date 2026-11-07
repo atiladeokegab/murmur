@@ -144,6 +144,11 @@ test('forward() posts every bus event as {events:[{type, ...payload}]} with keep
   assert.ok(events.every((e) => typeof e.t === 'number'));
 });
 
+test('app:import shows in the Plan column as the app coming over', () => {
+  const m = run([['app:import', { name: 'Camera' }]]);
+  assert.equal(m.columns().Plan.at(-1).plan[0].name, 'Bringing Camera over from the phone');
+});
+
 test('Asked shows a gated step\'s question as it starts, fills it on the answer, and says when it was never asked', () => {
   const m = createTally();
   const add = (type, p) => m.add({ type, ...p });
