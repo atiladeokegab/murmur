@@ -62,7 +62,8 @@ export async function wireExtras({ bus, registry, speak, settings, save, kv, app
   // First open: one sentence, once. Not awaited, so boot never waits on the voice.
   firstOpen({ kv: onboard.kv, say }).catch((e) => console.warn('first open', e));
 
-  // Inside: shell.js forwards the bus itself; forwarding here too would double every row on /inside.
+  // Inside: send every bus event to the relay so /inside on any device sees it (the only forward; shell.js has none since e134e27).
+  import('../inside/forward.js').then((m) => m.forward(bus)).catch(() => { /* no Inside: the phone works the same */ });
 
   return { say, demo, off: () => { offSync(); panel?.off(); } };
 }
