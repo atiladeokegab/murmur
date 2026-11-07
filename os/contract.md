@@ -2,7 +2,7 @@
 
 This is the contract between the shell, the agent and the apps. It is the source of truth on `main`. To
 change it, send a change request to Zeus; never edit it silently. Rev 3 (13:30): `step:next`, `task:done`
-`line` and `undo`, `confirm` `fingerprint` and `byHand`, the hand-tap rule for gates (§7) and the host (§9). Rev 4 (15:10): an action's optional `more`. Rev 5: the `reset` event. Spec: Murmur OS §3.3 and §8.1.
+`line` and `undo`, `confirm` `fingerprint` and `byHand`, the hand-tap rule for gates (§7) and the host (§9). Rev 4 (15:10): an action's optional `more`. Rev 5: the `reset` event. Rev 6: `mirror:frame`. Spec: Murmur OS §3.3 and §8.1.
 
 The code is in `public/sdk/` (import everything from `public/sdk/index.js`). The worked example is
 `public/apps/hello/`, and `test/sdk.test.js` runs it end to end.
@@ -147,6 +147,7 @@ plain JSON.
 | `undo` | `{ task?, action, ok }` | agent |
 | `task:done` | `{ task, ms, ok, reason?, line?, undo? }`: always ends a task (done, failed or stopped). `line` is the Done line ("Sent to Sam."); `undo: { label, until }` (ms since epoch) offers Undo until then | agent |
 | `reset` | `{}`: the demo panel's Reset; the Inside relay clears that room's ring, and /inside starts over | os (demo panel) |
+| `mirror:frame` | `{ html, w, h, cx, cy, sy, theme, at }`: the phone's screen (os/mirror.js, ?room only, at most one per 150 ms, ≤ 200 KB). Posted to the relay directly, never through the bus log; the relay keeps only the latest per room and gives it to a laptop on connect | os (mirror) |
 
 `task` is a string id the agent makes (`t-<timestamp>`). runAction leaves it out, and the agent adds it by
 wrapping the bus it passes in. The shell's work panel numbers steps from `n` and `of`. Its "Done in N s"

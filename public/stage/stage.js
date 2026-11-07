@@ -15,12 +15,12 @@ const fit = () => {
 };
 new ResizeObserver(fit).observe(col);
 
-// Left pane: the real phone's own screen, mirrored from its 'mirror:frame' events (Hermes), drawn into a
-// script-free iframe. No frame for 5 s: the stage's own phone instead, loaded only then so the two never both forward.
+// Left pane: the real phone's own screen, from its mirror:frame events (public/os/mirror.js), drawn into a
+// script-free iframe. No frame for 8 s (the phone beats every 5 s when idle): this laptop's phone instead, opened with
+// ?nomirror so it never mirrors itself, and unloaded again when the real phone is back.
 const mirror = $('mirror-frame'), live = $('phone-frame'), cursor = $('cursor');
-const STYLES = ['/app.css', '/os/phone-chrome.css', '/os/onboard/onboard.css'];
+const STYLES = ['/app.css', '/os/phone-chrome.css', '/os/onboard/onboard.css', '/apps/look/look.css', '/os/demo/demo.css']; // the phone's head is not in a frame
 mirror.srcdoc = `<!doctype html><html lang="en-GB"><head><meta charset="utf-8">${STYLES.map((h) => `<link rel="stylesheet" href="${h}">`).join('')}</head><body></body></html>`;
-const own = new Set(); // t of frames our own fallback phone sent, so it never mirrors itself
 let lastFrame = 0, mode = null;
 function show(next) {
   if (mode === next) return;
@@ -28,34 +28,31 @@ function show(next) {
   mirror.hidden = next !== 'mirror'; live.hidden = next !== 'live'; cursor.hidden = true;
   label.textContent = next === 'mirror' ? 'Live from the phone' : 'This laptop';
   label.classList.toggle('live', next === 'mirror');
-  if (next === 'live') { size = { w: 390, h: 844 }; fit(); live.src = `/${pass}`; }
+  if (next === 'live') { size = { w: 390, h: 844 }; fit(); live.src = `/${pass}&nomirror`; }
   else live.src = 'about:blank';
 }
-live.addEventListener('load', () => { // the fallback phone's own frames, by their bus time
-  const hook = (n = 0) => {
-    const bus = live.contentWindow?.murmur?.bus;
-    if (!bus) { if (n < 50 && mode === 'live') setTimeout(() => hook(n + 1), 200); return; }
-    try { bus.on('mirror:frame', (e) => own.add(e.t)); } catch { /* no mirror on this build */ }
-  };
-  hook();
-});
 let pending = null; // a frame that came before the srcdoc finished loading (the relay's latest, on connect)
 mirror.addEventListener('load', () => { if (pending) frame(pending); pending = null; });
 function frame(e) {
-  if (own.has(e.t) || typeof e.html !== 'string') return;
+  if (typeof e.html !== 'string') return;
   const d = mirror.contentDocument;
   if (!d?.body || d.URL !== 'about:srcdoc' || d.readyState !== 'complete') { pending = e; return; }
   lastFrame = Date.now();
   show('mirror');
   if (Number(e.w) > 0 && Number(e.h) > 0 && (e.w !== size.w || e.h !== size.h)) size = { w: Number(e.w), h: Number(e.h) };
-  const s = fit();
-  if (e.theme && e.theme !== 'dark') d.documentElement.dataset.theme = e.theme; else delete d.documentElement.dataset.theme;
-  d.body.innerHTML = e.html; // inert: the iframe's sandbox has no allow-scripts
+  const s = fit(), root = d.documentElement, th = e.theme && typeof e.theme === 'object' ? e.theme : {};
+  root.className = th.className || '';
+  for (const k of Object.keys(root.dataset)) delete root.dataset[k];
+  for (const [k, v] of Object.entries(th)) if (k !== 'className' && typeof v === 'string') root.dataset[k] = v;
+  root.style.fontSize = typeof e.size === 'string' ? e.size : '';
+  // Inert: parsed by DOMParser, and the iframe's sandbox has no allow-scripts.
+  d.body.replaceWith(d.adoptNode(new DOMParser().parseFromString(e.html, 'text/html').body));
+  d.defaultView.scrollTo(0, Number(e.sy) || 0);
   const has = Number.isFinite(e.cx) && Number.isFinite(e.cy);
   cursor.hidden = !has;
   if (has) cursor.style.transform = `translate(${(8 + e.cx) * s}px, ${(8 + e.cy) * s}px)`;
 }
-setInterval(() => { if (Date.now() - lastFrame > 5000) show('live'); }, 1000);
+setInterval(() => { if (Date.now() - lastFrame > 8000) show('live'); }, 1000);
 
 // The top line, from the same relay Inside reads. Text goes in by textContent only.
 const now = $('now');
