@@ -3,21 +3,25 @@
 // reserved phrase ("Stop. Where am I?"). Inside content ("tell Mum to stop worrying") it is content.
 
 const PHRASES = {
-  stop: ['stop', 'stop it', 'stop that', 'stop reading', 'stop now', 'cancel', 'hang on', 'wait', 'shut up', 'be quiet', 'quiet'],
+  stop: ['stop', 'stop it', 'stop that', 'stop reading', 'stop now', 'cancel', 'hang on', 'wait', 'shut up', 'be quiet', 'quiet',
+    'stop talking', 'stop speaking', 'shush', 'shh', 'hush', 'enough', "that's enough", 'quiet please'],
   where: ['where am i', 'where was i', 'where are we'],
-  undo: ['undo', 'undo that', 'undo it', 'take that back', 'go back'],
+  undo: ['undo', 'undo that', 'undo it', 'take that back', 'go back', 'cancel that', 'put it back', 'put that back', 'undo undo'],
   carry_on: ['carry on', 'continue', 'keep going', 'go on', 'resume'],
   again: ['again', 'say again', 'say that again', 'repeat', 'repeat that', 'sorry again', 'pardon'],
-  more: ['more', 'tell me more', 'say more', 'explain', 'explain that', 'longer', 'more detail', 'in more detail'],
+  more: ['more', 'tell me more', 'tell me more about that', 'tell me more about it', 'what else', 'anything else', 'say more', 'explain', 'explain that', 'longer', 'more detail', 'in more detail'],
   take_over: ["i'll do it", 'i will do it', 'let me do it', "i'll take over", 'let me'],
-  offer: ['what can i do', 'what can i do here', 'what can i say', 'help', 'options', 'what are my options'],
+  offer: ['what can i do', 'what can i do here', 'what can i say', 'help', 'options', 'what are my options',
+    'what can you do', 'help me', 'what do i do', 'what can i ask'],
 };
 // Confirm words open nothing by themselves: they only count while a gate is open (see hear()). Never ok or mm.
 const CONFIRM = { yes: ['yes', 'yes please', 'yes send it', 'yes do it', 'yes pay', 'yes call', 'yeah', 'yep', 'yup'],
   send: ['send', 'send it', 'send that'], pay: ['pay', 'pay it', 'pay now'], call: ['call', 'call them', 'call now'],
   hold: ['hold', 'hold it', 'hold that', 'hold the flight', 'yes hold'] };
-const DENY = ['no', 'no thanks', "don't", "don't send it", 'not now', 'leave it', 'nope', 'nah'];
-const FILLER = new Set(['um', 'uh', 'er', 'erm', 'please', 'murmur', 'hey', 'now', 'okay', 'ok', 'so']);
+const DENY = ['no', 'no thanks', "don't", "don't send it", 'not now', 'leave it', 'nope', 'nah', 'cancel that'];
+const FILLER = new Set(['um', 'uh', 'er', 'erm', 'please', 'murmur', 'hey', 'now', 'okay', 'ok', 'so', 'oops']);
+// Whole utterances that are made of fillers once those go ("what now", "what can Murmur do"): matched as said.
+const WHOLE = { and: 'more', 'what now': 'offer', 'what can murmur do': 'offer', 'what can murmur do for me': 'offer' };
 export const GATE_GRACE_MS = 500;
 
 // Dictation's padding, off the planner's words: leading fillers, the wake word and "can you", a trailing "please",
@@ -53,6 +57,8 @@ function matchAt(ws, i, table) {
  * With `gate` open ({openedAt}), confirm and deny words count too; a confirm in the first 0.5 s is ignored.
  */
 export function hear(text, { gate = null, now = Date.now() } = {}) {
+  const said = norm(text).replace(/[.,!?;:]/g, ' ').trim().replace(/\s+/g, ' ');
+  if (WHOLE[said]) return { words: [{ kind: WHOLE[said] }], rest: '' };
   const ws = wordsOf(text);
   const table = gate ? CONFIRM_TABLE.concat(TABLE).sort((a, b) => b.words.length - a.words.length) : TABLE;
   const found = [];

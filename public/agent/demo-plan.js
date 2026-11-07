@@ -112,7 +112,7 @@ function plan(said, apps, context, dry) {
   let m;
   if ((m = raw.match(/^in\s+(?:my\s+)?(?:reply|message|draft|chat)\s+(?:to|with)\s+\w+[,:]?\s+(.+)$/i))) { here = 'messages'; raw = m[1]; }
   else if ((m = raw.match(/^in\s+(?:the\s+)?(writer|messages|notes|calendar|shop)[,:]?\s+(.+)$/i))) { here = m[1].toLowerCase() === 'notes' ? 'writer' : m[1].toLowerCase(); raw = m[2]; }
-  const t = raw.replace(/[.!?]+$/, '');
+  let t = raw.replace(/[.!?]+$/, '');
   const tail = raw.slice(t.length);
   // Content keeps the person's own ending: "at three?" stays a question.
   const body = (s) => { const x = cap(s.trim()); return /[.!?]$/.test(x) ? x : x + (t.endsWith(s) ? tail.slice(0, 1) || '.' : '.'); };
@@ -125,7 +125,7 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^save (?:that|this|it) as\s+(.+)$/i))) {
     return task([{ tool: 'save_workflow', params: { name: cap(m[1]), slot: /\b(someone|somebody|anyone|a person)\b/i.test(m[1]) } }]);
   }
-  if ((m = t.match(/^what'?s in\s+(.+)$/i)) || (m = t.match(/^what does\s+(.+?)\s+do$/i))) return task([{ tool: 'explain', params: { name: m[1] } }]);
+  if ((m = t.match(/^what'?s in\s+(?!(?:my |the )?(?:calendar|diary|basket)\b)(.+)$/i)) || (m = t.match(/^what does\s+(.+?)\s+do$/i))) return task([{ tool: 'explain', params: { name: m[1] } }]);
   if ((m = t.match(/^(?:change|edit)\s+(.+?)[:,]?\s+(?:drop|remove|take out|skip)\s+(?:the\s+)?(.+)$/i))) {
     return task([{ tool: 'edit_workflow', params: { name: m[1], drop: m[2] } }]);
   }
@@ -150,6 +150,10 @@ function plan(said, apps, context, dry) {
   // Your look: every setting is a step on its visible row.
   if (apps.some((a) => a.id === 'look')) {
     const look = (names, slots) => task([step('look', names, slots)]);
+    const cant = /^i can'?t (?:read|see) (?:this|that|it|anything)(?: properly| very well)?[,.]?\s*/i;
+    if (cant.test(t) && !t.replace(cant, '')) return look(['textBigger']);
+    if (cant.test(t)) t = t.replace(cant, ''); // "I can't read this, make it bigger"
+    if (/^(?:make )?(?:it|everything|things) (?:bigger|larger)$|^(?:bigger|larger) (?:writing|letters|words|font)$/i.test(t)) return look(['textBigger']);
     if ((m = t.match(/^(?:set|make)\s+(?:the\s+)?text(?:\s+size)?\s+(?:to\s+)?(\d{3})\s*(?:%|percent)?$/i))) return look(['setText'], { percent: Number(m[1]) });
     // Anchored, so content ("text Sam I'm speeding up", "tell Mum to turn off the light") never changes a setting.
     const TXT = '(?:make |turn |set )?(?:the |my )?(?:text|writing|font|letters|words)(?: size)?';
@@ -197,7 +201,9 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:text|message|msg|tell)\s+(?!it\b|that\b)(\w+)\s+(?:that\s+|saying\s+|and\s+(?:say|tell (?:him|her|them))(?:\s+that)?\s+)?(.{2,})$/i))) {
     return msg(m[1], m[2].replace(/^to\s+/i, ''), true);
   }
-  if ((m = t.match(/^read\s+(\w+)'s\s+(?:latest\s+|last\s+)?(?:message|messages|text|chat)$/i)) || (m = t.match(/^what did\s+(\w+)\s+(?:say|write)$/i)) ||
+  if ((m = t.match(/^read\s+(?:me\s+)?(?!(?:my|the|me|new|latest|last)\b)(\w+?)(?:'s|s)?\s+(?:latest\s+|last\s+|new\s+)?(?:message|messages|text|texts|chat)$/i)) ||
+      (m = t.match(/^what did\s+(?:my\s+)?(\w+)\s+(?:say|write|send)(?:\s+me)?$/i)) ||
+      (m = t.match(/^(?:any|are there any|do i have any|have i got any)\s+(?:new\s+)?(?:messages|texts)\s+from\s+(?:my\s+)?(\w+)$/i)) ||
       (m = t.match(/^read\s+(?:me\s+)?(?:my\s+|the\s+)?(?:latest\s+|last\s+|new\s+)?(?:messages?|texts?)\s+from\s+(\w+)$/i)) || (m = t.match(/^(?:open|show)\s+(\w+)'s\s+chat$/i))) {
     return task([step('messages', ['openChat', 'open'], { who: name(m[1]) }), step('messages', ['read'])]);
   }
@@ -207,14 +213,19 @@ function plan(said, apps, context, dry) {
 
   // Calendar (before the generic "change X to Y")
   if ((m = t.match(/^invite\s+(\w+)\s+to\s+(.+)$/i))) return task([step('calendar', ['invite'], { who: name(m[1]), event: clean(m[2]) })]);
+  // "Change lunch to Friday", "Put lunch on Friday": a move only when it names an event and a day ("Change Tuesday to Wednesday" is a word edit)
+  if ((m = t.match(new RegExp(`^(?:change|reschedule|move|put|shift|push)\\s+(?:my\\s+|the\\s+)?((?:.*\\s)?(?:lunch|meeting|dinner|appointment|coffee|event|\\d{1,2} ?(?:am|pm)|\\w+ o'clock)(?:\\s.*)?)(?:\\s+(?:back|forward))?\\s+(?:to|for|on|until)\\s+${DAY}$`, 'i')))) {
+    return task([step('calendar', ['move', 'reschedule'], { event: clean(m[1]), day: cap(m[2]) })]);
+  }
   if ((m = t.match(/^(?:move|reschedule|shift|push)\s+(?:my\s+)?(.+?)(?:\s+(?:back|forward|on))?\s+(?:to|until|till)\s+(.+)$/i)) && (here === 'calendar' || !here || /lunch|meeting|dinner|appointment|coffee|event/i.test(m[1]))) {
     const at = m[2].match(/^(.+?)\s+at\s+(.+)$/);
     return task([step('calendar', ['move', 'reschedule'], at ? { event: clean(m[1]), day: cap(at[1]), time: at[2] } : { event: clean(m[1]), day: cap(m[2]) })]);
   }
   if (/^move (?:a|my|the) (?:meeting|event|appointment)$/i.test(t)) return task([step('calendar', ['move', 'reschedule'])]);
   if ((m = t.match(new RegExp(`^what'?s (?:on|happening)(?:\\s+(?:my|the)\\s+calendar)?(?:\\s+${DAY})?$`, 'i'))) ||
-      (m = t.match(new RegExp(`^(?:what (?:have i|do i have) (?:got )?(?:on )?|am i (?:busy|free) |what am i doing |what'?s my day (?:like )?)${DAY}$`, 'i')))) {
-    return task([step('calendar', ['whatsOn', 'today', 'list', 'read'], m[1] ? { day: cap(m[1]) } : {})]);
+      (m = t.match(new RegExp(`^(?:what (?:have i|do i have) (?:got )?(?:on )?|am i (?:busy|free) |what am i doing |what'?s my day (?:like )?|(?:is there )?anything on |do i have anything (?:on )?|what'?s in (?:my |the )?(?:calendar|diary) (?:for )?)${DAY}$`, 'i'))) ||
+      (m = t.match(new RegExp(`^what(?:'?s| does| is) my day look(?:ing)? like(?: ${DAY})?$`, 'i'))) || (m = t.match(/^what'?s in (?:my |the )?(?:calendar|diary)()$/i))) {
+    return task([step('calendar', ['whatsOn', 'today', 'list', 'read'], { day: cap(m[1] || 'today') })]);
   }
   if (/^what'?s next(?: on my calendar)?$/i.test(t)) return task([step('calendar', ['next', 'whatsNext', 'whatsOn'])]);
   if ((m = t.match(new RegExp(`^(?:add|put)\\s+(.+?)\\s+(?:on|for)\\s+${DAY}$`, 'i')))) {
@@ -290,7 +301,7 @@ function plan(said, apps, context, dry) {
   }
   if ((m = t.match(/^(?:run|start|do)\s+(.+)$/i))) return task([{ tool: 'run_workflow', params: { name: m[1] } }]);
 
-  const names = apps.slice(0, 3).map((a) => a.name);
+  const names = ['messages', 'calendar', 'look'].map((id) => apps.find((a) => a.id === id)?.name).filter(Boolean);
   return { kind: 'unknown', plan: [], say: `I can't do that one yet. Try ${names.join(', ') || 'Messages'}.` };
 }
 
