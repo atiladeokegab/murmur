@@ -420,7 +420,7 @@ body:has(dialog[open]) .agent-cursor { visibility: hidden; }
 #apps #app-look { padding-inline: 0; max-width: none; } /* the frame already carries the gutter */
 #apps .look-row button[aria-disabled="true"] { border-style: solid; border-color: var(--c-slat); color: var(--c-quiet); } /* at the limit: quiet, not dashed */
 .app { display: flex; flex-direction: column; gap: var(--gap); }
-.app h2, .app-h { margin: 0.5rem 0 0; font: 700 var(--fs-h1)/1.1 var(--f-read); }
+.app h2, .app-h { margin: 0.5rem 0 0; font: 700 var(--fs-h1)/1.1 var(--f-read); font-size: min(var(--fs-h1), 15vw); } /* 15vw: "Messages" stays one whole word inside 390 px at 400% */
 .app-h3 { margin: 0.5rem 0 0; font-size: var(--fs-why); font-weight: 600; color: var(--c-quiet); }
 .app-btn {
   all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; justify-content: center; gap: 0.15rem;
