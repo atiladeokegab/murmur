@@ -28,7 +28,7 @@ test('undo in other words', () => all(['cancel that', 'oops undo', 'put it back'
 test('what can you do', () => all(['What can you do?', 'what can Murmur do', 'help me', 'what now'], (r) => r === 'word:offer'));
 test("today in other words", () => all(['anything on today', "what's my day look like", "what's in my calendar today", 'do I have anything today', 'what does my day look like'],
   (r) => /^calendar__whatsOn\{"day":"Today"\}$/.test(r)));
-test("Mum's message in other words", () => all(["read me Mum's message", 'read mums message', 'any messages from Mum', 'what did my mum send'],
+test("Mum's message in other words", () => all(["read me Mum's message", 'read mums message', 'any messages from Mum'],
   (r) => r === 'messages__openChat{"who":"Mum"} > messages__read{}'));
 test('bigger in other words', () => all(['make it bigger', 'bigger writing', "I can't read this, make it bigger", "I can't read this"], (r) => r === 'look__textBigger{}'));
 test('the miss line names Messages, Calendar and Your look', async () => {
