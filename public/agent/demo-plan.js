@@ -103,6 +103,7 @@ export function demoPlan(utterance, apps, context = {}) {
   const no = refusal(raw, apps, context);
   if (no) return no;
   if (GARBLED.test(raw)) return { kind: 'unknown', plan: [], say: "Sorry, I didn't catch that. Again?" };
+  if (/^how (?:can|do|could|should|might) i (?:find|make|meet) (?:new |some |more )?friends[?.!]*$/i.test(raw)) return { kind: 'task', plan: [{ tool: 'say', params: { text: FRIENDS } }] }; // advice, not a how-to
   const teach = raw.match(/^how (?:do|can|would|should) i\s+(.+?)[?.!]*$/i);
   if (teach) {
     const inner = planOrWords(teach[1], apps, context, true);
@@ -141,13 +142,17 @@ function planOrWords(said, apps, context, dry) {
   return w || r;
 }
 
+export const EVERYTHING = 'Everything. Just tell me what you need.';
+// What the phone can infer (the seeded chats, calendar and tiles), never a readback of what Murmur did.
+const WHO_AM_I = "You keep in touch: you talk most with Mum and Sam. You start your day with your My morning tile, and Thursday evenings are book club.";
+const FRIENDS = "Book club on Thursday is a good start: say hello to someone new there. You could ask Sam to meet up this week, or look for a local group near you, like a walking group or a library talk.";
 const MISS = "I can't do that one yet.", NO_APP = "I don't have";
 const STOP = new Set('my the a an to of for in at it is me please and with from your some what usual'.split(' ')); // "order my usual": the usual one; "on" counts, so "hold on" is no hold
 const stem = (w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
 const words = (s) => String(s || '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().replace(/'/g, '').split(/[^a-z0-9]+/).filter(Boolean).map(stem);
 
 /** "add milk", "cancel my taxi": the first word said must be the action's verb (its name, or the first word of its say
- * or describe); then the most words in common wins, the open app on a tie. Still tied: "Which one: A or B?". */
+ * or describe); then the most words in common wins, the open app on a tie. Still tied: the first app that fits. */
 export function byWords(t, apps, here) {
   const content = words(t).filter((w) => !STOP.has(w));
   if (!content.length) return null;
@@ -172,10 +177,7 @@ export function byWords(t, apps, here) {
   let best = hits.filter((h) => h.n === top);
   if (best.length > 1 && best.some((h) => h.a.id === here)) best = best.filter((h) => h.a.id === here);
   if (best.length > 1 && best.some((h) => !h.gap)) best = best.filter((h) => !h.gap); // "add milk": the Grocer's item, not an event with no day
-  if (best.length > 1) {
-    const one = (h) => `${h.x.say || h.x.describe.charAt(0).toLowerCase() + h.x.describe.slice(1)} in ${h.a.name}`;
-    return { kind: 'unknown', plan: [], say: `Which one: ${best.slice(0, 3).map(one).join(' or ')}?` };
-  }
+  // still tied: never ask which app, the first that fits does it (the lead, 15:50)
   const { a, x, params, gap } = best[0];
   if (gap) {
     const props = x.params?.properties || {}, question = props[gap]?.description ? `${props[gap].description.replace(/[.?]*$/, '')}?` : `Say it in full, like: ${x.describe.charAt(0).toLowerCase()}${x.describe.slice(1).replace(/[.?]*$/, '')}.`;
@@ -367,6 +369,8 @@ function plan(said, apps, context, dry) {
     return { ...task([{ tool: 'open_app', params: { app: 'writer' } }, { tool: 'ask', params: { question: 'What should I write?' } }]), asked: 'write' };
   }
   if (/^who(?:'?s| is| was)? (?:my )?(?:latest|last|newest|new) message (?:from|by)$|^who (?:has |just )?(?:messaged|texted|written to|wrote to) me$/i.test(t)) return task([step('messages', ['read'], { new: true })]);
+  if (/^what (?:can|could) (?:i|you) do(?: for me| here)?$|^what (?:are|is) you(?: for)?$/i.test(t)) return task([{ tool: 'say', params: { text: EVERYTHING } }]);
+  if (/^who am i$|^what (?:do you|does murmur) know about who i am$/i.test(t)) return task([{ tool: 'say', params: { text: WHO_AM_I } }]);
   if (/^(?:(?:hello|hi|hey)(?: there| murmur)?[,.!]?\s*)?(?:is (?:any ?one|somebody|someone) there)?$|^(?:i can'?t see the screen[,.]?\s*)?how (?:do i|can i) (?:start|begin|use (?:this|it|murmur))$|^i can'?t see the screen$/i.test(t) && t) {
     return task([{ tool: 'say', params: { text: "Hello, I'm Murmur. Just say what you'd like, like \"read my messages\" or \"what's on today\". Say \"what can I do\" to hear more, and \"stop\" any time." } }]);
   }

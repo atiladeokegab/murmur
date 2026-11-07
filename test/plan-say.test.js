@@ -47,10 +47,10 @@ test('"write to Sam" is a message to Sam, not the Writer', () => {
   assert.equal(tool("Write to Sam I'm running late"), 'messages__openChat{"who":"Sam"} > messages__reply{"text":"I\'m running late."} > messages__send{}');
 });
 
-test('the open app wins a tie; an unclear match asks "Which one: A or B?"', () => {
+test('the open app wins a tie; still tied, the first app that fits does it, never "Which one?"', () => {
   const two = describeRegistry([taxi, { ...taxi, id: 'cabco', name: 'Cab Co' }]);
   assert.equal(demoPlan('cancel it', two, { app: 'cabco', workflows: [] }).plan[0].tool, 'cabco__cancel');
-  assert.equal(demoPlan('cancel it', two, { app: null, workflows: [] }).say, 'Which one: cancel my taxi in Northline Taxis or cancel my taxi in Cab Co?');
+  assert.equal(demoPlan('cancel it', two, { app: null, workflows: [] }).plan[0].tool, 'taxi__cancel', 'never asks which app');
   assert.match(demoPlan('say hello', reg, { app: null, workflows: [] }).say, /^I can't do that one yet/, 'one shared word that is not its verb plans nothing');
 });
 
@@ -164,4 +164,19 @@ test('speed: "speak at N percent" and "N times faster" set the nearest voice ste
   assert.equal(tool('speak faster'), 'look__voiceFaster{}');
   assert.match(tool('text Sam three times faster'), /^messages__openChat/, 'content is never a setting');
   assert.deepEqual([0.75, 1, 1.15, 1.25, 1.5, 5].map(cloudAt), [false, true, false, false, false, false]);
+});
+
+test('the lead 15:50: "what can I do" is everything, "who am I" describes the person, friends get a warm answer', async () => {
+  const said = (s) => demoPlan(s, reg, { app: null, workflows: [] }).plan.map((x) => x.params.text).join(' ');
+  for (const s of ['what can you do', 'What can I do for me']) assert.equal(said(s), 'Everything. Just tell me what you need.', s);
+  const who = said('Who am I?');
+  assert.match(who, /Mum and Sam/); assert.match(who, /book club/i);
+  assert.doesNotMatch(who, /you (?:asked|did|moved|sent)|I (?:did|moved|sent)/i, 'about the person, never what Murmur did');
+  for (const s of ['How can I find friends?', 'how can I make friends', 'how do I meet new friends']) {
+    const a = said(s); assert.match(a, /Book club/, s); assert.doesNotMatch(a, /can'?t/i, s);
+  }
+  const spoken = [];
+  const agent = createAgent({ registry: createRegistry(), bus: createBus(), ctxFor: () => ({}), planOpts: { offline: true }, speak: async (t) => { spoken.push(t); } });
+  await agent.hear('What can I do?');
+  assert.deepEqual(spoken, ['Everything. Just tell me what you need.'], 'the reserved word too, never a list');
 });
