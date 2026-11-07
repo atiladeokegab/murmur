@@ -87,3 +87,10 @@ test('a person\'s press moves focus to the new view\'s first line, not the top o
   assert.ok(roots.shop.contains(doc.activeElement) && doc.activeElement.tagName !== 'BUTTON');
   assert.equal(doc.activeElement.textContent, 'Shop, Demo Café');
 });
+
+test('pay on an empty basket says so in words and never opens a sheet', async () => {
+  const { run, asked } = await shopPhone({ answers: [true] });
+  const r = await run('shop__pay');
+  assert.equal(r.ok, false); assert.equal(r.reason, 'Your basket is empty.');
+  assert.equal(asked.length, 0);
+});
