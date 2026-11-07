@@ -35,7 +35,7 @@ export const NARRATION_HOLD_MS = 150; // a question this soon after a step start
 
 export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, fingerprint = async () => false,
   agency = () => 'ask', answers = () => 'short', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
-  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {}, onStop = () => {}, onCut = () => {} }) {
+  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {}, onStop = () => {}, onCut = () => {}, ackAfterMs = 0 }) {
   const appsList = () => (Array.isArray(registry) ? registry : typeof registry?.list === 'function' ? registry.list() : Object.values(registry || {}));
   const app = (id) => (typeof registry?.get === 'function' ? registry.get(id) : appsList().find((a) => a.id === id));
   let movedAt = null; // when this agent last moved a Calendar event; a send or 2 minutes ends "tell Mum" about it
@@ -237,8 +237,10 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
 
     // The first sound within 300 ms of the last word: the shell's heard earcon, then "On it." while the plan runs.
     // Held like a step's line, so a question that comes first ("Sam or Samira?") is the ack instead.
-    say(ACK, { narration: true, ack: true });
+    const ackNow = () => say(ACK, { narration: true, ack: true });
+    const ackT = ackAfterMs ? setTimeout(ackNow, ackAfterMs) : (ackNow(), null); // the lead, 7 Nov: "On it." only when the plan is slow
     const p = await planFor(rest);
+    clearTimeout(ackT);
     slotAsk = p.asked || null;
     if (!p.steps.length || p.kind === 'teach') releaseAck();
     const lost = p.dropped.find((d) => d.reason === 'unknown app' && d.say);

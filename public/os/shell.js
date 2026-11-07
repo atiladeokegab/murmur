@@ -500,6 +500,9 @@ function hear(text, path) {
 // ---------- the eight verbs: the shell's side (the agent matches the words and does undo and carry on) ----------
 function stopAll() {
   stopThinking();
+  // Stop ends hands-free everywhere (button, Back, said): no re-listen, and the open mic closes without its onend reopening it (Prometheus 15:46)
+  handsFree = false; clearTimeout(rearmTimer); clearTimeout(silence);
+  if (rec) { const r = rec; rec = null; r.onend = r.onresult = r.onerror = null; try { r.abort(); } catch { /* already stopped */ } setListening(false); }
   personal.abort(); personal = new AbortController();
   hush();
   if (pending) answerSheet(pending.kind === 'confirm' ? false : null);
@@ -583,7 +586,7 @@ const host = {
 try {
   const { createAgent } = await import('../agent/index.js');
   agent = await createAgent({
-    registry, bus, ctxFor, speak, librarian,
+    registry, bus, ctxFor, speak, librarian, ackAfterMs: 900, // "On it." only when a plan is slow (the lead, 7 Nov)
     os: { open: (id) => open(id), current: () => current, install, remove, home: () => home(),
       sound: (on) => { (on ? unmute : mute)(); store.set('muted', !on); } },
     fingerprint, // (signal): the agent's gates abort it on Stop, No or a new ask, which withdraws the WebAuthn prompt

@@ -358,7 +358,7 @@ export const EARCON_DEFS = Object.freeze({
 // Module state
 let audioCtx = null;
 let masterGain = null;
-let masterVolume = 1.0;
+let masterVolume = 0.4; // the lead, 7 Nov: the sounds were too loud
 let isMutedState = false;
 let isQuietState = false;
 
