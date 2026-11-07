@@ -35,7 +35,7 @@ test('first open says one sentence, only once, and reset re-arms it', async () =
   assert.equal(await firstOpen({ kv, say }), true);
   assert.equal(await firstOpen({ kv, say }), false);
   assert.deepEqual(said, [FIRST_WORDS]);
-  assert.equal(FIRST_WORDS, 'Tap anywhere and tell me what you need.');
+  assert.equal(FIRST_WORDS, 'Tap anywhere and speak.');
   await rearm({ kv });
   assert.equal(await firstOpen({ kv, say }), true);
 });
@@ -54,14 +54,16 @@ test('reset puts every app and the board back, and re-arms first open', async ()
 });
 
 test('next morning moves the board on a day; mode flips who speaks through the look action', async () => {
-  const { demo, board, registry, bus } = await phone();
+  const { demo, board, registry, bus, said } = await phone();
   await demo.nextMorning();
   assert.equal(board.day, 8);
   await demo.mode();
   assert.equal(registry.get('look').state().speaker, 'reader');
   assert.ok(bus.log.some((e) => e.name === 'step:verified' && e.action === 'look__whoSpeaks'));
+  assert.deepEqual(said.filter((t) => /speaks|Who speaks/.test(t)), ['My screen reader speaks.'], 'Mode says its row once');
   await demo.mode();
   assert.equal(registry.get('look').state().speaker, 'murmur');
+  assert.equal(said.at(-1), 'Murmur speaks.');
 });
 
 test('replay re-runs the last task plan, gates included', async () => {
@@ -94,6 +96,7 @@ test('the panel opens on three taps on the clock or Shift+D, and 1 to 4 run the 
   assert.deepEqual(ran, ['nextMorning'], 'number keys do nothing while the panel is shut');
   doc.keyEv({ key: 'D', shiftKey: true }); doc.key('4');
   doc.keyEv({ key: 'D', shiftKey: true }); panel.querySelector('#demo-mode').click();
+  doc.keyEv({ key: 'D', shiftKey: true }); doc.key('5');
   await new Promise((r) => setTimeout(r, 0));
-  assert.deepEqual(ran, ['nextMorning', 'replay', 'mode']);
+  assert.deepEqual(ran, ['nextMorning', 'replay', 'mode', 'planner']);
 });

@@ -61,8 +61,8 @@ test('Vertical 1: "Text Sam I\'m ten minutes late" is planned, asks Sam or Samir
   assert.deepEqual(s.ev('step:start').map((e) => [e.n, e.of, e.label]), [[1, 3, 'Opening the chat'], [2, 3, 'Writing your reply'], [3, 3, 'Sending']]);
   const gate = s.ev('confirm')[0];
   assert.equal(gate.result, true);
-  assert.equal(gate.readback, "Send to Sam: I'm ten minutes late.");
-  assert.ok(s.spoken.includes("Send to Sam: I'm ten minutes late. Send it?"));
+  assert.equal(gate.readback, "Send 'I'm ten minutes late' to Sam?");
+  assert.ok(s.spoken.some((t) => t.startsWith("Send 'I'm ten minutes late' to Sam?")));
   assert.ok(s.spoken.includes('Sam or Samira?'));
   assert.equal(s.ev('task:done')[0].ok, true);
   assertGatesHonoured(s.log);
@@ -126,10 +126,8 @@ test('pay needs the fingerprint; a stranger cannot pay', async () => {
 
   const no = await setup({ fingerprint: async () => false });
   const p = gated(no, 'Order my usual from Demo Café.', async () => { no.clock.t += 650; await no.agent.hear('pay'); });
-  await until(() => no.spoken.includes('Not you, or not read. Try again, or No.'));
-  assert.equal(no.state('shop').orders.length, 0);
-  await no.agent.hear('no');
-  assert.equal((await p).status, 'cancelled');
+  assert.equal((await p).status, 'cancelled', 'no fingerprint: fails closed, nothing paid');
+  assert.equal(no.ev('task:done').at(-1).line, 'Not paid.');
   assert.equal(no.state('shop').orders.length, 0);
   assertGatesHonoured(no.log);
 });
@@ -151,7 +149,7 @@ test('undo works for 8 seconds after a change, then is gone', async () => {
   await s.agent.runner.run({ utterance: 'write', steps: write });
   assert.equal(s.state('hello').draft, 'Lunch on Tuesday.');
   const done = s.ev('task:done')[0];
-  assert.equal(done.line, s.registry.get('hello').read(), 'the done line is on task:done for the panel');
+  assert.equal(done.line, 'Done.', 'a short done line on task:done for the panel, never the read() dump');
   assert.equal(done.undo.until, s.clock.t + 8000);
   assert.match(done.undo.label, /^Undo /);
   await s.agent.undo();
@@ -226,7 +224,7 @@ test('"how do I…" is a dry run that speaks the hints, then does it on request'
   assert.equal(JSON.stringify(s.state('calendar')), before);
   assert.ok(!s.ev('task:start').length);
   await s.agent.hear('do it');
-  assert.equal(s.spoken.at(-1), "Say it in full, and I'll do it.");
+  await until(() => s.spoken.at(-1) === "Say it in full, and I'll do it.");
   await s.agent.hear('How do I move a meeting?');
   const done = await s.agent.hear('Do it: move lunch with Mum to Wednesday.');
   assert.equal(done.status, 'done');
@@ -319,11 +317,25 @@ test("narration and who speaks: Murmur's voice or the status region, never both"
   assert.equal(status.attrs['aria-live'], 'polite');
   assert.equal(status.textContent, 'Sent.');
 
-  const s = await setup();
+  const s = await setup({ agency: () => 'ask' });
   await s.agent.hear("Read Mum's message");
-  assert.deepEqual(s.spoken.slice(0, 3), ['Opening the chat', 'Reading', 'Lunch on Tuesday?']);
-  assert.equal(s.spoken.at(-1), s.registry.get('messages').read());
+  assert.deepEqual(s.spoken.slice(0, 4), ['On it.', 'Opening the chat', 'Reading', 'Lunch on Tuesday?']);
+  const quick = await setup(); // Just do it: the step earcons carry the steps; the voice says the result
+  await quick.agent.hear("Read Mum's message");
+  assert.ok(!quick.spoken.includes('Opening the chat'));
+  assert.equal(quick.spoken.at(-1), 'Lunch on Tuesday?');
+  assert.equal(s.spoken.at(-1), 'Lunch on Tuesday?', 'a read ends on what was read, not a summary of the screen');
   assert.deepEqual(s.ev('say').map((e) => e.text), s.spoken, 'every sentence heard is on the record, once');
   assert.equal(gerund('Change a word'), 'Changing a word');
   assert.equal(gerund('Stop the timer'), 'Stopping the timer');
+});
+
+test('Ask me, Vertical 1: no clipped "Opening the chat" before "Sam or Samira?", and no beat before typing when Send asks anyway', async () => {
+  const s = await setup({ agency: () => 'ask' });
+  const t0 = s.clock.t;
+  const out = await gated(s, "Text Sam I'm ten minutes late", async () => { s.clock.t += 600; await s.agent.hear('send'); }, { choose: 'Sam' });
+  assert.equal(out.status, 'done');
+  const q = s.spoken.findIndex((t) => / or .+\?$/.test(t));
+  assert.ok(!s.spoken.slice(0, q).includes('Opening the chat'), 'the question replaced the step line');
+  assert.equal(s.clock.t - t0, 600, 'no 700 ms beat: the send gate is the moment to say no');
 });

@@ -1,5 +1,5 @@
 // The extras the shell calls once at boot: Your look as an app, the one-voice wrap, the first-open sentence,
-// the demo panel on the clock, and the Inside relay. One call from shell.js; everything here is optional.
+// and the demo panel on the clock. One call from shell.js; everything here is optional.
 import { appKv, createCtx, mountApp, runAction } from '../sdk/index.js';
 import look, { settings as lookSettings, onSettings } from '../apps/look/index.js';
 import { createDemo, bindDemo } from './demo/index.js';
@@ -51,15 +51,18 @@ export async function wireExtras({ bus, registry, speak, settings, save, kv, app
     cursor: { async moveTo() {}, hide() {} }, ask: async () => false, speak: say });
   const run = (name, params, n, of) => runAction({ registry, name, params, bus, ctxFor, n, of });
   const onboard = { kv: { get: (k) => kv.get('os.onboard', k), set: (k, v) => kv.set('os.onboard', k, v) } };
-  const demo = createDemo({ registry, bus, run, say, board, replay, stop, onboard });
+  const planner = settings && (() => {
+    settings.planner = settings.planner === 'offline' ? 'auto' : 'offline';
+    try { save?.(); } catch { /* stays in memory */ }
+    return say(`Planner: ${settings.planner === 'offline' ? 'offline' : 'Gemini'}.`);
+  });
+  const demo = createDemo({ registry, bus, run, say, board, replay, stop, onboard, planner });
   const panel = clockEl ? bindDemo(clockEl, demo, { doc }) : null;
 
   // First open: one sentence, once. Not awaited, so boot never waits on the voice.
   firstOpen({ kv: onboard.kv, say }).catch((e) => console.warn('first open', e));
 
-  // Inside: forward the bus to the laptop if Hermes's relay is on this build.
-  let offInside = null;
-  try { offInside = (await import('../inside/forward.js')).forward(bus); } catch { /* no Inside on this build */ }
+  // Inside: shell.js forwards the bus itself; forwarding here too would double every row on /inside.
 
-  return { say, demo, off: () => { offSync(); panel?.off(); offInside?.(); } };
+  return { say, demo, off: () => { offSync(); panel?.off(); } };
 }

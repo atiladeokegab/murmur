@@ -1,18 +1,18 @@
 // Your look: text, colours, voice, who speaks, how much Murmur does, and what Murmur remembers.
 // An app on the contract (os/contract.md). Each row applies on touch and says itself; each row is a voice action.
 // Text size, colours and voice speed live in the toolkit's ability profile (public/look.js); the rest in this app's kv.
-import { readLook, writeLook, applyLook } from '../../look.js';
+import { loadLook, writeLook, applyLook, PHONE_LIGHT } from '../../look.js';
 
 export const STEPS = {
   size: { label: 'Text', more: 'bigger', less: 'smaller', values: [100, 150, 200, 300, 400], words: (v) => `${v} percent` },
-  rate: { label: 'Voice', more: 'faster', less: 'slower', values: [0.75, 1, 1.25, 1.5, 2], words: (v) => (v === 1 ? 'normal speed' : `${v} times`) },
+  rate: { label: 'Voice', more: 'faster', less: 'slower', values: [0.75, 1, 1.15, 1.25, 1.5, 2], words: (v) => (v === 1 ? 'normal speed' : `${v} times`) },
 };
 export const CHOICES = {
-  theme: { label: 'Colours', options: { dark: 'Dark', light: 'Light', yellow: 'Yellow on black' } },
+  theme: { label: 'Colours', options: { auto: 'Match my phone', dark: 'Dark', light: 'Light', yellow: 'Yellow on black' } },
   speaker: { label: 'Who speaks', options: { murmur: 'Murmur', reader: 'My screen reader' } },
   agency: { label: 'How much Murmur does', options: { ask: 'Ask me', just: 'Just do it', teach: 'Teach me' } },
 };
-const DEFAULTS = { size: 100, rate: 1, theme: 'dark', speaker: 'murmur', agency: 'ask', learning: true };
+const DEFAULTS = { size: 100, rate: 1.15, theme: 'auto', speaker: 'murmur', agency: 'ask', learning: true };
 
 let root = null, kv = null, os = null, toolkit = null;
 let look = { ...DEFAULTS }, known = null, lastChange = null, pending = Promise.resolve();
@@ -92,7 +92,7 @@ async function save(change, sentence) {
   if (librarian && change.row === 'learning') { try { await librarian.setMemoryPaused(!look.learning); } catch { /* said below either way */ } }
   apply();
   render();
-  await os.say(sentence);
+  if (!byAgent) await os.say(sentence);
 }
 
 function step(key, dir) {
@@ -166,8 +166,31 @@ async function forget() {
 const on = (b, fn) => b.addEventListener('click', () => { pending = pending.then(fn, fn); });
 
 // Every action presses a row's control through ctx, then waits for that row to apply.
-const press = async (ctx, key) => { await ctx.tap(btn[key]); await pending; };
-const stepper = (key, dir) => ({
+// The agent's press keeps quiet: its done line says the change once ("Text 150 percent."). A tap by hand still hears it.
+let byAgent = false;
+const press = async (ctx, key) => { byAgent = true; try { await ctx.tap(btn[key]); await pending; } finally { byAgent = false; } };
+// Undo: press the row's own controls until it is back where it was before the action ran (the same door).
+const before = {};
+async function pressTo(ctx, row, value) {
+  for (let i = 0; i < 8 && look[row] !== value; i++) { // 8: more than any row has steps, so a stray value cannot loop
+    if (STEPS[row]) { const v = STEPS[row].values; await press(ctx, `${row}-${v.indexOf(look[row]) < v.indexOf(value) ? 'more' : 'less'}`); }
+    else await press(ctx, CHOICES[row] ? `${row}-${value}` : row); // learning is one toggle
+  }
+}
+const undoable = (row, action) => ({
+  ...action,
+  async run(p, ctx) { before[row] = look[row]; await action.run(p, ctx); },
+  async undo(ctx) { if (row in before) await pressTo(ctx, row, before[row]); },
+  done: (s) => rowLine(row, s),
+});
+// The done line after a change says only that row ("Text 150 percent."): seconds count on stage.
+function rowLine(row, s) {
+  if (STEPS[row]) return `${STEPS[row].label} ${STEPS[row].words(s[row])}.`;
+  if (row === 'learning') return s.learning ? 'Learning on.' : 'Learning stopped.';
+  const words = CHOICES[row].options[s[row]];
+  return row === 'speaker' ? `${words} speaks.` : `${CHOICES[row].label}: ${words.toLowerCase()}.`;
+}
+const stepper = (key, dir) => undoable(key, {
   describe: `Make the ${key === 'size' ? 'text' : 'voice'} ${STEPS[key][dir]}`,
   doing: `${key === 'size' ? 'Text' : 'Voice'} ${STEPS[key][dir]}`,
   hint: `${STEPS[key].label}: ${STEPS[key][dir]} is ${key === 'size' ? 'the first row' : 'the voice row'} in Your look.`,
@@ -176,7 +199,7 @@ const stepper = (key, dir) => ({
   verify: (s) => (s.lastChange?.row === key && (dir === 'more' ? s.lastChange.to > s.lastChange.from : s.lastChange.to < s.lastChange.from))
     || `${STEPS[key].label} did not change.`,
 });
-const chooser = (key, param, describe, doing, hint) => ({
+const chooser = (key, param, describe, doing, hint) => undoable(key, {
   describe, doing, hint,
   params: { type: 'object', properties: { [param]: { type: 'string', enum: Object.keys(CHOICES[key].options) } }, required: [param] },
   async run(p, ctx) { await press(ctx, `${key}-${p[param]}`); },
@@ -223,9 +246,11 @@ const app = {
     if (librarian) {
       try { // a fresh profile reads as light; seed it from ours (dark by default) instead, as public/app.js does
         if (!(await librarian.getProfile())?.fields?.needs?.length) await writeLook(librarian, look);
-        Object.assign(look, await readLook(librarian));
+        await loadLook(librarian, look);
       } catch { /* keep the kv copy */ }
     }
+    // No colours chosen: follow the phone's light or dark setting as it changes.
+    globalThis.matchMedia?.(PHONE_LIGHT).addEventListener?.('change', () => { if (look.theme === 'auto') apply(); });
     apply();
     render();
   },
@@ -257,7 +282,7 @@ const app = {
   actions: {
     textBigger: stepper('size', 'more'),
     textSmaller: stepper('size', 'less'),
-    setText: {
+    setText: undoable('size', {
       describe: 'Set the text size in percent',
       doing: 'Changing the text size',
       hint: 'Text: bigger and Text: smaller are the first row in Your look.',
@@ -267,20 +292,20 @@ const app = {
         while (look.size !== p.percent) await press(ctx, v.indexOf(look.size) < v.indexOf(p.percent) ? 'size-more' : 'size-less');
       },
       verify: (s, p) => s.size === p.percent || 'The text size did not change.',
-    },
+    }),
     voiceFaster: stepper('rate', 'more'),
     voiceSlower: stepper('rate', 'less'),
-    colours: chooser('theme', 'colours', 'Change the colours: dark, light, or yellow on black', 'Changing the colours', 'Colours is the third row in Your look.'),
+    colours: chooser('theme', 'colours', 'Change the colours: match my phone, dark, light, or yellow on black', 'Changing the colours', 'Colours is the third row in Your look.'),
     whoSpeaks: chooser('speaker', 'who', 'Choose who speaks: Murmur, or my screen reader', 'Choosing who speaks', 'Who speaks is after Colours in Your look.'),
     howMuch: chooser('agency', 'mode', 'Choose how much Murmur does: ask me, just do it, or teach me', 'Changing how much I do', 'How much Murmur does is after Who speaks.'),
-    learning: {
+    learning: undoable('learning', {
       describe: 'Stop learning, or start learning again',
       doing: 'Changing learning',
       hint: 'Stop learning is the first button under Memory, near the end of Your look.',
       params: { type: 'object', properties: { on: { type: 'boolean', description: 'false to stop learning' } }, required: ['on'] },
       async run(p, ctx) { if (look.learning !== p.on) await press(ctx, 'learning'); },
       verify: (s, p) => s.learning === p.on || 'Learning did not change.',
-    },
+    }),
     whatYouKnow: {
       describe: 'Say what Murmur knows about me',
       doing: 'Reading what I know',

@@ -22,7 +22,7 @@
   --c-bar-on: #F5F6F8;
   --c-on-bar-on: #0C0D10;
   --c-scrim: rgb(0 0 0 / 0.6);
-  --o-behind: 0.35;
+  --o-behind: 0.3;           /* the app dims to 30% under a sheet */
   --c-sheet: #14161B;
   --c-mark: #FFC266;
   --c-on-mark: #14100A;
@@ -38,7 +38,7 @@
   --fs-now-why: 1.125rem;
   --fs-badge: 0.9375rem;
   --fs-time: 1rem;
-  --fs-flap: 1.25rem;
+  --fs-flap: 2.75rem;        /* the board clock: the one big thing */
   --fs-say: 1rem;
   --fs-talk: 1.25rem;
   --fs-hint: 0.875rem;
@@ -48,6 +48,7 @@
 
   /* space and shape: generous padding, 16 to 22 px radii, a 3 px ring that sits off the edge */
   --gutter: clamp(16px, 4vw, 32px);
+  --gap: 12px;               /* between cards; never a divider */
   --pad-tile: 1rem 1.125rem;
   --pad-now: 1.375rem 1.25rem;
   --col-when: 4.75rem;
@@ -66,13 +67,14 @@
   --fs-race-taps: 1.5rem;
   --w-column: 720px;
   --r-now: 20px;
-  --r-cell: 6px;
+  --r-cell: 8px;
   --r-key: 8px;
-  --r-talk: 48px;
-  --r-sheet: 22px;
-  --r-btn: 16px;
-  --ring: 3px;              /* the focus ring and the agent cursor: 3 px, 2 px off the edge, never wider */
-  --ring-off: 2px;
+  --r-talk: 20px;
+  --r-sheet: 20px;
+  --r-btn: 20px;            /* one radius for every surface */
+  --ring: 3px;              /* the focus ring and the agent cursor: 3 px, never wider than the target */
+  --ring-off: 6px;
+  --ring-in: -8px;          /* the ring inside a full-width card */
   --bw-now: 2px;
   --bw-talk: 1.5px;
   color-scheme: dark;
@@ -92,19 +94,22 @@
   --c-accent: #734300;      /* 8.3:1 on #FFF, 7.5:1 on a hovered card (Hermes measured the old #8A4B00 at 6.8:1) */
   --c-on-accent: #FFF; --c-ink: #111318; --c-quiet: #4B5160; /* 7.9:1 on #FFF, 7.2:1 hovered */
   --c-focus: #734300; --c-bar: #FFF; --c-bar-on: #111318; --c-on-bar-on: #FFF;
-  --c-scrim: rgb(17 19 24 / 0.4); --o-behind: 0.4; --c-sheet: #FFF; --c-mark: #734300; --c-on-mark: #FFF;
+  --c-scrim: rgb(17 19 24 / 0.7); --o-behind: 0.3; --c-sheet: #FFF; --c-mark: #734300; --c-on-mark: #FFF;
   color-scheme: light;
 }
 
 * { box-sizing: border-box; }
-html { background: var(--c-page); }
+html { background: var(--c-page); overflow-x: hidden; overscroll-behavior: contain; }
 body {
-  margin: 0; height: 100svh; display: flex; flex-direction: column;
+  margin: 0; min-height: 100svh; display: flex; flex-direction: column;
   background: var(--c-page); color: var(--c-ink);
   font: 400 1rem/var(--lh) var(--f-read); -webkit-font-smoothing: antialiased; overflow-wrap: break-word;
 }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 :focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-off); }
+h2:focus-visible, h3:focus-visible, h4:focus-visible, p:focus-visible { outline-offset: 8px; border-radius: var(--r-btn); }
+[tabindex="-1"]:focus { outline: 0; } /* focus moved by the shell, not the person: no ring */
+h1, h2, h3, h4, .title, .app-title, .app-btn, .step, .done-line, .app-who, .badge, .choice { overflow-wrap: normal; hyphens: none; }
 button { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
 
@@ -115,7 +120,7 @@ button { font: inherit; color: inherit; }
 .skip:focus { top: 8px; }
 
 /* The scroller. The talk bar sits below it, never on top of a row. */
-main { flex: 1; overflow-y: auto; overscroll-behavior: contain; container: board / inline-size; }
+main { flex: 1; container: board / inline-size; } /* fills the page so the bar sits at the bottom; the document scrolls */
 .column { width: min(100%, var(--w-column)); margin: 0 auto; padding-bottom: 1rem; }
 
 .top { padding: clamp(14px, 3.2vh, 28px) var(--gutter) 0.75rem; }
@@ -131,7 +136,7 @@ h1 .day { font-size: var(--fs-day); color: var(--c-quiet); }
   background: var(--c-board);
 }
 .proposal p { margin: 0 0 0.75rem; font-size: var(--fs-now-why); }
-.choices { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.choices { display: flex; flex-wrap: wrap; gap: var(--gap); }
 .choice {
   all: unset; box-sizing: border-box; cursor: pointer; flex: 1 1 6rem; min-height: var(--h-link); padding: 0.5rem 0.75rem;
   display: grid; place-items: center; text-align: center; border: var(--bw-talk) solid var(--c-ink); border-radius: var(--r-btn);
@@ -139,18 +144,19 @@ h1 .day { font-size: var(--fs-day); color: var(--c-quiet); }
 }
 .choice.yes { background: var(--c-accent); color: var(--c-on-accent); border-color: var(--c-accent); }
 .choice:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-off); }
+.choice.yes:focus-visible { outline-color: var(--c-on-accent); outline-offset: calc(var(--ring) * -1); } /* the ring replaces the edge: one dark line, not amber on amber */
 
 /* ---------- the board ---------- */
 ol { list-style: none; margin: 0; padding: 0 var(--gutter); }
-li + li { border-top: 1px solid var(--c-slat); }
+#board { display: flex; flex-direction: column; gap: var(--gap); }
 .tile {
   all: unset; box-sizing: border-box; cursor: pointer; width: 100%; min-height: var(--h-tile);
   display: grid; grid-template-columns: var(--col-when) 1fr; align-items: center; gap: 0.25rem 0.75rem;
-  padding: var(--pad-tile); background: var(--c-board); color: var(--c-ink); -webkit-tap-highlight-color: transparent;
+  padding: var(--pad-tile); background: var(--c-board); color: var(--c-ink); border-radius: var(--r-now); -webkit-tap-highlight-color: transparent;
 }
 .tile:hover { background: var(--c-board-hover); }
 .tile:active { background: var(--c-board-press); }
-.tile:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: calc(var(--ring) * -1); }
+.tile:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-in); }
 .when:empty { display: none; }
 ol:not(:has(.when:not(:empty))) .tile { grid-template-columns: 1fr; }
 .when { font: 500 var(--fs-time)/1 var(--f-time); color: var(--c-quiet); font-variant-numeric: tabular-nums; }
@@ -162,8 +168,7 @@ ol:not(:has(.when:not(:empty))) .tile { grid-template-columns: 1fr; }
 .error { display: block; font-size: var(--fs-title); color: var(--c-ink); }
 
 /* the tile that grew */
-li.now { border: 0; margin-bottom: 0.5rem; }
-li.now + li { border-top: 0; }
+li.now { border: 0; }
 .now .tile {
   grid-template-columns: 1fr; gap: 0.6rem; min-height: var(--h-now); padding: var(--pad-now); align-content: center;
   background: linear-gradient(var(--c-now-top), var(--c-now-bottom)); box-shadow: inset 0 0 0 var(--bw-now) var(--c-accent); border-radius: var(--r-now);
@@ -171,16 +176,13 @@ li.now + li { border-top: 0; }
 .now .tile:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-off); }
 .now .head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
 .badge { background: var(--c-accent); color: var(--c-on-accent); font: 700 var(--fs-badge)/1 var(--f-read); padding: 0.35em 0.5em; border-radius: var(--r-cell); }
-.now .title { font-size: var(--fs-now-title); line-height: 1.05; color: var(--c-accent); }
+.now .title { font-size: var(--fs-now-title); line-height: 1.05; color: var(--c-ink); }
 .now .why { font-size: var(--fs-now-why); color: var(--c-ink); }
 .now .tap { font-size: var(--fs-why); color: var(--c-quiet); }
 
 /* split-flap: only the Now time */
-.flap { display: inline-flex; gap: 2px; font: 600 var(--fs-flap)/1 var(--f-time); color: var(--c-accent); font-variant-numeric: tabular-nums; }
-.flap i { font-style: normal; display: inline-grid; place-items: center; min-width: 1.05em; padding: 0.3em 0.1em; background: var(--c-cell); border-radius: var(--r-cell); position: relative; isolation: isolate; }
-.flap i::after { content: ""; position: absolute; z-index: -1; left: 0; right: 0; top: 50%; height: 1px; background: var(--c-cell-line); }
-.flap i.sep { background: none; min-width: 0.5em; }
-.flap i.sep::after { display: none; }
+.flap { display: inline-flex; font: 700 var(--fs-flap)/1 var(--f-read); letter-spacing: normal; color: var(--c-accent); font-variant-numeric: tabular-nums; }
+.flap i { font-style: normal; }
 
 @media (prefers-reduced-motion: no-preference) {
   .moved .title { animation: flip 520ms cubic-bezier(.3,.7,.2,1) both; }
@@ -193,9 +195,12 @@ li.now + li { border-top: 0; }
 }
 
 /* ---------- talk bar ---------- */
-footer { flex: none; container: bar / inline-size; padding: 8px var(--gutter) max(12px, env(safe-area-inset-bottom)); background: var(--c-page); border-top: 1px solid var(--c-slat); }
+footer { position: sticky; bottom: 0; z-index: 3; flex: none; container: bar / inline-size; padding: 8px var(--gutter) max(12px, env(safe-area-inset-bottom)); background: var(--c-page); border-top: 1px solid var(--c-slat); }
 footer > * { width: min(100%, var(--w-column)); margin-inline: auto; }
-.say { display: flex; gap: 0.5rem; align-items: baseline; margin-top: 0; margin-bottom: 0.5rem; padding: 0 1rem; min-height: 1.4em; font-size: var(--fs-say); max-height: 5.6em; overflow-y: auto; }
+.say { display: flex; gap: 0.5rem; align-items: baseline; margin-top: 0; margin-bottom: 0.5rem; padding: 0 1rem; font-size: var(--fs-say); line-height: 1.4;
+  block-size: min(2.8em, 14svh); overflow-y: auto; } /* fixed: a longer sentence scrolls in place, the screen above never moves */
+/* Big text: the talk bar keeps to its job, so the screen above it still has room to read and scroll. */
+@container bar (max-width: 22em) { .talk .hint { display: none; } .talk { min-height: var(--h-link); padding-block: 0.4rem; } }
 .say #say { min-width: 0; }
 .say .who { color: var(--c-accent); font-weight: 700; white-space: nowrap; }
 .say #say:not(:empty)::before { content: "\201C"; }
@@ -225,13 +230,18 @@ footer > * { width: min(100%, var(--w-column)); margin-inline: auto; }
 /* ---------- ask-first sheet and reader ---------- */
 dialog {
   /* Not modal: the talk bar stays live under it, so you can talk to a note or a reply. The menu goes inert. */
-  position: fixed; inset: var(--gutter) 0 auto 0; z-index: 5; margin: 0 auto; padding: 0;
-  width: min(100% - 2 * var(--gutter), var(--w-column)); max-height: calc(100svh - var(--footer-h, 160px) - 2 * var(--gutter)); overflow-y: auto;
+  /* It rises from the talk bar, under the work panel, so the place line, the step and Stop stay in sight. */
+  position: fixed; inset: auto 0 calc(var(--footer-h, 160px) + var(--gutter)) 0; z-index: 5; margin: 0 auto; padding: 0;
+  width: min(100% - 2 * var(--gutter), var(--w-column)); overflow-y: auto;
+  max-height: max(40svh, calc(100svh - var(--footer-h, 160px) - var(--work-h, 0px) - 2 * var(--gutter)),
+    calc(100svh - var(--footer-h, 160px) - 2 * var(--gap) - clamp(0px, (32px - 1rem) * 100, 100svh))); /* from 200% text: the whole space above the bar */
+  scrollbar-width: thin; scrollbar-color: var(--c-quiet) transparent;
   border: var(--bw-talk) solid var(--c-accent); border-radius: var(--r-sheet); background: var(--c-sheet); color: var(--c-ink);
 }
-body:has(dialog[open]) main { opacity: var(--o-behind); }
+body:has(dialog[open]) :is(#board-view, #apps) { opacity: var(--o-behind); filter: grayscale(1); } /* grey, not tan: dimmed amber reads as muddy on the light page */
 dialog::backdrop { background: var(--c-scrim); }
-.sheet { display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem; }
+.sheet { display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem; font-variant-numeric: normal; }
+.sheet::after { content: ""; position: sticky; bottom: 0; flex: none; height: 1.25rem; margin-bottom: -1.25rem; background: linear-gradient(transparent, var(--c-sheet)); pointer-events: none; } /* the scroll hint: sits in the padding at the end, fades the cut row while there is more */
 .sheet h2 { margin: 0; font-size: var(--fs-sheet-h); line-height: 1.15; }
 .sheet p { margin: 0; font-size: var(--fs-sheet); }
 .sheet .from b { display: block; color: var(--c-accent); font-size: var(--fs-why); }
@@ -259,15 +269,17 @@ dialog::backdrop { background: var(--c-scrim); }
 }
 /* big text (about 250% and up on a phone): Now fills the screen, heading and date drop, one column */
 @container board (max-width: 15em) {
+  body:has(dialog[open]) .column { visibility: hidden; } /* big text: nothing pokes out above the sheet */
   .top { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); padding: 0; }
-  .column { --fs-now-title: 1.25rem; --fs-title: 1rem; --fs-why: 0.75rem; --fs-now-why: 0.75rem; --fs-badge: 0.75rem; --fs-flap: 0.625rem; --fs-time: 0.625rem; }
+  .column { --fs-now-title: 1.25rem; --fs-title: 0.875rem; --fs-why: 0.75rem; --fs-now-why: 0.75rem; --fs-badge: 0.75rem; --fs-flap: 0.625rem; --fs-time: 0.625rem; }
   ol { padding-top: 6px; }
-  .tile, .now .tile { grid-template-columns: 1fr; padding: 0.4rem 0.6rem; gap: 0.25rem; min-height: 0; }
+  .tile, .now .tile { grid-template-columns: 1fr; padding: 0.4rem 0.5rem; gap: 0.25rem; min-height: 0; border-radius: 12px; }
+  #board { gap: 6px; }
   .look { font-size: 0.75rem; padding-inline: 0.3rem; }
   .now .flap { display: none; }
 }
 @container bar (max-width: 15em) {
-  .say { display: block; margin-bottom: 6px; font-size: 0.75rem; max-height: 2.8em; padding-inline: 0.3rem; }
+  .say { display: block; margin-bottom: 6px; font-size: 0.75rem; max-height: 1.45em; padding-inline: 0.3rem; }
   .say .who { margin-right: 0.3em; }
   .talk { font-size: 0.75rem; min-height: 72px; padding: 0.2rem 12px; border-radius: var(--r-btn); gap: 0.4rem; }
   .talk svg, .talk .hint { display: none; }
@@ -276,7 +288,8 @@ dialog::backdrop { background: var(--c-scrim); }
 /* ---------- Your look ---------- */
 .sheet .quiet { color: var(--c-quiet); font-size: var(--fs-why); }
 .sheet .group h3 { margin: 0 0 0.5rem; font-size: var(--fs-why); font-weight: 600; color: var(--c-quiet); }
-.sheet .group .choice { font-size: var(--fs-sheet); }
+.sheet .group .choice { font-size: var(--fs-sheet); flex: 1 1 calc(50% - var(--gap)); }
+.sheet .group .choices:has(> .choice:nth-child(3):last-child) .choice { flex-basis: 100%; } /* three options: one per row, never an orphan */
 .choice[aria-pressed="true"] { background: var(--c-ink); color: var(--c-page); border-color: var(--c-ink); }
 dialog { container: sheet / inline-size; }
 @container sheet (max-width: 15em) {
@@ -300,13 +313,13 @@ dialog { container: sheet / inline-size; }
 .nl-help { flex: 1 1 12rem; margin: 0; font-size: var(--fs-why); color: var(--c-ink); }
 .nl-band .choice { flex: 0 1 auto; }
 .no-look main { padding-bottom: var(--nl-room); }
-.nolook { container: nl / inline-size; }
+.nolook { container: nl / inline-size; font-variant-numeric: normal; }
 @container nl (max-width: 15em) {
   .nl-help { display: none; }
   .nl-band { padding: 4px 8px; }
   .nl-band .choice { flex: 1 1 100%; min-height: 64px; font-size: 0.75rem; padding: 2px 6px; }
 }
-.tile.cursor { outline: var(--ring) solid var(--c-focus); outline-offset: calc(var(--ring) * -1); background: var(--c-board-press); }
+.tile.cursor { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-in); background: var(--c-board-press); }
 
 /* ---------- the race page ---------- */
 .race main { padding: var(--gutter); }
@@ -333,37 +346,66 @@ dialog { container: sheet / inline-size; }
   position: fixed; left: 0; top: 0; z-index: 20; pointer-events: none; box-sizing: border-box;
   width: var(--w); height: var(--h); transform: translate(var(--x), var(--y));
   border: var(--ring) solid var(--c-focus); border-radius: var(--r-btn);
-  transition: transform var(--t-glide) ease-out, width var(--t-glide) ease-out, height var(--t-glide) ease-out;
+  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1), width 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 150ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 100ms ease-out; /* shortcut: literal until design's motion tokens land */
 }
 .agent-cursor[hidden] { display: none; }
-@media (prefers-reduced-motion: reduce) { .agent-cursor { transition: none; } }
+/* the sheet asks first: the ring on the control behind it waits, it does not draw over the question */
+body:has(dialog[open]) .agent-cursor { visibility: hidden; }
+.agent-cursor[data-press] { animation: press 180ms ease-out; }
+@keyframes press { 40% { scale: 0.92; } }
+@media (prefers-reduced-motion: reduce) {
+  /* No glide: the ring fades out where it was and in where it lands. */
+  .agent-cursor { transition: opacity 40ms linear; }
+  .agent-cursor[data-press] { animation: none; }
+}
 
 /* ---------- the work panel: where you are, the step now, Stop, the Done line (os/shell.js) ---------- */
-.work { padding: clamp(10px, 2.4vh, 20px) var(--gutter) 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.work { position: sticky; top: 0; z-index: 2; background: var(--c-page); padding: clamp(10px, 2.4vh, 20px) var(--gutter) 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .work .place { margin: 0; font-size: var(--fs-place); color: var(--c-quiet); }
 .work .step { margin: 0; font: 700 var(--fs-step)/1.05 var(--f-read); color: var(--c-accent); }
+.slot-a { min-block-size: calc(2 * 1.05 * var(--fs-step)); display: grid; align-content: start; }
+.slot-b { min-block-size: var(--h-stop); display: grid; }
+.slot[hidden] { display: none; }
+.work .step, .done-line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.work .step[hidden], .done-line[hidden] { display: none; }
 .stop {
   all: unset; box-sizing: border-box; cursor: pointer; display: grid; place-items: center; width: 100%; min-height: var(--h-stop);
   border: var(--bw-now) solid var(--c-ink); border-radius: var(--r-btn); background: var(--c-ink); color: var(--c-page);
   font: 700 var(--fs-sheet-h)/1 var(--f-read);
 }
-.stop:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-off); }
-.done { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
-.done-line { margin: 0; flex: 1 1 12rem; font: 700 var(--fs-title)/1.2 var(--f-read); }
-.done .undo { min-height: var(--h-btn); min-width: 8rem; font-size: var(--fs-sheet); }
-.done-ms { margin: 0; flex-basis: 100%; font: 500 var(--fs-hint)/1.2 var(--f-time); color: var(--c-quiet); }
-.work .ticks, .work .lines { padding: 0; display: flex; flex-direction: column; gap: 0.25rem; font-size: var(--fs-why); }
-.work .ticks li::before { content: "\2713\00A0"; color: var(--c-accent); }
-.work .ticks li.no::before { content: "\2717\00A0"; }
+.stop:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-in); } /* full width: ring inside, never past the gutter */
+.done[hidden] { display: none; }
+.done { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 1.125rem; border: var(--bw-now) solid var(--c-accent); border-radius: var(--r-now); }
+/* Done: the line (slot a) and Undo (slot b) read as one card; the tick row goes */
+.work:has(.done:not([hidden])) .ticks { display: none; }
+.work:has(.done:not([hidden])) .slot-a { min-block-size: 0; padding: 1rem 1.125rem 0; border: var(--bw-now) solid var(--c-accent); border-bottom: 0; border-radius: var(--r-now) var(--r-now) 0 0; }
+.work:has(.done:not([hidden])) .slot-b { margin-top: -0.5rem; min-block-size: 0; }
+.done .undo { flex: none; }
+.work:has(.done:not([hidden])) .done { border-top: 0; border-radius: 0 0 var(--r-now) var(--r-now); }
+.done-line { margin: 0; font: 700 var(--fs-title)/1.2 var(--f-read); }
+.done .undo { width: 100%; min-width: 0; min-height: var(--h-btn); font-size: var(--fs-sheet); }
+.done-ms { margin: 0; font: 500 var(--fs-hint)/1.2 var(--f-read); color: var(--c-quiet); }
+.work .ticks { margin: 0; padding: 0; list-style: none; display: flex; gap: 0.4rem; block-size: 1.4em; overflow: hidden; font: 700 var(--fs-why)/1.4 var(--f-read); }
+.work .ticks:empty { visibility: hidden; } /* the row keeps its height before the first tick */
+.work .ticks li::before { content: "\2713"; color: var(--c-accent); }
+.work .ticks li.no::before { content: "\2717"; color: var(--c-ink); }
+.work .slot-a[hidden] + .ticks { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  /* A tick draws in on the frame its earcon plays. */
+  .work .ticks li { transition: scale 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 160ms ease-out; }
+  @starting-style { .work .ticks li { scale: 0.2; opacity: 0; } }
+}
+.work .lines { margin: 0; list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; font-size: var(--fs-why); }
 .work .lines li { color: var(--c-quiet); }
 .work .lines li:last-child { color: var(--c-ink); }
-.work .lines:empty, .work .ticks:empty { display: none; }
+.work .lines:empty { display: none; }
 .top { display: flex; }
 .top .day { cursor: default; }
 
 /* ---------- the app frame: shared by every app (apps write no colours or sizes) ---------- */
 #apps { padding: 0 var(--gutter) 1rem; }
-.app { display: flex; flex-direction: column; gap: 0.75rem; }
+.app { display: flex; flex-direction: column; gap: var(--gap); }
 .app h2, .app-h { margin: 0.5rem 0 0; font: 700 var(--fs-h1)/1.1 var(--f-read); }
 .app-h3 { margin: 0.5rem 0 0; font-size: var(--fs-why); font-weight: 600; color: var(--c-quiet); }
 .app-btn {
@@ -376,7 +418,8 @@ dialog { container: sheet / inline-size; }
 .app-btn.primary { min-height: var(--h-btn); background: var(--c-accent); color: var(--c-on-accent); border-color: var(--c-accent); align-items: center; }
 .app-btn.quiet { background: none; border-color: transparent; font-weight: 400; text-decoration: underline; text-underline-offset: 0.25em; }
 .app-btn:disabled { opacity: 0.6; cursor: default; }
-.app-list, .app-chat, .app-sentences, .app-days { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.app-list, .app-chat, .app-sentences, .app-days { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--gap); }
+.app-btn .app-why { color: var(--c-quiet); font-weight: 400; }
 .app-title { font-size: var(--fs-title); font-weight: 700; }
 .app-why, .app-place { margin: 0; font-size: var(--fs-why); font-weight: 400; color: var(--c-quiet); }
 .app-chat li { padding: 0.5rem 0.75rem; border-radius: var(--r-btn); background: var(--c-board); font-size: var(--fs-sheet); }
@@ -394,6 +437,24 @@ dialog { container: sheet / inline-size; }
 .app-card, .app-body { display: flex; flex-direction: column; gap: 0.5rem; }
 .app-card { padding: 0.75rem; border: 1px solid var(--c-slat); border-radius: var(--r-btn); background: var(--c-board); }
 @container board (max-width: 15em) {
-  .work, #apps { --fs-step: 1rem; --fs-place: 0.75rem; --fs-title: 0.875rem; --fs-sheet: 0.75rem; --fs-why: 0.625rem; --fs-h1: 1rem; --fs-sheet-h: 1rem; padding-inline: 6px; }
+  .done { padding: 0.5rem 0.6rem; gap: 0.5rem; }
+  .done .undo { min-height: 64px; }
+  .work:has(.done:not([hidden])) .slot-a { padding: 0.5rem 0.6rem 0; }
+  .work .done-line { -webkit-line-clamp: 4; }
+  .work { position: static; } /* big text: the panel scrolls with the page, so the app below it can be reached */
+  .work, #apps { --fs-step: 1rem; --fs-place: 0.75rem; --fs-title: 0.875rem; --fs-sheet: 0.75rem; --fs-why: 0.625rem; --fs-h1: min(1rem, 16cqi); --fs-sheet-h: 1rem; padding-inline: 6px; }
   .app-btn.primary, .done .undo { min-height: 64px; }
+}
+
+/* ---------- motion: the sheet rises, apps arrive, all on transform and opacity (no layout, no CLS) ---------- */
+/* shortcut: literal durations until design-murmur's motion tokens land */
+@media (prefers-reduced-motion: no-preference) {
+  dialog[open] { transition: translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 140ms ease-out; }
+  @starting-style { dialog[open] { translate: 0 2.5rem; opacity: 0; } }
+  .app:not([hidden]), #board-view:not([hidden]) { transition: translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  @starting-style { .app:not([hidden]), #board-view:not([hidden]) { translate: 0 0.75rem; } } /* slide only: a fade from 0.4 reads as a black frame on the dark page */
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog[open] { transition: opacity 120ms linear; }
+  @starting-style { dialog[open] { opacity: 0.4; } }
 }

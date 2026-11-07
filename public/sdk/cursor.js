@@ -1,23 +1,44 @@
 // The agent cursor: one amber ring in a fixed overlay, moved onto the control the agent is about to press.
+// It glides there, gives a soft press pulse on arrival, and stays on its control while the page scrolls.
+// Reduced motion: it fades out where it was and in where it lands.
 export function createCursor(doc = document) {
-  let ring = null;
+  const win = doc.defaultView;
+  let ring = null, target = null, frame = 0;
+  const still = () => win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const place = () => {
+    frame = 0;
+    if (!ring || ring.hidden || !target) return;
+    if (!target.isConnected || !target.getClientRects().length) { ring.hidden = true; return; } // its control went away
+    const r = target.getBoundingClientRect();
+    ring.style.setProperty('--x', `${r.left}px`); ring.style.setProperty('--y', `${r.top}px`);
+    ring.style.setProperty('--w', `${r.width}px`); ring.style.setProperty('--h', `${r.height}px`);
+  };
+  const follow = () => { if (!frame) frame = win.requestAnimationFrame(place); };
+  const wait = (ms) => new Promise((res) => setTimeout(res, ms));
   return {
     async moveTo(el, name) {
       if (!ring) {
         ring = doc.createElement('div');
         ring.className = 'agent-cursor';
         ring.setAttribute('aria-hidden', 'true'); // the step line says it; the ring is for eyes
+        ring.hidden = true;
         doc.body.append(ring);
+        win.addEventListener('scroll', follow, { capture: true, passive: true });
+        win.addEventListener('resize', follow, { passive: true });
       }
       el.scrollIntoView({ block: 'nearest' });
-      const r = el.getBoundingClientRect();
-      ring.style.setProperty('--x', `${r.left}px`); ring.style.setProperty('--y', `${r.top}px`);
-      ring.style.setProperty('--w', `${r.width}px`); ring.style.setProperty('--h', `${r.height}px`);
+      const appearing = ring.hidden;
+      target = el;
       ring.dataset.name = name;
+      if (still() && !appearing) { ring.style.opacity = '0'; await wait(40); }
+      if (appearing) ring.style.transition = 'none'; // the first ring appears on its control, it does not fly in from a corner
+      place();
       ring.hidden = false;
-      const still = doc.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      await new Promise((res) => setTimeout(res, still ? 0 : 220)); // let the glide land before the press
+      ring.style.opacity = '1';
+      if (appearing) { ring.getBoundingClientRect(); ring.style.transition = ''; }
+      await wait(still() ? 40 : 150); // let the glide land before the press; 80 ms read as a teleport on a long move
+      delete ring.dataset.press; ring.getBoundingClientRect(); ring.dataset.press = '';
     },
-    hide() { if (ring) ring.hidden = true; },
+    hide() { if (ring) ring.hidden = true; target = null; },
   };
 }

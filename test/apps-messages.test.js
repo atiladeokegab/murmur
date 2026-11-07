@@ -55,12 +55,12 @@ test('the race: open Mum, read, reply, change Tuesday to Wednesday, send', () =>
   assert.notEqual(A.replace.verify(s, { from: 'Tuesday', to: 'Thursday' }), true);
   assert.deepEqual(M.place(s), { where: "Mum's chat", item: 'your reply', n: 1, of: 1, next: 'send' });
 
-  assert.equal(A.send.readback(s), "Send to Mum: Wednesday's fine.");
+  assert.equal(A.send.readback(s), "Send 'Wednesday's fine' to Mum?");
   assert.notEqual(A.send.verify(s), true, 'not sent yet');
   assert.ok(M.send(s));
   assert.equal(A.send.verify(s), true);
   assert.equal(M.chatOf(s).messages.at(-1).text, "Wednesday's fine.");
-  assert.equal(M.read(s), `Mum's chat, 4 messages, the last from you "Wednesday's fine.". Sent.`);
+  assert.equal(M.read(s), `Mum's chat, 4 messages, the last from you "Wednesday's fine". Sent.`, 'one full stop, not two');
 });
 
 test('Vertical 1: text Sam I am ten minutes late', () => {
@@ -70,7 +70,7 @@ test('Vertical 1: text Sam I am ten minutes late', () => {
   assert.equal(A.openChat.verify(s, { id: 'sam' }), true);
   M.setDraft(s, "I'm ten minutes late.");
   assert.equal(A.reply.verify(s, { text: "I'm ten minutes late." }), true);
-  assert.equal(A.send.readback(s), "Send to Sam: I'm ten minutes late.");
+  assert.equal(A.send.readback(s), "Send 'I'm ten minutes late' to Sam?");
   M.send(s);
   assert.equal(A.send.verify(s), true);
   assert.deepEqual(s.lastSent, { to: 'sam', text: "I'm ten minutes late." });

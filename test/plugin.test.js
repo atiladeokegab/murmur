@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createBus, createRegistry, createCtx, appKv, mountApp, loadApps, runAction } from '../public/sdk/index.js';
-import { installApp, uninstallApp, restoreApps, installByName, availableApps, PLUGINS, INSTALL_APP } from '../public/sdk/plugin.js';
+import { installApp, uninstallApp, removeApp, restoreApps, installByName, availableApps, PLUGINS, INSTALL_APP } from '../public/sdk/plugin.js';
 import { browserKV } from '../public/ports/browser-kv.js';
 import appIds from '../public/apps/apps.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
@@ -34,7 +34,8 @@ async function phone({ storage = fakeStorage(), answers = [] } = {}) {
     roots[app.id] = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say() {}, workflows: null });
     await app.seed();
   }
-  const plug = { registry, host: doc.body, port, os: (app, kv) => ({ kv, bus, say() {} }) };
+  // confirm: yes, as the shell's is when the agent pressed the control (the runner already asked)
+  const plug = { registry, host: doc.body, port, os: (app, kv) => ({ kv, bus, say() {}, confirm: async () => true }) };
   const add = (r) => { roots[r.id] = r.root; return r; };
   for (const r of await restoreApps(plug)) add(r);
   const asked = [];
@@ -76,7 +77,7 @@ test('a bad gate is refused, and money or message actions may not skip the ask',
   const p = await phone();
   await assert.rejects(installApp(bad('launcher', `{ go: { describe: 'Go', doing: 'Going', gate: 'launch', run() {}, verify: () => true } }`), p.plug),
     /gate must be one of/);
-  for (const k of ['pay', 'sendMoney', 'transfer', 'callDriver']) {
+  for (const k of ['pay', 'sendMoney', 'transfer', 'callDriver', 'order', 'bookRide', 'checkout']) {
     await assert.rejects(installApp(bad(`sneaky${k.toLowerCase()}`, `{ ${k}: { describe: 'Do it', doing: 'Doing it', gate: null, run() {}, verify: () => true } }`), p.plug),
       /must have a gate/, k);
   }
@@ -103,10 +104,24 @@ test('an installed app, and its booking, come back after a reload', async () => 
   assert.equal(t.ok, true, t.reason);
 });
 
+test('registry.unregister drops an app and its tools; an unknown id is a no-op', () => {
+  const r = createRegistry();
+  const f = () => {};
+  r.register({ id: 'x', name: 'X', mount: f, read: f, place: f, state: f, seed: f, reset: f, actions: { go: { describe: 'Go', doing: 'Going', run: f, verify: f } } });
+  assert.ok(r.resolve('x__go'));
+  assert.equal(r.unregister('x'), true);
+  assert.equal(r.unregister('x'), false);
+  assert.equal(r.resolve('x__go'), null);
+  assert.equal(r.get('x'), undefined);
+  assert.ok(!r.tools().some((t) => t.name.startsWith('x__')));
+});
+
 test('uninstall removes the tools and stays gone after a reload; built-in apps cannot be uninstalled', async () => {
   const p = await phone();
   p.add(await installApp(TAXI, p.plug));
+  await p.plug.port.set('app.taxi', 'booking', { name: 'Home' });
   await uninstallApp('taxi', p.plug);
+  assert.deepEqual(await p.plug.port.getAll('app.taxi'), {}, 'its kv area is wiped');
   assert.ok(!p.names().some((n) => n.startsWith('taxi__')));
   assert.equal((await p.run('taxi__quote', { to: 'Home' })).reason, "I can't do that here.");
   assert.ok(!(await phone({ storage: p.storage })).names().includes('taxi__book'));
@@ -131,7 +146,7 @@ test('install_app by spoken name, through the manifest', async () => {
   const p = await phone();
   assert.deepEqual(Object.keys(INSTALL_APP.params.properties), ['name']);
   const list = await availableApps(p.plug);
-  assert.deepEqual(list.map((x) => [x.id, x.installed]), [['taxi', false]]);
+  assert.deepEqual(list.map((x) => [x.id, x.installed]), [['taxi', false], ['grocer', false]]);
   const miss = await installByName('pizza', p.plug);
   assert.equal(miss.ok, false);
   assert.match(miss.say, /I can't find pizza\. I can add Northline Taxis/);
@@ -140,4 +155,103 @@ test('install_app by spoken name, through the manifest', async () => {
   assert.match(r.say, /^Added Northline Taxis\./);
   assert.ok(p.names().includes('taxi__book'));
   assert.match((await installByName('Northline', p.plug)).say, /already on your phone/);
+});
+
+const GROCER = new URL('grocer/index.js', PLUGINS).href;
+
+test('a second plug-in: Corner Grocer installs by name beside taxi, and both come back after a reload', async () => {
+  const p = await phone();
+  assert.equal((await installByName('the taxi app', p.plug)).ok, true);
+  const g = await installByName('my groceries', p.plug);
+  assert.equal(g.ok, true, g.say);
+  assert.match(g.say, /^Added Corner Grocer\./);
+  for (const n of ['grocer__basket', 'grocer__add', 'grocer__remove', 'grocer__order', 'taxi__book']) assert.ok(p.names().includes(n), n);
+  assert.match(p.registry.tools().find((t) => t.name === 'grocer__order').description, /asked first: pay/);
+  const again = await phone({ storage: p.storage });
+  assert.ok(again.names().includes('grocer__order') && again.names().includes('taxi__book'));
+  assert.deepEqual((await availableApps(again.plug)).map((x) => x.installed), [true, true]);
+});
+
+test('grocer: add and remove go through the controls; an unknown item fails in words', async () => {
+  const p = await phone();
+  p.add(await installApp(GROCER, p.plug));
+  const s = () => p.registry.get('grocer').state();
+  assert.deepEqual(s().basket, ['milk', 'bread', 'eggs', 'bananas']);
+  assert.equal((await p.run('grocer__basket', {})).ok, true);
+  const add = await p.run('grocer__add', { item: 'a box of tea' });
+  assert.equal(add.ok, true, add.reason);
+  assert.ok(s().basket.includes('tea'));
+  const rm = await p.run('grocer__remove', { item: 'bananas' });
+  assert.equal(rm.ok, true, rm.reason);
+  assert.deepEqual(s().basket, ['milk', 'bread', 'eggs', 'tea']);
+  const bad = await p.run('grocer__add', { item: 'caviar' });
+  assert.equal(bad.ok, false);
+  assert.match(bad.reason, /We don't sell caviar/);
+  assert.match((await p.run('grocer__remove', { item: 'cheese' })).reason, /cheese is not in your basket/);
+});
+
+test('grocer: a No at the pay gate orders nothing; a Yes hears the exact readback and orders', async () => {
+  const p = await phone({ answers: [false, true] });
+  p.add(await installApp(GROCER, p.plug));
+  const no = await p.run('grocer__order', {});
+  assert.deepEqual([no.ok, no.cancelled, no.reason], [false, true, 'Not paid.']);
+  assert.equal(p.registry.get('grocer').state().order, null);
+  assert.equal(p.asked[0].gate, 'pay');
+  assert.equal(p.asked[0].readback, 'Order your basket: milk, bread, eggs and bananas, £5.70, delivered by 6 pm. Pay?');
+  const yes = await p.run('grocer__order', {});
+  assert.equal(yes.ok, true, yes.reason);
+  assert.equal(p.registry.get('grocer').state().order.total, 570);
+  assert.equal((await phone({ storage: p.storage })).registry.get('grocer').state().order.total, 570, 'the order survives a reload');
+});
+
+test('a person removes a plug-in with its own Remove button: asked first (delete), a No keeps it', async () => {
+  const p = await phone();
+  const answers = [false, true], asked = [];
+  let done;
+  const plug = { ...p.plug, confirm: async (q) => { asked.push(q); return answers.shift(); } };
+  plug.removed = (x) => done(x);
+  const r = p.add(await installApp(GROCER, plug));
+  const btn = r.root.querySelector('#app-grocer-remove');
+  assert.equal(btn.textContent, 'Remove Corner Grocer from your phone');
+  assert.equal(r.root.children.at(-1), btn, 'Remove is the last control in reading order');
+  const click = () => new Promise((res) => { done = res; btn.click(); });
+  const no = await click();
+  assert.deepEqual([no.ok, no.cancelled, no.say], [false, true, 'Kept it.']);
+  assert.deepEqual(asked[0], { app: 'grocer', gate: 'delete', readback: 'Remove Corner Grocer from your phone?' });
+  assert.ok(p.names().includes('grocer__order'), 'a No removes nothing');
+  const yes = await click();
+  assert.deepEqual([yes.ok, yes.say], [true, 'Removed Corner Grocer.']);
+  assert.ok(!p.names().some((n) => n.startsWith('grocer__')));
+  assert.deepEqual(await p.plug.port.getAll('app.grocer'), {});
+  assert.ok(!(await phone({ storage: p.storage })).names().includes('grocer__order'), 'still gone after a reload');
+});
+
+test('built-in apps cannot be removed, and are never asked about', async () => {
+  const p = await phone();
+  let asked = 0;
+  const x = await removeApp('hello', p.plug, async () => { asked++; return true; });
+  assert.deepEqual([x.ok, x.say, asked], [false, 'Hello came with the phone, so it stays.', 0]);
+  assert.ok(p.names().includes('hello__send'));
+  assert.equal((await removeApp('nope', p.plug, async () => true)).ok, false);
+  assert.equal((await installApp(GROCER, p.plug)).root.querySelector('#app-grocer-remove'), null, 'no confirm, no Remove button');
+});
+
+test('fail closed: with no confirm on the mount, a hand tap books, orders and cancels nothing', async () => {
+  const p = await phone({ answers: [true] });
+  p.add(await installApp(TAXI, p.plug));
+  assert.equal((await p.run('taxi__book', { to: 'Home' })).ok, true);
+  const bare = { ...p.plug, os: (app, kv) => ({ kv, say() {} }) };
+  await uninstallApp('taxi', p.plug);
+  const t = p.add(await installApp(TAXI, bare));
+  await p.plug.port.set('app.taxi', 'booking', null);
+  const taxi = p.registry.get('taxi');
+  t.root.querySelector('#taxi-to').value = 'Home';
+  t.root.querySelector('#taxi-to').dispatchEvent(new Event('input'));
+  t.root.querySelector('#taxi-book').click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(taxi.state().booking, null, 'no booking without a confirm');
+  const g = p.add(await installApp(GROCER, bare));
+  g.root.querySelector('#grocer-order').click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(p.registry.get('grocer').state().order, null, 'no order without a confirm');
 });

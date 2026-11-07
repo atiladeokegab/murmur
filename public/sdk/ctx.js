@@ -51,8 +51,20 @@ export function createCtx({ app, root, bus, kv, cursor, ask, choose = async () =
         throw new Error(`${app.name}: ${controlName(el) || 'that box'} can't be changed right now.`);
       }
       if (el.focus) el.focus({ preventScroll: true });
-      el.value = String(text);
-      el.dispatchEvent(new Event('input', { bubbles: true }));
+      // Visible typing, ~10 ms a letter and never more than 400 ms in all (long text types in chunks), so the confirm
+      // opens on text already in view without slowing the send. Instant under reduced motion,
+      // in ?quiet runs (the eval) and outside a browser (tests).
+      text = String(text);
+      const slow = typeof globalThis.matchMedia === 'function' && !globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches
+        && !/[?&]quiet\b/.test(globalThis.location?.search || '');
+      const chunk = Math.ceil(text.length / 40); // 40 ticks of 10 ms at most
+      for (let i = slow ? Math.min(chunk, text.length) : text.length; ; i = Math.min(i + chunk, text.length)) {
+        live();
+        el.value = text.slice(0, i);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        if (i >= text.length) break;
+        await new Promise((r) => setTimeout(r, 10));
+      }
     },
     /** Says one sentence and settles when it has been said; rejects with AbortError on Stop. */
     async say(text) {

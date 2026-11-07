@@ -7,6 +7,7 @@ export const CONTROLS = [
   { key: 'nextMorning', label: 'Next morning', words: 'Moves the seeded week on a day, so Murmur proposes Put the bus first?' },
   { key: 'mode', label: 'Mode', words: 'Switches who speaks: Murmur, or the screen reader.' },
   { key: 'replay', label: 'Replay', words: 'Runs the last task again, gates included.' },
+  { key: 'planner', label: 'Planner', words: 'Switches the planner: Gemini, or offline. The fallback if Gemini hangs.' },
 ];
 export const TAPS = 3, WITHIN_MS = 1500;
 
@@ -20,8 +21,9 @@ export const TAPS = 3, WITHIN_MS = 1500;
  * @param {function} [o.replay] (task) => Promise: the agent's runner for a whole plan; default runs each step
  * @param {function} [o.stop]   stops a running task before a reset
  * @param {object} [o.onboard]  { kv } for the first-open flag, re-armed on reset
+ * @param {function} [o.planner] flips the planner (offline or Gemini) and says which
  */
-export function createDemo({ registry, bus, run, say = async () => {}, board = {}, replay, stop, onboard = {} }) {
+export function createDemo({ registry, bus, run, say = async () => {}, board = {}, replay, stop, onboard = {}, planner }) {
   const lastTask = () => [...bus.log].reverse().find((e) => e.name === 'task:start');
   return {
     async reset() {
@@ -39,7 +41,13 @@ export function createDemo({ registry, bus, run, say = async () => {}, board = {
       const look = registry.get('look');
       if (!look) return say('Mode needs Your look.');
       const who = look.state().speaker === 'reader' ? 'murmur' : 'reader';
-      return run('look__whoSpeaks', { who });
+      const r = await run('look__whoSpeaks', { who });
+      if (r?.ok) await say(look.actions.whoSpeaks.done(look.state())); // the agent's press is quiet, so Mode says its row
+      return r;
+    },
+    async planner() {
+      if (!planner) return say('Planner needs the shell.');
+      return planner();
     },
     async replay() {
       const t = lastTask();
@@ -55,7 +63,7 @@ export function createDemo({ registry, bus, run, say = async () => {}, board = {
 
 /**
  * Opens the demo panel on three taps on `trigger` (the clock) within 1.5 s, or Shift+D anywhere.
- * Inside the panel, keys 1 to 4 run the controls in order and Escape closes it. A control closes the panel
+ * Inside the panel, keys 1 to 5 run the controls in order and Escape closes it. A control closes the panel
  * before it runs, so the mirror shows the phone, not the panel. Returns { open, close, panel, off }.
  */
 export function bindDemo(trigger, demo, { doc = trigger.ownerDocument, now = () => Date.now() } = {}) {

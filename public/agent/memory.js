@@ -6,7 +6,9 @@
 // App id -> the toolkit taxonomy category the Librarian keys memory on. Murmur has no finance, health or
 // government app; anything unknown is 'other'.
 const CATEGORY = { messages: 'social', writer: 'productivity', notes: 'productivity', calendar: 'productivity', mine: 'productivity',
-  shop: 'shopping', transit: 'reference', travel: 'reference' };
+  shop: 'shopping', transit: 'reference', travel: 'reference', bank: 'finance' };
+// No-memory zones (the Librarian's floor): a task that touches one is never logged, not even as "which app, when".
+const NO_MEMORY = new Set(['finance', 'health', 'government']);
 const SAFE_NAME = /^[a-z][a-z0-9_]*(__[a-zA-Z0-9_]+)?$/;
 export const JUST_DO_IT_AFTER = 3;
 
@@ -39,6 +41,7 @@ export function attachMemory({ librarian, bus, kv = mapKV(), clock = { now: () =
   const off = bus.on('task:done', async (e) => {
     const t = tasks.get(e.task); tasks.delete(e.task);
     if (!t?.actions.length) return;
+    if (t.apps.some((a) => NO_MEMORY.has(CATEGORY[a]))) return;
     const obs = observationOf({ ...t, success: !!e.ok }, new Date(clock.now()));
     let res;
     try { res = await librarian.logObservation(obs); } catch (err) { res = { logged: false, reason: err.message }; }
