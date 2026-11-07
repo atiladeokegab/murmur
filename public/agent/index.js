@@ -180,6 +180,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
         const a = app(current());
         const x = a && (a.actions.carryOn ? 'carryOn' : a.actions.resume ? 'resume' : null);
         if (x) await runPlan('carry on', [{ tool: `${a.id}__${x}`, app: a.id, action: x, params: {}, gate: null }]);
+        else if (lastMore && !runner.busy) await say(lastMore); // "go on" after a result with more to say
         else runner.nudge();
         return;
       }
