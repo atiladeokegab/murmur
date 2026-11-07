@@ -129,3 +129,10 @@ test('3. Your look has an Answers row a person can press: Short or Detailed, pre
   assert.equal(detailed.getAttribute('aria-pressed'), 'true');
   await p.registry.get('look').reset();
 });
+
+test('3. Look\'s longer answer falls back to the default on a saved value that is not an option', async () => {
+  const { default: lookApp } = await import('../public/apps/look/index.js');
+  const line = lookApp.actions.answers.more({ size: 100, rate: 1.15, theme: 'neon', speaker: 'nobody', agency: 'ask', answers: 'huge' });
+  assert.match(line, /colours, now match my phone/);
+  assert.match(line, /who speaks, now murmur/);
+});
