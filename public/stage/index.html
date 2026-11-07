@@ -14,7 +14,14 @@
   <p id="now" role="status" aria-live="polite">Waiting for the phone.</p>
 </header>
 <main>
-  <div id="phone" class="phone"><iframe id="phone-frame" title="Murmur phone" allow="microphone; autoplay" width="390" height="844"></iframe></div>
+  <div class="phone-col">
+    <p id="phone-label" class="phone-label">Waiting for the phone.</p>
+    <div id="phone" class="phone">
+      <iframe id="mirror-frame" title="Live from the phone" sandbox="allow-same-origin" tabindex="-1" hidden></iframe>
+      <iframe id="phone-frame" title="Murmur phone" allow="microphone; autoplay" hidden></iframe>
+      <span id="cursor" class="cursor" aria-hidden="true" hidden></span>
+    </div>
+  </div>
   <iframe id="inside-frame" class="inside-frame" title="Inside: what Murmur is doing"></iframe>
 </main>
 <script type="module" src="/stage/stage.js"></script>

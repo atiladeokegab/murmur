@@ -7,8 +7,19 @@ body.stage { height: 100svh; margin: 0; padding: 1rem 1.5rem 1.25rem; box-sizing
 .stage #now b { color: var(--c-accent); font-weight: 700; }
 .stage main { display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; min-height: 0; }
 /* An original frame: a plain rounded body with an even bezel, no notch or brand cues. --s is set by stage.js. */
-.stage .phone { --s: 1; width: calc(406px * var(--s)); height: calc(860px * var(--s)); align-self: center; }
-.stage .phone iframe { display: block; width: 390px; height: 844px; border: 8px solid var(--c-slat); border-radius: 44px;
+.stage .phone-col { display: flex; flex-direction: column; align-items: center; gap: .5rem; min-height: 0; }
+.stage .phone-label { margin: 0; font-size: var(--fs-talk); color: var(--c-quiet); white-space: nowrap; }
+.stage .phone-label.live { color: var(--c-ink); font-weight: 700; }
+.stage .phone-label.live::before { content: ""; display: inline-block; width: .6rem; height: .6rem; margin-right: .5rem; border-radius: 50%; background: var(--c-accent); vertical-align: middle; }
+/* An original frame: a plain rounded body with an even bezel, no notch or brand cues. --w, --h and --s are set by stage.js. */
+.stage .phone { --w: 390; --h: 844; --s: 1; position: relative; width: calc((var(--w) * 1px + 16px) * var(--s)); height: calc((var(--h) * 1px + 16px) * var(--s)); }
+.stage .phone iframe { display: block; width: calc(var(--w) * 1px); height: calc(var(--h) * 1px); border: 8px solid var(--c-slat); border-radius: 44px;
   background: var(--c-page); transform: scale(var(--s)); transform-origin: 0 0; box-sizing: content-box; }
+.stage .phone iframe[hidden] { display: none; }
+/* the agent's cursor on the mirrored screen */
+.stage .cursor { position: absolute; left: 0; top: 0; width: 1.5rem; height: 1.5rem; margin: -.75rem 0 0 -.75rem; border-radius: 50%;
+  background: var(--c-accent); border: 3px solid var(--c-on-accent); pointer-events: none; }
+.stage .cursor[hidden] { display: none; }
+@media (prefers-reduced-motion: no-preference) { .stage .cursor { transition: transform var(--t-glide); } }
 .stage .inside-frame { width: 100%; height: 100%; border: 0; border-radius: var(--r-now); background: var(--c-page); min-width: 0; }
 @media (prefers-reduced-motion: no-preference) { .stage #now { transition: color var(--t-glide); } }
