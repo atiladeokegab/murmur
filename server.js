@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as demo from './lib/demo.js';
 import * as gemini from './lib/gemini.js';
+import * as relay from './lib/relay.js';
 import * as eleven from './lib/eleven.js';
 import * as agent from './lib/agent/planner.js';
 import { createGuard } from './lib/guard.js';
@@ -18,7 +19,7 @@ const LIVE_URL = process.env.MURMUR_LIVE_URL || ''; // test only: point the brow
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json' };
-const PAGES = { '/': 'index.html', '/race': 'race.html' };
+const PAGES = { '/': 'index.html', '/race': 'race.html', '/inside': 'inside/index.html' };
 
 function send(res, status, body, type = 'application/json') {
   res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
@@ -64,6 +65,7 @@ const api = {
     return speakLine(String(body.text || '').slice(0, 400));
   },
 };
+Object.assign(api, relay.api);
 
 // Spoken lines: ElevenLabs first (under its daily character cap), then Gemini, then 503 and the phone's own voice.
 // Each line is synthesised once per instance; repeated fixed lines cost nothing.
@@ -114,6 +116,10 @@ export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
     if (url.pathname === '/health') return send(res, 200, { ok: true, provider: PROVIDER, live: (!!KEY || !!LIVE_URL) && !process.env.MURMUR_NO_LIVE, tts: !!KEY || !!ELEVEN });
+    if (url.pathname.startsWith('/api/bus') && !relay.allowed(req, url)) return send(res, 403, { error: 'forbidden' });
+    if (url.pathname === '/api/bus/stream' && req.method === 'GET') return relay.stream(req, res, relay.roomOf(url) || 'stage');
+    // The phone forwards every bus event: same-origin checked above, no model behind it, so it skips the rate limit and the daily cap.
+    if (url.pathname === '/api/bus' && req.method === 'POST') return send(res, 200, await relay.api['POST /api/bus'](await readJson(req), relay.roomOf(url)));
     const handler = api[`${req.method} ${url.pathname}`];
     if (url.pathname.startsWith('/api/')) {
       const no = guard(req, { model: !!KEY || !!ELEVEN }); // every /api route may spend a key once one is set

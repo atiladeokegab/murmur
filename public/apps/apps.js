@@ -9,4 +9,6 @@ export default [
   'transit',
   'travel',
   'places',
+  'weather',
+  'clock',
 ];

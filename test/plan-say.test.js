@@ -23,12 +23,13 @@ const tool = (said, app = null, extra = {}) => {
   return p.plan.length ? p.plan.map((s) => `${s.tool}${JSON.stringify(s.params)}`).join(' > ') : p.say;
 };
 
-test('Grocer and Taxi plan from their own words, whichever app is open', () => {
+test('Grocer plans from its own words when open, over the built-in Shop; Taxi whichever app is open', () => {
+  assert.equal(tool('read my basket', 'grocer'), 'grocer__basket{}');
+  assert.equal(tool('add milk', 'grocer'), 'grocer__add{"item":"milk"}');
+  assert.equal(tool('take out milk', 'grocer'), 'grocer__remove{"item":"milk"}');
+  assert.equal(tool('order my usual', 'grocer'), 'grocer__order{}');
+  assert.match(tool('add milk', null), /^shop__addToBasket/, 'nothing open: the built-in Shop');
   for (const open of [null, 'grocer', 'taxi', 'messages', 'writer']) {
-    assert.equal(tool('read my basket', open), 'grocer__basket{}', open);
-    assert.equal(tool('add milk', open), 'grocer__add{"item":"milk"}', open);
-    assert.equal(tool('take out milk', open), 'grocer__remove{"item":"milk"}', open);
-    assert.equal(tool('order my usual', open), 'grocer__order{}', open);
     assert.equal(tool('get a price to the station', open), 'taxi__quote{"to":"station"}', open);
     assert.equal(tool('track my taxi', open), 'taxi__track{}', open);
     assert.equal(tool('cancel my taxi', open), 'taxi__cancel{}', open);
@@ -56,7 +57,7 @@ test('the open app wins a tie; an unclear match asks "Which one: A or B?"', () =
 test('for free: every Grocer and Taxi action, said as its describe, plans that action', () => {
   for (const app of [grocer, taxi]) for (const [name, x] of Object.entries(app.actions)) {
     if (x.gate === 'pay' && x.params?.required?.length) continue; // "book a taxi home": money with a slot keeps its hand-written words
-    const said = asSaid(x.describe), got = demoPlan(said, reg, { app: null, workflows: [] }).plan;
+    const said = asSaid(x.describe), got = demoPlan(said, reg, { app: app.id, workflows: [] }).plan; // the plug-in open: Shop is built in now
     const asks = got[0]?.tool === 'open_app' && got[0].params.app === app.id && got[1]?.tool === 'ask'; // "add one item": which item?
     assert.ok(asks || got.some((s) => s.tool === `${app.id}__${name}`), `"${said}" -> ${JSON.stringify(got)}`);
   }
@@ -96,7 +97,7 @@ test('cheap hits: next appointment, read back, next one, again, the clock', () =
   assert.equal(tool('read back what I wrote'), 'writer__readLastPage{}');
   assert.equal(tool('read the next one'), 'messages__read{"new":true}');
   assert.equal(tool('read my last message again'), 'messages__read{}');
-  assert.match(tool('what time is it'), /^say\{"text":"It's \d{1,2}:\d\d\."\}$/);
+  assert.match(tool('what time is it'), /^clock__time\{\}$|^say\{"text":"It's \d{1,2}:\d\d\."\}$/, 'the Clock app when it is installed');
   assert.match(tool('what day is it'), /^say\{"text":"It's (Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day \d{1,2} [A-Z][a-z]+\."\}$/);
 });
 
