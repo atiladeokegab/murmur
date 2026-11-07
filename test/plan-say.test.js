@@ -144,3 +144,16 @@ test('"Call Mum" opens her chat on the real phone, whose Phone app is settings; 
   const calls = { id: 'calls', name: 'Calls', actions: { call: { describe: 'Call a person', doing: 'Calling', hint: 'Call', params: { type: 'object', properties: { who: { type: 'string' } }, required: ['who'] }, async run() {}, verify: () => true } } };
   assert.ok(!demoPlan('Call Mum', describeRegistry([...apps, phoneApp, calls]), { app: null, workflows: [] }).plan.some((s) => s.tool === 'say'));
 });
+
+test('speed: "speak at N percent" and "N times faster" set the nearest voice step, up to 500 percent; the cloud voice only up to 125', async () => {
+  const { STEPS } = await import('../public/apps/look/index.js');
+  const { cloudAt } = await import('../public/voice/tts-cache.js');
+  assert.deepEqual(STEPS.rate.values, [0.75, 1, 1.15, 1.25, 1.5, 2, 2.5, 3, 4, 5]);
+  assert.equal(STEPS.rate.words(1), 'normal speed');
+  assert.equal(STEPS.rate.words(2.5), '250 percent');
+  for (const [said, percent] of [['Speak at 300 percent', 300], ['voice to 250%', 250], ['three times faster', 300], ['speak 5 times faster', 500],
+    ['set the voice to 180 percent', 200], ['twice as fast', 200]]) assert.equal(tool(said), `look__setVoice{"percent":${percent}}`, said);
+  assert.equal(tool('speak faster'), 'look__voiceFaster{}');
+  assert.match(tool('text Sam three times faster'), /^messages__openChat/, 'content is never a setting');
+  assert.deepEqual([0.75, 1, 1.15, 1.25, 1.5, 5].map(cloudAt), [true, true, true, true, false, false]);
+});

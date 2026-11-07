@@ -13,7 +13,7 @@ import { byHand, checkFingerprint, payAttempt } from './gate.js';
 import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
 import { installToken } from '../agent/token.js';
 import { play, buzz, mute, unmute, isMuted, EARCON_NAMES } from '../sound/index.js';
-import { cachedTts, warmTts } from '../voice/tts-cache.js';
+import { cachedTts, warmTts, cloudAt } from '../voice/tts-cache.js';
 import { createPhone } from './phone.js';
 import { talkAnywhere } from './talk.js';
 installToken(); // wraps fetch before any /api call
@@ -75,7 +75,7 @@ function speak(text, signal) {
     const abort = () => { hush(); end(false); };
     signal?.addEventListener('abort', abort, { once: true });
     const local = () => browserSpeak(text, () => end(my === token));
-    if (!caps.tts) return local();
+    if (!caps.tts || !cloudAt(look.rate)) return local(); // fast speech is the browser voice: it keeps pitch at any rate
     cachedTts(text) // fetched once; the fixed lines are warmed at boot
       .then((a) => (my === token ? playPcm(a.audio, a.rate) : null))
       .then(() => end(my === token))
