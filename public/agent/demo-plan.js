@@ -62,6 +62,17 @@ const DAY = '(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tom
 // it is installed (BANK_WORDS), so with no Bank app "bank" and "balance" are still refused.
 const NO_GO = /\b(transfer (?:\w+ )?(?:money|funds|pounds|quid|euros|dollars)|account numbers?|sort code|my pin|pin (?:number|code)|card numbers?|online banking|(?:log|sign)(?:ging)? ?in(?:to)? (?:to )?(?:my |an? )?(?:\w+ )?account|between (?:my )?accounts|overdraft|doctor|gp|prescription|medication|diagnos\w*|nhs|benefits|universal credit|tax return|hmrc|passport|driving licence|council tax|savings|mortgage|loan|credit card|pin number|move (?:my |some )?money|barclays|hsbc|lloyds|natwest|santander|monzo|starling|nationwide|halifax|revolut)\b/i;
 const BANK_WORDS = /\b(bank|banking|balance)\b/i;
+const CREDENTIALS = /\b(sort code|account numbers?|my pin|pin (?:number|code)|card numbers?)\b/i;
+const REFUSE = { kind: 'refuse', plan: [], say: "I don't do banking, health or government. Those stay with you." };
+
+/** The money, health and government line, whoever plans: the server checks it before the model, too. */
+export function refusal(utterance, apps, context = {}) {
+  const raw = String(utterance || '').trim();
+  if (!NO_GO.test(raw) && !(BANK_WORDS.test(raw) && !apps.some((a) => a.id === 'bank'))) return null;
+  // The words of a message are content, not the request: "Tell Sam: I switched from Monzo" sends. Credentials never go.
+  const p = CREDENTIALS.test(raw) ? null : plan(raw, apps, context, false);
+  return p?.kind === 'task' && p.plan.every((x) => x.tool.startsWith(`messages${SEP}`)) ? null : REFUSE;
+}
 const GARBLED = /\.\.\.|…|\[(?:unintelligible|inaudible|noise)\]|^\W*$/i;
 
 /**
@@ -72,7 +83,8 @@ const GARBLED = /\.\.\.|…|\[(?:unintelligible|inaudible|noise)\]|^\W*$/i;
 export function demoPlan(utterance, apps, context = {}) {
   const raw = String(utterance || '').trim();
   if (!raw) return { kind: 'unknown', plan: [], say: 'Sorry, again?' };
-  if (NO_GO.test(raw) || (BANK_WORDS.test(raw) && !apps.some((a) => a.id === 'bank'))) return { kind: 'refuse', plan: [], say: "I don't do banking, health or government. Those stay with you." };
+  const no = refusal(raw, apps, context);
+  if (no) return no;
   if (GARBLED.test(raw)) return { kind: 'unknown', plan: [], say: "Sorry, I didn't catch that. Again?" };
   const teach = raw.match(/^how (?:do|can|would|should) i\s+(.+?)[?.!]*$/i);
   if (teach) {

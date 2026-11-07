@@ -137,3 +137,20 @@ test('the phone keeps the code from ?code= and sends it only to its own /api/', 
   await win.fetch('https://elsewhere.example/api/x');
   assert.deepEqual(seen, [['/api/plan', 'abc'], ['/apps/apps.js', null], ['https://elsewhere.example/api/x', null]]);
 });
+
+test('a real bank is refused before the model is asked, even when the model would plan it; a message about one still sends', async () => {
+  const realFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return { ok: true, json: async () => ({ candidates: [{ content: { parts: [
+    { functionCall: { name: 'messages__openChat', args: { who: 'Sam' } } }] } }] }) }; };
+  try {
+    const bankApps = [...apps, { id: 'bank', name: 'Murmur Bank', actions: [{ name: 'balance', params: { type: 'object', properties: {} } }] }];
+    const out = await plan({ key: 'k', utterance: 'Check my Barclays bank balance', apps: bankApps });
+    assert.deepEqual([out.kind, out.steps.length, calls], ['refuse', 0, 0]);
+    const { demoPlan } = await import('../public/agent/demo-plan.js');
+    const ok = demoPlan('Tell Sam: I switched from Monzo', apps);
+    assert.equal(ok.kind, 'task'); assert.match(ok.plan[1].params.text, /Monzo/);
+    assert.equal(demoPlan('Text Sam my sort code is 12 34 56', apps).kind, 'refuse', 'credentials never go, even in a message');
+    assert.ok(!demoPlan('Text Sam then check my Barclays balance', apps).plan.some((x) => !x.tool.startsWith('messages__')), 'at most words sent, never a bank step');
+  } finally { globalThis.fetch = realFetch; }
+});
