@@ -4,10 +4,11 @@ import { createBus, createRegistry, createCursor, createCtx, appKv, loadApps, mo
 import appIds from '../apps/apps.js';
 import { IDLE, reduce, placeLine } from './panel.js';
 import { recogniser } from '../lib/gestures.js';
-import { readLook, writeLook, applyLook } from '../look.js';
+import { loadLook, writeLook, applyLook } from '../look.js';
 import { createToolkit } from '../vendor/toolkit/index.js';
 import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
+import { cachedTts } from '../voice/tts-cache.js';
 import * as passkey from '../passkey.js';
 import { byHand } from './gate.js';
 import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
@@ -27,7 +28,7 @@ const store = {
   set(k, v) { try { localStorage.setItem('murmur:' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
 const QUIET = /[?&]quiet\b/.test(location.search); // the eval and the flows: no audio, no waiting for speech
-const look = Object.assign({ size: 100, theme: 'dark', rate: 1.15, speaker: 'murmur', agency: 'ask', planner: 'auto', nolook: false },
+const look = Object.assign({ size: 100, theme: 'auto', rate: 1.15, speaker: 'murmur', agency: 'ask', answers: 'short', planner: 'auto', nolook: false },
   store.get('look', {}));
 const saveLook = () => store.set('look', look);
 let agent = null; // declared before the mount loop: Mine reads os.workflows during seed()
@@ -37,7 +38,7 @@ let librarian, datastore;
 try {
   ({ librarian, datastore } = createToolkit({ kv: browserKV() }));
   if (!(await librarian.getProfile())?.fields?.needs?.length) await writeLook(librarian, look);
-  Object.assign(look, await readLook(librarian));
+  await loadLook(librarian, look);
 } catch (e) {
   console.warn('Librarian unavailable; Your look stays on this phone only', e.name);
   librarian = null; datastore = null;
@@ -64,7 +65,7 @@ function speak(text, signal) {
   if (signal?.aborted) return Promise.resolve(false);
   if (QUIET || !text) return Promise.resolve(true);
   if (readerSpeaks()) return wait(Math.min(4000, 600 + text.length * 55), signal); // give TalkBack time to read it
-  const my = ++token;
+  const my = token; // only Stop (hush) moves token: a later line queues behind a started one, never cuts it
   return new Promise((res) => {
     let settled = false;
     const end = (ok) => { if (!settled) { settled = true; signal?.removeEventListener('abort', abort); res(ok); } };
@@ -72,8 +73,7 @@ function speak(text, signal) {
     signal?.addEventListener('abort', abort, { once: true });
     const local = () => browserSpeak(text, () => end(my === token));
     if (!caps.tts) return local();
-    fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('tts'))))
+    cachedTts(text)
       .then((a) => (my === token ? playPcm(a.audio, a.rate) : null))
       .then(() => end(my === token))
       .catch(() => (my === token ? local() : end(false)));
@@ -81,7 +81,7 @@ function speak(text, signal) {
 }
 function browserSpeak(text, done) {
   if (!('speechSynthesis' in window)) return done();
-  speechSynthesis.cancel();
+  // no cancel() here: speechSynthesis queues, so a line that has started always finishes (Stop cancels in hush)
   const u = new SpeechSynthesisUtterance(text);
   const voices = speechSynthesis.getVoices().filter((v) => /^en/i.test(v.lang));
   u.lang = 'en-GB'; u.rate = look.rate; u.voice = voices.find((v) => v.lang === 'en-GB') || voices[0] || null;
@@ -121,6 +121,8 @@ function onBack(kind) {
 
 // ---------- the apps ----------
 const bus = createBus();
+// Fetch a line's audio the moment it is queued, so it is ready when the line before it ends.
+bus.on('say', (e) => { if (caps.tts && e?.text && !readerSpeaks()) cachedTts(String(e.text)).catch(() => {}); });
 const registry = createRegistry();
 await loadApps(registry, appIds);
 registry.register(createPhone({ stop: () => stopAll(), where: () => where(), noLook: (on) => setNoLook(on), isNoLook: () => !!look.nolook,
@@ -510,7 +512,7 @@ try {
     registry, bus, ctxFor, speak, librarian,
     os: { open: (id) => open(id), current: () => current, install },
     fingerprint: () => passkey.confirm(),
-    agency: () => look.agency,
+    agency: () => look.agency, answers: () => look.answers,
     onGate: agentGate, onChoose: agentChoose,
   });
   // Mine mounted before the agent, on its own seed. Give the real store that first tile so Run My morning runs.

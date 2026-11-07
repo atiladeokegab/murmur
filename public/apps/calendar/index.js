@@ -22,8 +22,11 @@ const mins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m
 const order = (a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || mins(a.time) - mins(b.time);
 /** "today", "tomorrow", "wed", "Wednesday" -> "Wednesday"; null if not a day. */
 export function dayOf(s, today = TODAY) {
-  const q = String(s ?? '').trim().toLowerCase();
-  if (!q || q === 'today') return today;
+  const raw = String(s ?? '').trim().toLowerCase();
+  // dictation leaves fillers in: "um Wednesday", "Wednesday please"
+  const q = raw.replace(/[^a-z ]/g, ' ').replace(/\b(um+|uh+|erm?|please|on|this|the|like|so)\b/g, ' ').trim().replace(/\s+/g, ' ');
+  if (!raw || q === 'today') return today;
+  if (q.includes(' ')) return q.split(' ').map((w) => dayOf(w, today)).find(Boolean) ?? null;
   if (q === 'tomorrow') return DAYS[(DAYS.indexOf(today) + 1) % 7];
   return DAYS.find((d) => q.length >= 3 && d.toLowerCase().startsWith(q.slice(0, 3)) && d.toLowerCase().startsWith(q.replace(/s$/, ''))) ?? null;
 }
@@ -42,10 +45,22 @@ export function spoken(t) {
   const [h, m] = t.split(':').map(Number);
   return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
 }
-/** The best-matching events for what was said ("lunch with Mum", "lunch", "Mum"). Ties come back together. */
+const NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+/** "3pm", "three o'clock", "my 12:30 meeting" -> "15:00", "15:00", "12:30". A bare 1 to 7 is afternoon. Not a time: null. */
+export function heardTime(q) {
+  const s = String(q ?? '').toLowerCase().replace(/\b(my|the|meeting|event|appointment|thing|o'?clock)\b/g, ' ')
+    .trim().replace(/^[a-z]+/, (w) => NUMS[w] ?? w);
+  const t = timeOf(s);
+  if (!t || /[ap]\.?m/.test(s)) return t;
+  const h = Number(t.slice(0, 2));
+  return h >= 1 && h <= 7 ? `${h + 12}${t.slice(2)}` : t;
+}
+/** The best-matching events for what was said ("lunch with Mum", "lunch", "Mum", or a time: "my 12:30"). Ties come back together. */
 export function matches(list, said) {
   const q = String(said ?? '').toLowerCase().replace(/\b(the|my|a)\b/g, ' ').replace(/\s+/g, ' ').trim();
   if (!q) return [];
+  const at = heardTime(q);
+  if (at) return list.filter((e) => e.time === at);
   const score = (e) => {
     const t = e.title.toLowerCase();
     if (t === q) return 4;
@@ -70,6 +85,26 @@ function dayLine(list, day) {
   if (on.length) return `${day === TODAY ? 'Today' : day}: ${on.map(at).join(', then ')}.`;
   const n = nextOf(list);
   return `Nothing ${name}.${day === TODAY && n ? ` Next is ${n.title} on ${n.day} at ${spoken(n.time)}.` : ''}`;
+}
+// The longer answer ("tell me more"): the day's first event still to come (else the next one), when to leave, the
+// rest of that day, and how to move it.
+const LEAVE = 15; // shortcut: events have no place, so leave a fixed 15 minutes before; Transit could give the real trip
+const clockOf = (m) => spoken(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+function inTime(m) {
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), r = m % 60, n = (k, w) => k && `${k} ${w}${k > 1 ? 's' : ''}`;
+  return m <= 0 ? 'now' : `in ${[n(d, 'day'), n(h, 'hour'), n(r, 'minute')].filter(Boolean).join(' ')}`;
+}
+export function moreLine(list, day) {
+  const later = (e) => DAYS.indexOf(e.day) > DAYS.indexOf(TODAY) || (e.day === TODAY && mins(e.time) >= mins(NOW));
+  const on = list.filter((e) => e.day === day).sort(order);
+  const f = on.find(later) ?? nextOf(list);
+  if (!f) return `Nothing ${day === TODAY ? 'today' : `on ${day}`}, and nothing else this week. Say "add" and what, to add an event.`;
+  const leave = mins(f.time) - LEAVE;
+  const rest = on.filter((e) => e !== f);
+  return [`${f.day === day ? '' : `Nothing on ${day}. Next is `}${f.title}, ${f.day} at ${spoken(f.time)} for ${f.mins} minutes${f.with && !f.title.includes(f.with) ? `, with ${f.with}` : ''}.`,
+    /^call\b/i.test(f.title) ? '' : `Leave by ${clockOf(leave)}, ${inTime((DAYS.indexOf(f.day) - DAYS.indexOf(TODAY)) * 1440 + leave - mins(NOW))}.`,
+    rest.length ? `Also on ${f.day}: ${rest.map(at).join(', then ')}.` : `Nothing else on ${f.day}.`,
+    `To change it, say "move ${f.title} to" another day.`].filter(Boolean).join(' ');
 }
 const clashLine = (c, e) => `${c.day} has ${c.with.map(at).join(' and ')}. Move ${e.title} anyway?`;
 
@@ -236,7 +271,7 @@ async function openEvent(ctx, e) {
 }
 async function pickOne(ctx, said) {
   const found = matches(events, said);
-  if (!found.length) throw new Error(`There's nothing called ${said} this week.`);
+  if (!found.length) { const at = heardTime(said); throw new Error(at ? `Nothing's at ${spoken(at)} this week.` : `There's nothing called ${said} this week.`); }
   if (found.length === 1) return found[0];
   const c = await ctx.choose(`${found.map((x) => `${x.title} on ${x.day}`).join(' or ')}?`, found.map((x) => ({ label: `${x.title} on ${x.day}`, id: x.id })));
   if (!c) throw new Error('No event chosen.');
@@ -327,6 +362,7 @@ const app = {
         const d = dayOf(p.day, s.today);
         return (s.shown === d && s.open === null && !s.adding) || `Calendar shows ${s.shown}, not ${d}.`;
       },
+      more: (s, p) => moreLine(s.events, dayOf(p.day, s.today)),
     },
     next: {
       describe: "Say what's next in the calendar",
@@ -339,6 +375,7 @@ const app = {
         await ctx.say(e ? `Next is ${e.title}, ${e.day} at ${spoken(e.time)}.` : 'Nothing else this week.');
       },
       verify: (s) => s.open === s.next || "Calendar didn't open what's next.",
+      more: (s) => { const e = s.events.find((x) => x.id === s.next); return e ? moreLine(s.events, e.day) : moreLine(s.events, s.today); },
     },
     add: {
       describe: 'Add an event to the calendar',

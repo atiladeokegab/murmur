@@ -18,7 +18,7 @@ test('seed: two chapters, chapter 2 has 30 sentences', () => {
   const s = W.fresh();
   assert.equal(W.count(s, 0), 8);
   assert.equal(W.count(s, 1), 30);
-  assert.equal(W.read(s), 'The Writer: Platform Four. 2 chapters. Open: chapter 2, Platform Four, 30 sentences.');
+  assert.equal(W.read(s), 'Platform Four. 2 chapters. Open: chapter 2, Platform Four, 30 sentences.');
 });
 
 test('the demo beat: read the last page, stop, where am I, carry on', () => {

@@ -27,7 +27,7 @@ for (let i = 0; ; i++) {
 
 const vids = mkdtempSync(path.join(tmpdir(), 'murmur-gif-'));
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: W, height: H }, recordVideo: { dir: vids, size: { width: W, height: H } } });
+const ctx = await browser.newContext({ viewport: { width: W, height: H }, colorScheme: process.env.SCHEME || 'dark', recordVideo: { dir: vids, size: { width: W, height: H } } });
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));

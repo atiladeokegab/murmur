@@ -7,7 +7,7 @@
   <img alt="No dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-000000">
   <img alt="Gemini planner, Live and TTS" src="https://img.shields.io/badge/Gemini-planner%20%C2%B7%20Live%20%C2%B7%20TTS-8E75B2?logo=googlegemini&logoColor=white">
   <img alt="Google Cloud Run" src="https://img.shields.io/badge/Cloud%20Run-europe--west1-4285F4?logo=googlecloud&logoColor=white">
-  <img alt="WCAG 2.2, AAA contrast tokens" src="https://img.shields.io/badge/WCAG%202.2-AAA%20contrast-FFB000">
+  <img alt="WCAG 2.2, AAA contrast tokens" src="https://img.shields.io/badge/WCAG%202.2-AAA%20contrast-FFC266">
   <img alt="WebAuthn passkey" src="https://img.shields.io/badge/WebAuthn-passkey-000000?logo=webauthn&logoColor=white">
   <img alt="Web Speech fallback" src="https://img.shields.io/badge/Web%20Speech-fallback-555555">
 </p>
@@ -62,6 +62,7 @@ decide.
 | **You talk, it drives** | Say it, and Murmur works the app in front of you. An amber cursor ring lands on each control it presses, the same buttons you would press. |
 | **Every step is checked** | After each action the app itself confirms the result before the step gets a tick. If it didn't work, Murmur says so in plain words and stops. |
 | **Asks first** | Send, pay, call and delete never just happen. A sheet reads back exactly what will leave the phone, and waits for your Yes. Pay also needs your fingerprint (a passkey). |
+| **Add an app** | Apps plug in while the phone runs: say *"add Northline Taxis"* or tap **Add an app**. A plug-in passes the same checks as a built-in app, and anything that books, buys or pays must ask first; it cannot opt out. |
 | **Routines by voice** | Do something once, then say *"save that as my morning"*. It becomes a tile on your board. |
 | **Teaches "how do I"** | Ask *"how do I…"* and Murmur speaks the steps in the app's own words, then offers to do it or walk you through it until you can do it alone. |
 | **Shows its work** | The work panel names each step as it happens and ticks it when the app confirms it. |
@@ -70,11 +71,29 @@ decide.
 <p align="center">
   <img src="docs/readme/home.png" alt="The board: Saturday, Murmur. A large Now tile on top, then a tile for each app (Messages, The Writer, Mine, Calendar), with a Tap to talk bar at the bottom." width="240">
   &nbsp;
-  <img src="docs/readme/ask-first.png" alt="The ask-first sheet: Send it? Send to Sam: I'm ten minutes late. A Send button and a No button." width="240">
+  <img src="docs/readme/ask-first.png" alt="The ask-first sheet over Sam's chat: Send it? Send 'I'm ten minutes late' to Sam? A Send button and a No button." width="240">
   &nbsp;
-  <img src="docs/readme/sent.png" alt="Done in Sam's chat. Three ticked steps: Opening the chat, Writing your reply, Sending. The reply I'm ten minutes late sits under Sam's message." width="240">
+  <img src="docs/readme/sent.png" alt="Sent to Sam, with three ticks, one for each checked step. The reply I'm ten minutes late sits under Sam's message." width="240">
 </p>
 <p align="center"><sub>The board · ask first, with the readback · sent, every step ticked</sub></p>
+
+## Why not computer use?
+
+Computer use clicks pixels it reads from screenshots, which suits a sighted supervisor who can watch it and
+catch its mistakes. In Murmur each app declares its actions: the OS gates send, pay, call and delete behind
+an ask (pay also needs a fingerprint), every step is checked against the app's own state, and words Murmur
+already knows are planned on the phone and never leave it. The closest prior
+work is Apple's App Intents and Android's App Actions; Murmur makes that kind of declared action the only way
+an app can be driven, by a person or the agent.
+
+Measured on 7 Nov 2026 in headless Chromium, three runs per line, on main and on the live app:
+
+| | |
+|---|---|
+| Screenshots sent off the phone | **0**, in every run |
+| Model calls to plan the demo lines | **0**. "Text Sam", "What's on today", "Make the text bigger" and "Stop" are planned on the phone |
+| When the model is needed | one call of about 9.6 KB of text: the list of apps and what they can do. No image |
+| Time to "On it." | **1 to 6 ms** after the words reach the phone |
 
 ## How it works
 
@@ -129,12 +148,12 @@ PLAYWRIGHT=<path to the playwright package> node docs/readme/capture.mjs   # nee
 
 ## Known limitations
 
-- **The apps are simulated.** Messages, Calendar, The Writer and Mine run inside Murmur with invented
-  people. Nothing is actually sent, paid or called.
+- **The apps are simulated.** Messages, Calendar, The Writer, Mine and the plug-ins (Northline Taxis, Corner
+  Grocer) run inside Murmur with invented people and companies. Nothing is actually sent, paid, booked or called.
 - **It is a web app, not a phone OS yet.** Murmur runs in the browser as a simulated phone. It is not an
   Android accessibility service, and it cannot drive other apps on a real phone.
-- **The numbers are still being measured.** Task time, steps per task and accuracy on our eval set:
-  measuring. We won't quote a figure until it has a source.
+- **Some numbers are still being measured.** Time to Done and accuracy on our eval set: measuring. The
+  numbers under "Why not computer use?" are measured; we won't quote any other figure until it has a source.
 - **Voice-owner detection is not built.** The fingerprint guards pay; recognising the owner's voice is next.
 - **Built in one day**, with two co-designers. That is two people, not a study.
 

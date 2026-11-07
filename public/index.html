@@ -13,14 +13,24 @@
     var z = /[?&]zoom=([\d.]+)/.exec(location.search);
     var size = z ? Number(z[1]) * 100 : look.size;
     if (size) document.documentElement.style.fontSize = size + '%';
-    if (look.theme) document.documentElement.dataset.theme = look.theme;
+    var theme = look.theme || 'auto'; // no colours chosen: follow the phone's light or dark setting
+    if (theme === 'auto') theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    if (theme !== 'dark') document.documentElement.dataset.theme = theme;
   })();
 </script>
 <link rel="preload" href="fonts/atkinson-next.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="os/phone-chrome.css">
+<link rel="stylesheet" href="os/onboard/onboard.css" id="onboard-css"><!-- in the first paint, so the welcome caption never jumps the talk bar -->
+<script type="module" src="os/statusbar.js"></script>
 <script type="module" src="os/shell.js"></script>
 </head>
 <body>
+<div class="statusbar" aria-hidden="true"><span class="sb-time"></span><span class="sb-right">
+  <svg viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="4.5" y="5.5" width="3" height="6.5" rx="1"/><rect x="9" y="3" width="3" height="9" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+  <svg viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1.5 4.5a9.5 9.5 0 0 1 13 0M4 7.3a6 6 0 0 1 8 0"/><circle cx="8" cy="10.3" r="1.2" fill="currentColor" stroke="none"/></svg>
+  <span class="sb-pct">82%</span><svg viewBox="0 0 26 12" fill="currentColor"><rect x="0.75" y="0.75" width="22" height="10.5" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="2.5" y="2.5" width="15.2" height="7" rx="1.5"/><rect x="24" y="4" width="1.8" height="4" rx="0.9"/></svg>
+</span></div>
 <main>
   <div class="column">
     <section class="work" id="work" aria-label="What Murmur is doing" hidden>
