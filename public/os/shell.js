@@ -10,6 +10,10 @@ import { createToolkit } from '../vendor/toolkit/index.js';
 import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
 import * as passkey from '../passkey.js';
+import { byHand } from './gate.js';
+// Optional modules from other branches: boot never depends on them. The token must wrap fetch before any /api call.
+const optional = (p) => import(p).catch(() => null);
+(await optional('../agent/token.js'))?.installToken();
 
 const $ = (s) => document.querySelector(s);
 function el(tag, props = {}, ...kids) {
@@ -116,6 +120,7 @@ function onBack(kind) {
 
 // ---------- the apps ----------
 const bus = createBus();
+(await optional('../inside/forward.js'))?.forward(bus); // /inside watches the bus
 const registry = createRegistry();
 await loadApps(registry, appIds);
 const port = browserKV({ prefix: 'murmur' });
@@ -129,8 +134,11 @@ for (const app of registry.list()) {
   roots[app.id] = await mountApp(app, appsEl, {
     kv: kvs[app.id], bus, registry,
     say: (t) => speak(t, personal.signal),
-    // A person's own tap on a gated control asks here; when the agent pressed it, the runner already asked.
-    confirm: ({ gate, readback }) => (agentPress ? Promise.resolve(true) : sheetConfirm({ app: app.id, gate, readback })),
+    // A person's own tap on a gated control is their yes (Pay still checks the fingerprint); when the agent
+    // pressed it, the runner already asked.
+    confirm: ({ gate, readback }) => (agentPress ? Promise.resolve(true) : byHand({ app: app.id, gate, readback, bus,
+      passkey: { usable: fingerprintUsable, confirm: () => passkey.confirm() },
+      sheet: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true) })),
     get workflows() { return agent?.workflows; },
   });
   await app.seed();
@@ -293,15 +301,20 @@ function showSheet(kind, q, answer) {
 }
 function hideSheet(kind) { if (pending?.kind === kind) { pending = null; closeSheet(); } }
 
-// The person's own path (an app's own gated button): the shell keeps the grace, the fingerprint and the voice.
+// The sheet: every gate the runner asks through ctx.confirm, and a hand-tapped Pay with no fingerprint to check.
+// The shell keeps the grace, the fingerprint and the voice, and resolves { result, fingerprint } for pay.
 function sheetConfirm({ gate, readback }) {
   return new Promise((resolve) => {
     showSheet('confirm', { gate, readback }, (v) => {
       if (v === true && performance.now() - pending.at < GRACE_MS) return false;
       pending = null;
-      if (v === true && gate === 'pay' && passkey.hasPasskey()) {
-        show('Check your fingerprint.');
-        passkey.confirm().catch(() => false).then((ok) => { closeSheet(); resolve(!!ok); });
+      if (v === true && gate === 'pay') { // pay always needs the fingerprint (spec §3.7)
+        fingerprintUsable().then((usable) => {
+          // shortcut: no platform authenticator means the sheet's yes stands alone (fingerprint:false)
+          if (!usable) { closeSheet(); resolve({ result: true, fingerprint: false }); return; }
+          show('Check your fingerprint.');
+          passkey.confirm().then((ok) => ok === true, () => false).then((ok) => { closeSheet(); resolve({ result: ok, fingerprint: true }); });
+        });
         return true;
       }
       closeSheet(); resolve(v === true);
@@ -310,6 +323,7 @@ function sheetConfirm({ gate, readback }) {
     speak(`${readback}. ${VERB[gate] || 'Yes'}?`, personal.signal);
   });
 }
+async function fingerprintUsable() { return passkey.hasPasskey() || await passkey.available(); }
 function sheetChoose({ question, choices }) {
   return new Promise((resolve) => {
     showSheet('choose', { question, choices }, (v) => { pending = null; closeSheet(); resolve(Number.isInteger(v) ? v : null); });
@@ -395,7 +409,7 @@ const gestures = recogniser({
   doubleTap() { again(); },
   swipe(dir) {
     if (dir === 'down') stopAll();
-    else if (dir === 'right') agent?.hear('carry on', { path: 'gesture' });
+    else if (dir === 'right') (agent?.carryOn ? agent.carryOn() : agent?.hear('carry on', { path: 'gesture' }));
     else if (dir === 'up') where();
   },
   holdStart() { summon(); },   // holding still works; letting go ends it
