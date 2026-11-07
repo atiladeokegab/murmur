@@ -31,6 +31,7 @@ test('every changing Your look action undoes to the value before it ran, through
 
   for (const [key, name, params, row, was] of [
     ['voiceSlower', 'look__voiceSlower', {}, 'rate', 1.15],
+    ['setVoice', 'look__setVoice', { percent: 400 }, 'rate', 1.15],
     ['colours', 'look__colours', { colours: 'yellow' }, 'theme', 'auto'],
     ['whoSpeaks', 'look__whoSpeaks', { who: 'reader' }, 'speaker', 'murmur'],
     ['howMuch', 'look__howMuch', { mode: 'teach' }, 'agency', 'ask'],
@@ -59,8 +60,11 @@ test('the done line after a change says only the changed row; read() stays the w
   };
   assert.equal(await line('look__textBigger'), 'Text 150 percent.');
   assert.equal(await line('look__setText', { percent: 400 }), 'Text 400 percent.');
-  assert.equal(await line('look__voiceFaster'), 'Voice 1.25 times.');
-  assert.equal(await line('look__voiceSlower'), 'Voice 1.15 times.');
+  assert.equal(await line('look__voiceFaster'), 'Voice 125 percent.');
+  assert.equal(await line('look__voiceSlower'), 'Voice 115 percent.');
+  assert.equal(await line('look__setVoice', { percent: 500 }), 'This is 500 percent. That is the fastest.');
+  assert.equal(await line('look__setVoice', { percent: 300 }), 'This is 300 percent.');
+  assert.equal(await line('look__setVoice', { percent: 100 }), 'This is 100 percent.');
   assert.equal(await line('look__colours', { colours: 'yellow' }), 'Colours: yellow on black.');
   assert.equal(await line('look__howMuch', { mode: 'teach' }), 'How much Murmur does: teach me.');
   assert.equal(await line('look__learning', { on: false }), 'Learning stopped.');

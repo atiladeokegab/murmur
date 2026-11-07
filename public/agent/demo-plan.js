@@ -255,6 +255,14 @@ function plan(said, apps, context, dry) {
     if (new RegExp(`^${TXT} (?:bigger|larger|up)$|^(?:bigger|larger) text$|^zoom in$|^(?:increase|enlarge) ${TXT}$`, 'i').test(t)) return look(['textBigger']);
     if (new RegExp(`^${TXT} (?:smaller|down)$|^smaller text$|^zoom out$|^(?:decrease|reduce|shrink) ${TXT}$`, 'i').test(t)) return look(['textSmaller']);
     if (new RegExp(`^${VOX} (?:faster|quicker)$|^(?:speak|talk) (?:faster|quicker|more quickly)$|^speed up$`, 'i').test(t)) return look(['voiceFaster']);
+    // "Speak at 300 percent", "voice to 250%", "three times faster": the nearest step
+    const N = { one: 1, two: 2, three: 3, four: 4, five: 5, double: 2, twice: 2, triple: 3 };
+    if ((m = t.match(new RegExp(`^(?:${VOX}|(?:speak|talk|read)(?: to me)?)(?: speed)?\\s+(?:to |at )?(\\d{2,3})\\s*(?:%|percent)(?: speed)?$`, 'i'))) ||
+        (m = t.match(new RegExp(`^(?:${VOX}|(?:speak|talk|read)(?: to me)?)?\\s*(?:at\\s+)?(\\d|one|two|three|four|five|double|twice|triple)(?: times)? (?:faster|as fast|speed|the speed)$`, 'i')))) {
+      const n = /^\d{2,3}$/.test(m[1]) ? Number(m[1]) : (N[m[1].toLowerCase()] || Number(m[1])) * 100;
+      const steps = apps.find((a) => a.id === 'look')?.actions.find((x) => x.name === 'setVoice')?.params.properties.percent.enum || [];
+      if (steps.length) return look(['setVoice'], { percent: steps.reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a)) });
+    }
     if (new RegExp(`^${VOX} slower$|^(?:speak|talk) (?:slower|more slowly)$|^slow down$`, 'i').test(t)) return look(['voiceSlower']);
     if ((m = t.match(/^(?:(?:switch|change|make|use|set|turn|go)(?:\s+(?:it|everything|the|screen|phone|colou?rs?|theme|to|into|on))*\s+)?(yellow on black|yellow|high contrast|dark|light|white|black)(?:\s+(?:mode|theme|colou?rs?))?$/i)) &&
         (/^(?:switch|change|make|use|set|turn|go)\b/i.test(t) || /\s(?:mode|theme|colou?rs?)$|^yellow on black$|^high contrast$/i.test(t))) {

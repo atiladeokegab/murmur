@@ -5,7 +5,7 @@ import { loadLook, writeLook, applyLook, PHONE_LIGHT } from '../../look.js';
 
 export const STEPS = {
   size: { label: 'Text', more: 'bigger', less: 'smaller', values: [100, 150, 200, 300, 400], words: (v) => `${v} percent` },
-  rate: { label: 'Voice', more: 'faster', less: 'slower', values: [0.75, 1, 1.15, 1.25, 1.5, 2], words: (v) => (v === 1 ? 'normal speed' : `${v} times`) },
+  rate: { label: 'Voice', more: 'faster', less: 'slower', values: [0.75, 1, 1.15, 1.25, 1.5, 2, 2.5, 3, 4, 5], words: (v) => (v === 1 ? 'normal speed' : `${Math.round(v * 100)} percent`) }, // 1.15 stays: the default
 };
 export const CHOICES = {
   theme: { label: 'Colours', options: { auto: 'Match my phone', dark: 'Dark', light: 'Light', yellow: 'Yellow on black' } },
@@ -303,6 +303,18 @@ const app = {
       },
       verify: (s, p) => s.size === p.percent || 'The text size did not change.',
     }),
+    setVoice: { ...undoable('rate', {
+      describe: 'Set the voice speed in percent',
+      say: 'speak at 200 percent',   // what a person would say (offer.js)
+      doing: 'Changing the voice speed',
+      hint: 'Voice: faster and Voice: slower are the voice row in Your look.',
+      params: { type: 'object', properties: { percent: { type: 'integer', enum: STEPS.rate.values.map((v) => Math.round(v * 100)) } }, required: ['percent'] },
+      async run(p, ctx) {
+        const v = STEPS.rate.values, to = v.find((x) => Math.round(x * 100) === p.percent);
+        while (look.rate !== to) await press(ctx, v.indexOf(look.rate) < v.indexOf(to) ? 'rate-more' : 'rate-less');
+      },
+      verify: (s, p) => Math.round(s.rate * 100) === p.percent || 'The voice speed did not change.',
+    }), done: (s) => `This is ${Math.round(s.rate * 100)} percent.${s.rate === STEPS.rate.values.at(-1) ? ' That is the fastest.' : ''}` },
     voiceFaster: stepper('rate', 'more'),
     voiceSlower: stepper('rate', 'less'),
     colours: { ...chooser('theme', 'colours', 'Change the colours: match my phone, dark, light, or yellow on black', 'Changing the colours', 'Colours is the third row in Your look.'), say: 'use dark mode' },

@@ -15,3 +15,5 @@ export function cachedTts(text, { fetch = globalThis.fetch } = {}) {
 }
 
 export const warmTts = (lines, o) => Promise.allSettled(lines.map((l) => cachedTts(l, o)));
+/** The cloud voice plays at its own speed, so above 125 percent Murmur speaks with the browser voice, which takes the rate. */
+export const cloudAt = (rate) => !(rate > 1.25);
