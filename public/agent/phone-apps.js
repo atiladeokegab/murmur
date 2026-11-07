@@ -2,13 +2,10 @@
 // Names are text only (no logos or colours); every person is invented; nothing is ever sent, paid, called or deleted.
 export const PHONE_APPS = [
   { name: 'Spotify', also: [], does: 'music', line: 'Opening Spotify. Playing your liked songs.', steps: ['Opening Your Library', 'Opening Liked Songs', 'Pressing Play'] },
-  { name: 'Uber', also: [], does: 'rides', line: 'Opening Uber. A car home is about six minutes away. Nothing is booked.', steps: ['Opening Where to', 'Choosing Home', 'Checking the wait'] },
-  { name: 'Deliveroo', also: [], does: 'food delivery', line: 'Opening Deliveroo. Your usual from Pasta Corner is on the menu. Nothing is ordered.', steps: ['Opening Your orders', 'Finding Pasta Corner', 'Reading the menu'] },
   { name: 'WhatsApp', also: ['whats app'], does: 'chat', line: 'Opening WhatsApp. Two new messages, from Priya and Tomas.', steps: ['Opening Chats', 'Finding the unread chats', 'Reading the newest'] },
   { name: 'Instagram', also: ['insta'], does: 'photos', line: 'Opening Instagram. Three new photos from Priya, from her walk by the sea.', steps: ['Opening the feed', 'Scrolling to the newest', 'Reading the captions'] },
   { name: 'Netflix', also: [], does: 'shows', line: 'Opening Netflix. Playing the next episode of Harbour Lights.', steps: ['Opening Continue watching', 'Choosing Harbour Lights', 'Pressing Play'] },
   { name: 'YouTube', also: ['you tube'], does: 'videos', line: 'Opening YouTube. Playing the newest video from your subscriptions.', steps: ['Opening Subscriptions', 'Choosing the newest', 'Pressing Play'] },
-  { name: 'Maps', also: ['google maps', 'apple maps', 'citymapper'], does: 'directions', line: 'Opening Maps. Home is eighteen minutes on foot.', steps: ['Opening Directions', 'Choosing Home', 'Reading the route'] },
   { name: 'Podcasts', also: ['podcast'], does: 'podcasts', line: 'Opening Podcasts. Playing the newest episode of Slow News.', steps: ['Opening Your shows', 'Choosing Slow News', 'Pressing Play'] },
   { name: 'Audible', also: ['audiobook', 'audiobooks'], does: 'audiobooks', line: 'Opening Audible. Carrying on with The Long Road, chapter seven.', steps: ['Opening Library', 'Choosing The Long Road', 'Pressing Play'] },
   { name: 'BBC Sounds', also: ['radio'], does: 'radio', line: 'Opening BBC Sounds. Playing the radio.', steps: ['Opening Live', 'Choosing a station', 'Pressing Play'] },
