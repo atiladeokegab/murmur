@@ -13,7 +13,8 @@ async function phone() {
   const doc = fakeDocument();
   const docListeners = {};
   doc.addEventListener = (t, fn) => (docListeners[t] ||= []).push(fn);
-  doc.key = (key) => (docListeners.keydown || []).forEach((fn) => fn({ key, target: doc.body }));
+  doc.keyEv = (e) => (docListeners.keydown || []).forEach((fn) => fn({ target: doc.body, ...e }));
+  doc.key = (key) => doc.keyEv({ key });
   const bus = createBus(), registry = createRegistry();
   await loadApps(registry, ['hello']);
   registry.register(look);
@@ -73,28 +74,26 @@ test('replay re-runs the last task plan, gates included', async () => {
   assert.ok(bus.log.some((e) => e.name === 'confirm' && e.gate === 'send'), 'the replayed send still asked');
 });
 
-test('the panel opens on a long press of the clock or the ` key, and 1 to 4 run the controls', async () => {
+test('the panel opens on three taps on the clock or Shift+D, and 1 to 4 run the controls', async () => {
   const { doc } = await phone();
   const clock = doc.createElement('time'); doc.body.append(clock);
   const ran = [];
   const spy = Object.fromEntries(CONTROLS.map((c) => [c.key, async () => ran.push(c.key)]));
-  const { panel } = bindDemo(clock, spy, { hold: 10 });
+  let t = 0;
+  const { panel } = bindDemo(clock, spy, { now: () => t });
   assert.equal(panel.hidden, true);
   assert.equal(panel.getAttribute('role'), 'dialog');
-  clock.dispatchEvent(new Event('pointerdown'));
-  clock.dispatchEvent(new Event('pointerup'));
-  await new Promise((r) => setTimeout(r, 20));
-  assert.equal(panel.hidden, true, 'a short press does nothing');
-  clock.dispatchEvent(new Event('pointerdown'));
-  await new Promise((r) => setTimeout(r, 20));
-  assert.equal(panel.hidden, false, 'a long press opens it');
+  clock.click(); t += 1000; clock.click(); t += 1000; clock.click();
+  assert.equal(panel.hidden, true, 'three slow taps do nothing');
+  t += 100; clock.click();
+  assert.equal(panel.hidden, false, 'three taps inside 1.5 s open it');
   assert.equal(doc.activeElement.textContent, '1. Reset');
   doc.key('2');
   assert.equal(panel.hidden, true, 'a control closes the panel first');
   doc.key('2');
   assert.deepEqual(ran, ['nextMorning'], 'number keys do nothing while the panel is shut');
-  doc.key('`'); doc.key('4');
-  doc.key('`'); panel.querySelector('#demo-mode').click();
+  doc.keyEv({ key: 'D', shiftKey: true }); doc.key('4');
+  doc.keyEv({ key: 'D', shiftKey: true }); panel.querySelector('#demo-mode').click();
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(ran, ['nextMorning', 'replay', 'mode']);
 });
