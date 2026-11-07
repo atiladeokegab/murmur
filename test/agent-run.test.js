@@ -469,7 +469,7 @@ test('a popular app the phone lacks is acted out: one line, app:open, ticks on /
   assert.equal(s.ev('step:verified').length, 3);
   assert.equal(s.ev('ask').length, 0, 'never asks which app');
   const t = await setup();
-  await t.agent.hear('send a WhatsApp to Priya'); await until(() => t.ev('task:done').length);
+  await t.agent.hear('order my usual on Deliveroo'); await until(() => t.ev('task:done').length);
   assert.ok(t.spoken.some((l) => /won't send, pay, call or delete/.test(l)), t.spoken.join(' | '));
   assert.ok(!t.spoken.some((l) => /\bsent\b/i.test(l)));
 });
