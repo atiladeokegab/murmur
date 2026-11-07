@@ -250,7 +250,7 @@ const app = {
 #app-calendar li{padding:0.25rem 0}#app-calendar label,#app-calendar h4{display:block;margin-top:var(--gutter)}
 #app-calendar .choices{margin:0.25rem 0}#app-calendar li .choice{width:100%;justify-items:start;text-align:start}
 #app-calendar .cal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,8rem),1fr));gap:0.5rem;margin:0.25rem 0}
-#app-calendar .choice{border-color:var(--c-slat)}#app-calendar .choice[aria-pressed="true"]{border-color:var(--c-ink);background:var(--c-board-press)}#app-calendar .choice.yes{border-color:var(--c-accent)}
+#app-calendar .choice{border-color:var(--c-slat)}#app-calendar .choice{overflow-wrap:anywhere;hyphens:auto}#app-calendar .choice[aria-pressed="true"]{border-color:var(--c-ink);border-width:calc(var(--bw-talk) * 2);background:var(--c-board-press);color:var(--c-ink);text-decoration:underline;text-decoration-thickness:calc(var(--bw-talk) * 1.5);text-underline-offset:0.3em}#app-calendar .choice.yes{border-color:var(--c-accent)}
 #app-calendar .cal-grid .choice[aria-current]{border-style:dashed}
 #app-calendar h3,#app-calendar h4{font-size:var(--fs-title);margin:var(--gutter) 0 0.25rem}
 #app-calendar label,#app-calendar p{font-size:var(--fs-sheet)}#cal-status:empty{margin:0}

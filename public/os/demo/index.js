@@ -41,7 +41,9 @@ export function createDemo({ registry, bus, run, say = async () => {}, board = {
       const look = registry.get('look');
       if (!look) return say('Mode needs Your look.');
       const who = look.state().speaker === 'reader' ? 'murmur' : 'reader';
-      return run('look__whoSpeaks', { who });
+      const r = await run('look__whoSpeaks', { who });
+      if (r?.ok) await say(look.actions.whoSpeaks.done(look.state())); // the agent's press is quiet, so Mode says its row
+      return r;
     },
     async planner() {
       if (!planner) return say('Planner needs the shell.');
