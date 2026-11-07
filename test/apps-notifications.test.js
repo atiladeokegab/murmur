@@ -5,7 +5,7 @@ import { browserKV } from '../public/ports/browser-kv.js';
 import { describeRegistry } from '../public/agent/plan.js';
 import { demoPlan } from '../public/agent/demo-plan.js';
 import { toUtterance } from '../public/voice/gpt.js';
-import notifications from '../public/apps/notifications/index.js';
+import notifications, { arrive, ARRIVING, env } from '../public/apps/notifications/index.js';
 import messages from '../public/apps/messages/index.js';
 import appIds from '../public/apps/apps.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
@@ -45,4 +45,19 @@ test('notifications: reads the latest 1 to 3, who, what and when, and never says
   assert.equal((await run('notifications__check', { who: 'Zara' })).ok, true);
   assert.match(said(), /^Nothing from Zara\. The latest: Uber/);
   assert.doesNotMatch(said(), /can'?t|try again/i);
+});
+
+test('notifications: one arriving drops a banner over any app, is said in one line, and reply goes to that chat', async () => {
+  const doc = fakeDocument(), bus = createBus(), lines = [];
+  env.after = () => {}; // the banner stays up for the check
+  await mountApp(notifications, doc.body, { kv: appKv('notifications', browserKV({ storage: fakeStorage(), prefix: 'murmur' })), bus, say: (t) => lines.push(t) });
+  await notifications.reset();
+  arrive(ARRIVING[0]);
+  assert.deepEqual(lines, ['Sam: Are you coming tonight?']);
+  const b = doc.getElementById('notif-banner');
+  assert.ok(b && b.parentNode === doc.body, 'on the phone itself, over whatever app is open');
+  assert.ok(b.textContent.includes('Sam') && b.textContent.includes('Are you coming tonight?'));
+  assert.equal(notifications.state().list[0].what, 'Are you coming tonight?');
+  const { id, who, app } = notifications.state().last;
+  assert.deepEqual(plan('Reply on my way', { app: 'hello', notified: { id, who, app } }).map((x) => x[0]), ['messages__openChat', 'messages__reply', 'messages__send']);
 });

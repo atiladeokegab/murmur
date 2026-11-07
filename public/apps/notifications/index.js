@@ -11,6 +11,12 @@ const SEED = [
   { who: 'Calendar', app: 'calendar', when: '40 minutes ago', what: `Book club with ${CONTACTS.chloe.name} at 6 pm today.` },
   { id: 'mum', who: CONTACTS.mum.name, app: 'messages', when: 'an hour ago', what: "Don't forget your coat, it's cold out." },
 ];
+// What arrives while the demo runs, one by one after start: a banner over whatever app is open, said in one line.
+export const ARRIVING = [
+  { id: 'sam', who: CONTACTS.sam.name, app: 'messages', what: 'Are you coming tonight?' },
+  { id: 'mum', who: CONTACTS.mum.name, app: 'messages', what: 'Call me when you get a minute, love.' },
+];
+export const env = { after: (ms, fn) => setTimeout(fn, ms), times: [20000, 55000] }; // tests swap these
 const MAX = 3;
 const clean = (who) => String(who || '').trim().replace(/^(?:my|the)\s+/i, '').replace(/'s$/i, '').toLowerCase();
 
@@ -37,6 +43,26 @@ function el(tag, props = {}, ...kids) {
   for (const k of kids.flat()) if (k != null && k !== false) n.append(k);
   return n;
 }
+// A new one: on top of the list, a banner dropped from the top of the phone (so /stage shows it), and one spoken line.
+// It becomes the last one, so "reply" or "open it" goes to that chat.
+export function arrive(n) {
+  const x = { ...n, when: 'just now' };
+  s.list.unshift(x); s.last = x; render();
+  const doc = root?.ownerDocument;
+  if (doc?.body) {
+    doc.getElementById('notif-banner')?.remove();
+    const b = doc.createElement('div');
+    b.id = 'notif-banner'; b.setAttribute('role', 'status');
+    b.style.cssText = 'position:fixed;top:max(0.5rem,env(safe-area-inset-top));left:0.5rem;right:0.5rem;z-index:2147483000;padding:0.75rem 1rem;' +
+      'border-radius:1rem;background:Canvas;color:CanvasText;border:1px solid GrayText;box-shadow:0 0.5rem 1.5rem rgb(0 0 0 / 0.35);font-size:1rem;line-height:1.35';
+    const who = doc.createElement('b'); who.textContent = `${x.who} · ${x.app === 'whatsapp' ? 'WhatsApp' : 'Messages'}`;
+    b.append(who, doc.createElement('br'), x.what);
+    doc.body.append(b);
+    env.after(6000, () => b.remove());
+  }
+  os?.say?.(`${x.who}: ${x.what}`);
+  return x;
+}
 function readOut(e) {
   const r = pick(s.list, q('#notif-from')?.value);
   s.last = r.shown[0]; s.note = r.line; s.said = true; render();
@@ -59,7 +85,12 @@ function render() {
 export default {
   id: 'notifications',
   name: 'Notifications',
-  async mount(r, o) { root = r; os = o; root.append(el('h2', { id: 'notif-h' }, 'Notifications'), body = el('div', { className: 'app-body' })); render(); },
+  async mount(r, o) {
+    root = r; os = o; root.append(el('h2', { id: 'notif-h' }, 'Notifications'), body = el('div', { className: 'app-body' })); render();
+    // The demo's arrivals, only on a real phone: never under a test browser (webdriver) or with ?notify=0.
+    const live = typeof location !== 'undefined' && !globalThis.navigator?.webdriver && !/[?&]notify=0\b/.test(location.search);
+    if (live) ARRIVING.forEach((n, i) => env.after(env.times[i], () => arrive(n)));
+  },
   async seed() { render(); },
   async reset() { s = fresh(); if (q('#notif-from')) q('#notif-from').value = ''; render(); },
   state: () => ({ ...s, list: s.list.map((n) => ({ ...n })), last: s.last && { ...s.last } }),
