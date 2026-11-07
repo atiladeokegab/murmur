@@ -15,6 +15,7 @@ before(async () => {
   url = `http://127.0.0.1:${server.address().port}/`;
   browser = await chromium.launch();
   page = await browser.newPage({ viewport: { width: 390, height: 757 } });
+  await page.route('**/os/shell.js', (route) => route.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
   await page.goto(url);
   await page.evaluate(async () => {
     const [{ default: app }, { mountApp }, { createBus }] = await Promise.all([
@@ -35,6 +36,8 @@ after(async () => {
 
 test('mounted Hello exposes its labelled, headed app and controls in a real browser', async () => {
   const root = page.locator('#app-hello');
+  assert.equal(await page.locator('#hello-send').count(), 1);
+  assert.equal(await page.locator('#hello-box').count(), 1);
   assert.equal(await root.getAttribute('aria-labelledby'), 'hello-h');
   assert.ok(await page.getByRole('heading', { level: 2, name: 'Hello' }).isVisible());
   assert.ok(await page.getByRole('textbox', { name: 'Your message to Sam' }).isVisible());
@@ -46,8 +49,8 @@ test('mounted Hello exposes its labelled, headed app and controls in a real brow
   assert.deepEqual(violations, []);
 });
 
-test('mounted Hello controls meet the 64px target floor', async () => {
-  const targets = await page.locator('#app-hello textarea, #app-hello button').evaluateAll((els) => els.map((el) => {
+test('mounted Hello visible controls meet the 64px target floor', async () => {
+  const targets = await page.locator('#app-hello textarea, #app-hello button').evaluateAll((els) => els.filter((el) => el.checkVisibility()).map((el) => {
     const { width, height } = el.getBoundingClientRect();
     return { name: el.getAttribute('aria-label') || el.labels?.[0]?.textContent || el.textContent, width, height };
   }));

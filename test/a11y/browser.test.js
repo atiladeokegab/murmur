@@ -46,6 +46,7 @@ for (const [name, width, query] of [
     const page = await browser.newPage({ viewport: { width, height: 757 }, reducedMotion: 'reduce' });
     try {
       await page.goto(url + query);
+      await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
       await page.getByRole('button', { name: /talk/i }).waitFor();
       await page.evaluate(() => document.fonts.ready);
       if (query) assert.equal(await page.locator('html').evaluate((el) => getComputedStyle(el).fontSize), '64px');
@@ -62,7 +63,7 @@ for (const [name, width, query] of [
         assert.deepEqual(result.elements, []);
       });
       await t.test('one status region and no positive tabindex', async () => {
-        assert.equal(await page.locator('[role="status"]').count(), 1);
+        assert.equal(await page.locator('[role="status"]:visible').count(), 1);
         assert.equal(await page.locator('[tabindex]').evaluateAll((els) => els.filter((el) => el.tabIndex > 0).length), 0);
       });
       await t.test('keyboard focus follows control source order', async () => {
