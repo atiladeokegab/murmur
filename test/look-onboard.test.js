@@ -118,3 +118,14 @@ test('the caption is quiet: hidden from screen readers, shown only while there i
   show(null);
   assert.equal(p.hidden, true);
 });
+
+test('step 1 is hushed the moment anything is heard, so "On it." never waits behind it', async () => {
+  let signal;
+  const p = phone({ say: (t, s) => { signal = s; return new Promise((r) => s.addEventListener('abort', () => r(false))); } });
+  const open = p.open();
+  await tick();
+  assert.equal(signal?.aborted, false, 'the welcome is being said');
+  p.bus.emit('heard', { text: 'read Mum\'s message', path: 'typed' });
+  assert.equal(signal.aborted, true, 'hushed by the first words heard');
+  assert.equal(await open, true);
+});
