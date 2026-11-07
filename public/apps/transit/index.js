@@ -75,7 +75,7 @@ export function createTransit({ now = () => Date.now() } = {}) {
   }
 
   const go = async (ctx, act, arg) => { if (s.view !== 'home') await ctx.tap(ui.find('back')); await ctx.tap(ui.find(act, arg)); };
-  const needPlace = (p) => { const k = placeOf(p.place); if (!k) throw new Error(`I don't have that place saved. I know Work, Mum's and the library.`); return k; };
+  const needPlace = (p) => { if (!p.place) throw new Error("Where to? I know Work, Mum's and the library."); const k = placeOf(p.place); if (!k) throw new Error(`I don't have that place saved. I know Work, Mum's and the library.`); return k; };
 
   const app = {
     id: 'transit', name: 'Transit',
@@ -116,7 +116,7 @@ export function createTransit({ now = () => Date.now() } = {}) {
       },
       directions: {
         describe: 'Get directions to a saved place', doing: 'Getting directions',
-        params: { type: 'object', properties: { place: { type: 'string' } }, required: ['place'] },
+        params: { type: 'object', properties: { place: { type: 'string' } } },
         gate: null,
         hint: 'Directions is the first button beside each saved place',
         async run(p, ctx) { await go(ctx, 'directions', needPlace(p)); },
@@ -124,7 +124,7 @@ export function createTransit({ now = () => Date.now() } = {}) {
       },
       whenToLeave: {
         describe: 'Work out when to leave for a saved place', doing: 'Working out when to leave',
-        params: { type: 'object', properties: { place: { type: 'string' } }, required: ['place'] },
+        params: { type: 'object', properties: { place: { type: 'string' } } },
         gate: null,
         hint: 'When to leave is the second button beside each saved place',
         async run(p, ctx) { await go(ctx, 'leave', needPlace(p)); },

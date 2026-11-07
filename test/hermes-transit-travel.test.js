@@ -28,6 +28,7 @@ test('Transit: directions and when to leave, by name, through Back', async () =>
   assert.deepEqual(taps, ['Back to Transit', 'When to leave for Work']);
   assert.equal(app.read(), "Leave in one minute to catch the 25 at eight thirty-four. You'll be at work by eight forty-eight.");
   assert.match((await run('transit__directions', { place: 'the moon' })).reason, /don't have that place saved/);
+  assert.equal((await run('transit__whenToLeave', {})).reason, "Where to? I know Work, Mum's and the library.", 'no place: a spoken question, not a schema error');
   assert.match((await run('transit__nextBus', { route: '99' })).reason, /No 99 stops near you/);
   assert.ok((await run('transit__nextBus', { route: 'the 8' })).ok);
   assert.equal(app.read(), 'The 8 leaves in nine minutes from the stop on Market Street.');
