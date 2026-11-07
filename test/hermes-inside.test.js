@@ -143,3 +143,20 @@ test('forward() posts every bus event as {events:[{type, ...payload}]} with keep
   assert.deepEqual(events.map(({ t, ...e }) => e), [{ type: 'heard', text: 'hi', path: 'typed' }, { type: 'tap', app: 'shop', control: 'buy' }]);
   assert.ok(events.every((e) => typeof e.t === 'number'));
 });
+
+test('Asked shows a gated step\'s question as it starts, fills it on the answer, and says when it was never asked', () => {
+  const m = createTally();
+  const add = (type, p) => m.add({ type, ...p });
+  add('task:start', { task: 't', utterance: 'pay', plan: [] });
+  add('step:start', { task: 't', action: 'pay', app: 'shop', label: 'Paying', params: {}, gate: 'pay' });
+  assert.deepEqual(m.columns().Asked, [{ app: 'shop', gate: 'pay', readback: 'Paying', result: null }], 'pending before the sheet is answered');
+  add('confirm', { task: 't', app: 'shop', gate: 'pay', readback: 'Pay £3?', result: true });
+  add('step:verified', { task: 't', action: 'pay', app: 'shop', ms: 5 });
+  assert.deepEqual(m.columns().Asked, [{ app: 'shop', gate: 'pay', readback: 'Pay £3?', result: true }], 'one row, filled in');
+  assert.equal(m.tally().bypassed, 0);
+  add('step:start', { task: 't', action: 'hold', app: 'travel', label: 'Holding', params: {}, gate: 'pay' });
+  add('step:failed', { task: 't', action: 'hold', app: 'travel', reason: 'Find the flights first.' });
+  assert.equal(m.columns().Asked[1].unasked, true);
+  add('confirm', { app: 'shop', gate: 'pay', readback: 'by hand', result: false });
+  assert.equal(m.columns().Asked.length, 3, 'a later confirm never fills a closed row');
+});
