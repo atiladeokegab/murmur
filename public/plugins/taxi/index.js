@@ -101,7 +101,7 @@ const app = {
   actions: {
     quote: {
       describe: 'Get the price and wait for a taxi to a place',
-      say: '',   // offline, only booking plans this app yet (offer.js)
+      say: 'get a taxi price',
       doing: 'Getting a taxi price',
       hint: 'Type where you are going, then Get a price.',
       params: { type: 'object', properties: { to: { type: 'string', description: 'Where to: Home, Work, the Station or the Airport' } }, required: ['to'] },
@@ -134,7 +134,7 @@ const app = {
     },
     track: {
       describe: 'Say where the booked taxi is now',
-      say: '',
+      say: 'track my taxi',
       doing: 'Tracking your taxi',
       hint: 'Track my taxi is in the box under Book and pay.',
       params: { type: 'object', properties: {} },
@@ -147,7 +147,7 @@ const app = {
     },
     cancel: {
       describe: 'Cancel the booked taxi',
-      say: '',
+      say: 'cancel my taxi',
       doing: 'Cancelling your taxi',
       gate: 'delete',
       hint: 'Cancel my taxi is the last button.',

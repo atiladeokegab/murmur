@@ -53,7 +53,7 @@ const app = {
   actions: {
     write: {
       describe: 'Write a message to Sam',
-      say: '',   // offline, no words plan Hello's write yet (they find Writer or Messages)
+      say: '',   // offline, every "write ..." plans Writer or Messages first, and Hello's verb is write (agent-offer-plans.test.js)
       doing: 'Writing to Sam',
       hint: 'The message box is under the heading.',
       params: { type: 'object', properties: { text: { type: 'string', description: 'The message' } }, required: ['text'] },

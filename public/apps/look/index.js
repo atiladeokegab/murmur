@@ -320,7 +320,7 @@ const app = {
     }),
     whatYouKnow: {
       describe: 'Say what Murmur knows about me',
-      say: '',   // the words plan the agent's own recall
+      say: 'show what you know about me',   // "what Murmur knows about me" plans the agent's own recall
       doing: 'Reading what I know',
       hint: 'What do you know about me is under Memory, near the end of Your look.',
       params: { type: 'object', properties: {} },

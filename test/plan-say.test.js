@@ -49,7 +49,7 @@ test('"write to Sam" is a message to Sam, not the Writer', () => {
 test('the open app wins a tie; an unclear match asks "Which one: A or B?"', () => {
   const two = describeRegistry([taxi, { ...taxi, id: 'cabco', name: 'Cab Co' }]);
   assert.equal(demoPlan('cancel it', two, { app: 'cabco', workflows: [] }).plan[0].tool, 'cabco__cancel');
-  assert.equal(demoPlan('cancel it', two, { app: null, workflows: [] }).say, 'Which one: cancel the booked taxi in Northline Taxis or cancel the booked taxi in Cab Co?');
+  assert.equal(demoPlan('cancel it', two, { app: null, workflows: [] }).say, 'Which one: cancel my taxi in Northline Taxis or cancel my taxi in Cab Co?');
   assert.match(demoPlan('say hello', reg, { app: null, workflows: [] }).say, /^I can't do that one yet/, 'one shared word that is not its verb plans nothing');
 });
 
