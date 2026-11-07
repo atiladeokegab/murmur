@@ -103,7 +103,8 @@ html.big .inside #tally :is(.t-tasks, .t-failed, .t-modelCalls) { display: none;
    Memory is on the laptop view only */
 html.big .inside main { display: flex; flex-direction: column; gap: 6px; overflow: hidden; min-height: 0; }
 html.big .inside section { flex: none; max-height: none; min-height: 0; }
-html.big .inside section:has(#c-Actions) { flex: 1 1 auto; }
+html.big .inside section:has(#c-Actions) { flex: 1 1 auto; min-height: 5.5rem; }
+html.big .inside section:has(#c-Asked) { flex: 0 1 auto; overflow: hidden; }
 html.big .inside section:has(#c-Memory) { display: none; }
 html.big .inside h2 { padding: .3rem .6rem; }
 html.big .inside li.old { display: none; } /* history lives on the laptop view; the room sees what is happening now */

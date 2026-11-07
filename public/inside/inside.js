@@ -25,7 +25,7 @@ const ROW = {
     + `<p class="meta">${esc(r.action)}${params(r.params)}</p>`
     + `<p class="meta">verify: <span class="res">${esc(r.result)}</span>${ms(r.ms)}</p>`
     + `${r.control ? `<p class="pressed">pressed <q>${esc(r.control)}</q></p>` : ''}${r.reason ? `<p class="why">Didn't work: ${esc(r.reason)}</p>` : ''}`,
-  Asked: (r) => `<p class="read">${esc(r.readback)}</p><p class="answer ${r.result === true ? 'yes' : r.result === false ? 'no' : ''}"><b>${esc(r.gate)}</b> · ${yesNo(r.result)}</p>`,
+  Asked: (r) => `<p class="read">${esc(r.readback)}</p><p class="answer ${r.result === true ? 'yes' : r.result === false ? 'no' : ''}"><b>${esc(r.gate)}</b> · ${r.unasked ? 'not asked' : yesNo(r.result)}</p>`,
   // Every field, as key and value, so a judge sees there is no content in it.
   Memory: (r) => `<p class="kind">${esc(r.kind)}</p><dl class="fields">${Object.entries(r.fields).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(val(v))}</dd>`).join('')}</dl>`,
 };

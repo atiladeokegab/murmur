@@ -190,7 +190,7 @@ export function createShop({ now = () => Date.now() } = {}) {
         gate: 'pay',
         hint: 'Pay is the large button under the basket total',
         // What leaves the phone, from state, never the model: "Flat white, Demo Café, £3.20."
-        readback(st) { return `${say(st.basket)}.`; },
+        readback(st) { if (!st.basket.length) throw new Error('Your basket is empty.'); return `${say(st.basket)}.`; }, // throws before any sheet opens
         async run(p, ctx) {
           if (!s.basket.length) throw new Error('Your basket is empty.');
           await tap(ctx, 'pay');
