@@ -135,7 +135,7 @@ function planOrWords(said, apps, context, dry) {
 }
 
 const MISS = "I can't do that one yet.", NO_APP = "I don't have";
-const STOP = new Set('my the a an to of for in on at it is me please and with from your some what usual'.split(' ')); // "order my usual": the usual one
+const STOP = new Set('my the a an to of for in at it is me please and with from your some what usual'.split(' ')); // "order my usual": the usual one; "on" counts, so "hold on" is no hold
 const stem = (w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
 const words = (s) => String(s || '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().replace(/'/g, '').split(/[^a-z0-9]+/).filter(Boolean).map(stem);
 
