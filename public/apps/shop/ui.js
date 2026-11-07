@@ -34,6 +34,10 @@ export function swap(body, kids) {
   if (!first) return;
   if (first.tabIndex == null || first.tabIndex < 0) first.tabIndex = -1;
   first.focus();
+  // The page may sit scrolled past the new view's top; while the confirm sheet is still open it can't scroll, so wait for it.
+  let tries = 30;
+  const show = () => (doc.querySelector?.('dialog[open]') && --tries ? setTimeout(show, 100) : first.isConnected && first.scrollIntoView?.({ block: 'nearest' }));
+  setTimeout(show, 120); // after the sheet's close and the layout settle, which otherwise put the old scroll back
 }
 
 /** The place line, unless it only repeats the app's name (the h2 already says it). */
@@ -65,7 +69,7 @@ export const CSS = `
 .m-app-body ul, .m-app-body ol { list-style: none; padding: 0; margin: 0; }
 .m-app-body li { border-top: var(--bw-talk) solid var(--c-slat); padding: var(--pad-tile); display: flex; flex-wrap: wrap; gap: var(--ring); align-items: center; justify-content: space-between; }
 .m-app .m-app-place { color: var(--c-quiet); }
-.m-app-btn { min-height: var(--h-link); min-width: var(--h-link); padding: var(--pad-tile); font: inherit; font-weight: 700; color: var(--c-ink); background: var(--c-board); border: var(--bw-talk) solid var(--c-quiet); border-radius: var(--r-btn); cursor: pointer; }
+.m-app-btn { min-height: var(--h-link); min-width: min(var(--h-link), 100%); padding: var(--pad-tile); font: inherit; font-weight: 700; color: var(--c-ink); background: var(--c-board); border: var(--bw-talk) solid var(--c-quiet); border-radius: var(--r-btn); cursor: pointer; }
 .m-app-btn:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-off); }
 .m-app-sim { color: var(--c-quiet); font-size: var(--fs-hint); }
 .m-app-main { background: var(--c-accent); color: var(--c-on-accent); border-color: var(--c-accent); }
@@ -74,6 +78,8 @@ export const CSS = `
 @container (max-width: 15em) {
   .m-app-body li { padding: var(--ring) 0; }
   .m-app-btn { flex: 1 1 100%; width: 100%; padding: var(--ring); }
+  /* a long word breaks with a hyphen, never past the edge; the text keeps the size the person zoomed to */
+  .m-app-body li, .m-app-body p, .m-app-body h3, .m-app-btn { hyphens: auto; overflow-wrap: anywhere; }
 }
 .m-app-total { font-family: var(--f-time); font-size: var(--fs-title); }
 `;
