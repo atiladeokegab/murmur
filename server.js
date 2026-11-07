@@ -26,9 +26,9 @@ function send(res, status, body, type = 'application/json') {
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
-async function readJson(req) {
+async function readJson(req, cap = 32 * 1024) {
   let size = 0; const chunks = [];
-  for await (const c of req) { size += c.length; if (size > 32 * 1024) throw Object.assign(new Error('too big'), { status: 413 }); chunks.push(c); }
+  for await (const c of req) { size += c.length; if (size > cap) throw Object.assign(new Error('too big'), { status: 413 }); chunks.push(c); }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); }
   catch { throw Object.assign(new Error('bad json'), { status: 400 }); }
 }
@@ -119,7 +119,7 @@ export const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/bus') && !relay.allowed(req, url)) return send(res, 403, { error: 'forbidden' });
     if (url.pathname === '/api/bus/stream' && req.method === 'GET') return relay.stream(req, res, relay.roomOf(url) || 'stage');
     // The phone forwards every bus event: same-origin checked above, no model behind it, so it skips the rate limit and the daily cap.
-    if (url.pathname === '/api/bus' && req.method === 'POST') return send(res, 200, await relay.api['POST /api/bus'](await readJson(req), relay.roomOf(url)));
+    if (url.pathname === '/api/bus' && req.method === 'POST') return send(res, 200, await relay.api['POST /api/bus'](await readJson(req, 256 * 1024), relay.roomOf(url)) /* a mirror frame is up to 200 KB */);
     const handler = api[`${req.method} ${url.pathname}`];
     if (url.pathname.startsWith('/api/')) {
       const no = guard(req, { model: !!KEY || !!ELEVEN }); // every /api route may spend a key once one is set
