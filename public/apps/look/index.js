@@ -5,14 +5,14 @@ import { readLook, writeLook, applyLook } from '../../look.js';
 
 export const STEPS = {
   size: { label: 'Text', more: 'bigger', less: 'smaller', values: [100, 150, 200, 300, 400], words: (v) => `${v} percent` },
-  rate: { label: 'Voice', more: 'faster', less: 'slower', values: [0.75, 1, 1.25, 1.5, 2], words: (v) => (v === 1 ? 'normal speed' : `${v} times`) },
+  rate: { label: 'Voice', more: 'faster', less: 'slower', values: [0.75, 1, 1.15, 1.25, 1.5, 2], words: (v) => (v === 1 ? 'normal speed' : `${v} times`) },
 };
 export const CHOICES = {
   theme: { label: 'Colours', options: { dark: 'Dark', light: 'Light', yellow: 'Yellow on black' } },
   speaker: { label: 'Who speaks', options: { murmur: 'Murmur', reader: 'My screen reader' } },
   agency: { label: 'How much Murmur does', options: { ask: 'Ask me', just: 'Just do it', teach: 'Teach me' } },
 };
-const DEFAULTS = { size: 100, rate: 1, theme: 'dark', speaker: 'murmur', agency: 'ask', learning: true };
+const DEFAULTS = { size: 100, rate: 1.15, theme: 'dark', speaker: 'murmur', agency: 'ask', learning: true };
 
 let root = null, kv = null, os = null, toolkit = null;
 let look = { ...DEFAULTS }, known = null, lastChange = null, pending = Promise.resolve();
