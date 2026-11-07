@@ -6,13 +6,15 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ESC[c]);
 const code = (o) => `<code>${esc(JSON.stringify(o))}</code>`;
 const ms = (n) => (n == null ? '' : ` · ${Math.round(n)} ms`);
 
+const yesNo = (r) => (r === true ? 'yes' : r === false ? 'no' : JSON.stringify(r));
 const ROW = {
-  Heard: (r) => `${esc(r.text)}${r.clean ? `<br>Heard: ${esc(r.clean)}` : ''}<br><code>${esc(r.path || 'path ?')}${ms(r.ms)}</code>`,
-  Plan: (r) => `${r.plan.map((c) => `${c.gate ? `<b>[${esc(c.gate)}]</b> ` : ''}${esc(c.action || c.tool || c.name)} ${code(c.params ?? c.args ?? {})}`).join('<br>') || 'No plan'}`
-    + `${r.dropped.length ? `<br>Dropped: ${code(r.dropped)}` : ''}<br><code>${esc(r.provider || '')}</code>`,
-  Actions: (r) => `<span class="${r.result === 'verified' ? 'ok' : r.result === 'failed' ? 'no' : ''}">${esc(r.action)}</span>${r.gate ? ` <b>[${esc(r.gate)}]</b>` : ''} ${code(r.params ?? {})}`
-    + `<br><code>${esc(r.control ? `pressed ${r.control}` : '')} verify: ${esc(r.result)}${ms(r.ms)}</code>${r.reason ? `<br>Didn't work: ${esc(r.reason)}` : ''}`,
-  Asked: (r) => `<b>${esc(r.gate)}</b>: ${esc(r.readback)}<br><code>answer: ${esc(JSON.stringify(r.result))}${r.fingerprint != null ? ` · fingerprint: ${esc(JSON.stringify(r.fingerprint))}` : ''}</code>`,
+  Heard: (r) => `${esc(r.text)}${r.raw && r.raw !== r.text ? `<br>Raw: ${esc(r.raw)}` : ''}<br><code>${esc(r.path || 'from the task')}${ms(r.ms)}</code>`,
+  Plan: (r) => `${r.plan.map((c) => `${esc(c.name)} ${code(c.params ?? {})}`).join('<br>') || 'No plan'}`
+    + `${r.dropped.length ? `<br>Dropped: ${code(r.dropped)}` : ''}${r.provider ? `<br><code>${esc(r.provider)}</code>` : ''}`,
+  Actions: (r) => `<span class="${r.result === 'verified' ? 'ok' : r.result === 'failed' ? 'no' : ''}">${esc(r.label || r.action)}</span>${r.gate ? ` <b>[${esc(r.gate)}]</b>` : ''}`
+    + `<br><code>${esc(r.app ? `${r.app}.` : '')}${esc(r.action)} ${esc(JSON.stringify(r.params ?? {}))}</code>`
+    + `<br><code>${esc(r.control ? `pressed ${r.control} · ` : '')}verify: ${esc(r.result)}${ms(r.ms)}</code>${r.reason ? `<br>Didn't work: ${esc(r.reason)}` : ''}`,
+  Asked: (r) => `<b>${esc(r.gate)}</b>: ${esc(r.readback)}<br><code>${esc(r.app || '')} answer: ${esc(yesNo(r.result))}</code>`,
   Memory: (r) => `${esc(r.kind)} ${code(r.fields)}`,
 };
 const LABELS = [['tasks', 'tasks'], ['verified', 'steps verified'], ['failed', 'steps failed'], ['asked', 'gates asked'], ['bypassed', 'gates bypassed'], ['modelCalls', 'model calls']];
