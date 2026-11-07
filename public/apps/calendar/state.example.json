@@ -1,0 +1,20 @@
+{
+  "today": "Monday",
+  "now": "09:00",
+  "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+  "shown": "Monday",
+  "open": null,
+  "picking": false,
+  "clash": null,
+  "adding": false,
+  "inviting": false,
+  "events": [
+    { "id": "lunch", "title": "Lunch with Mum", "day": "Tuesday", "time": "12:30", "mins": 60, "with": "Mum", "invited": [] },
+    { "id": "bookclub", "title": "Book club", "day": "Thursday", "time": "19:00", "mins": 90, "with": null, "invited": [] },
+    { "id": "callsam", "title": "Call Sam", "day": "Friday", "time": "19:00", "mins": 30, "with": "Sam", "invited": [] }
+  ],
+  "next": "lunch",
+  "lastMoved": null,
+  "lastAdded": null,
+  "lastInvite": null
+}

@@ -122,6 +122,7 @@ const port = browserKV({ prefix: 'murmur' });
 const appsEl = $('#apps');
 const roots = {}, kvs = {};
 let current = null, agentPress = false;
+let agent = null; // declared before the mount loop: Mine reads os.workflows during seed()
 let personal = new AbortController(); // the person's own reads (Read it); Stop aborts it too
 const cursor = createCursor(document);
 for (const app of registry.list()) {

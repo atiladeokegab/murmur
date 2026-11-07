@@ -1,0 +1,110 @@
+{
+  "afterSeed": {
+    "title": "Platform Four",
+    "chapters": [
+      {
+        "title": "The flat",
+        "text": "We moved in on the first warm day of the year. The flat was above a launderette, and the floor was always faintly warm. I learned the stairs by counting them: fourteen, then a turn, then six. The kettle was the first thing I found and the last thing I packed. Next door played the cello badly every evening at seven. By the second week I liked it. A letter came for the person who lived here before me. I put it on the shelf by the door and forgot about it.",
+        "parts": [
+          {
+            "from": 0,
+            "about": "moving in"
+          },
+          {
+            "from": 6,
+            "about": "the letter for someone else"
+          }
+        ]
+      },
+      {
+        "title": "Platform Four",
+        "text": "The rain started before I reached the corner. It came sideways, the way it does in March. I pulled my collar up and kept walking. The bakery was shut, its blinds half down. A bus went past and soaked my shoes. I counted the lamp posts to keep my mind still. Eleven, twelve, thirteen. My phone buzzed twice and I ignored it. By the bridge, the rain had settled into a drizzle. I could hear the trains before I could see them. The station smelled of wet coats and coffee. A board above the gates clicked through the departures. The nine forty to Leeds was on time, for once. I stood under the clock and looked for her. A man with a guide dog asked me which platform was four. I walked him there, and the dog led the way. People moved around us like water round a stone. The announcer said our train in a voice like gravel. I still could not see her anywhere. Then someone touched my arm. It was not her, but her brother. He held out an envelope with my name on it. The handwriting was hers, small and slanted. I did not open it on the platform. I sat on the train and held it on my knee. The fields went past, green and grey. Somewhere after Peterborough, I opened it. There was one line inside. It said, \"Read this out loud.\" So I did.",
+        "parts": [
+          {
+            "from": 0,
+            "about": "the rain"
+          },
+          {
+            "from": 10,
+            "about": "the station"
+          },
+          {
+            "from": 20,
+            "about": "the envelope"
+          }
+        ]
+      }
+    ],
+    "chapter": 1,
+    "sentence": 0,
+    "readFrom": null,
+    "changed": null,
+    "lastSaid": "",
+    "undo": null,
+    "current": {
+      "chapter": 2,
+      "title": "Platform Four",
+      "sentence": 1,
+      "of": 30,
+      "text": "The rain started before I reached the corner. It came sideways, the way it does in March. I pulled my collar up and kept walking. The bakery was shut, its blinds half down. A bus went past and soaked my shoes. I counted the lamp posts to keep my mind still. Eleven, twelve, thirteen. My phone buzzed twice and I ignored it. By the bridge, the rain had settled into a drizzle. I could hear the trains before I could see them. The station smelled of wet coats and coffee. A board above the gates clicked through the departures. The nine forty to Leeds was on time, for once. I stood under the clock and looked for her. A man with a guide dog asked me which platform was four. I walked him there, and the dog led the way. People moved around us like water round a stone. The announcer said our train in a voice like gravel. I still could not see her anywhere. Then someone touched my arm. It was not her, but her brother. He held out an envelope with my name on it. The handwriting was hers, small and slanted. I did not open it on the platform. I sat on the train and held it on my knee. The fields went past, green and grey. Somewhere after Peterborough, I opened it. There was one line inside. It said, \"Read this out loud.\" So I did."
+    }
+  },
+  "afterAction": {
+    "said": [
+      {
+        "name": "writer__readLastPage",
+        "params": {}
+      }
+    ],
+    "state": {
+      "title": "Platform Four",
+      "chapters": [
+        {
+          "title": "The flat",
+          "text": "We moved in on the first warm day of the year. The flat was above a launderette, and the floor was always faintly warm. I learned the stairs by counting them: fourteen, then a turn, then six. The kettle was the first thing I found and the last thing I packed. Next door played the cello badly every evening at seven. By the second week I liked it. A letter came for the person who lived here before me. I put it on the shelf by the door and forgot about it.",
+          "parts": [
+            {
+              "from": 0,
+              "about": "moving in"
+            },
+            {
+              "from": 6,
+              "about": "the letter for someone else"
+            }
+          ]
+        },
+        {
+          "title": "Platform Four",
+          "text": "The rain started before I reached the corner. It came sideways, the way it does in March. I pulled my collar up and kept walking. The bakery was shut, its blinds half down. A bus went past and soaked my shoes. I counted the lamp posts to keep my mind still. Eleven, twelve, thirteen. My phone buzzed twice and I ignored it. By the bridge, the rain had settled into a drizzle. I could hear the trains before I could see them. The station smelled of wet coats and coffee. A board above the gates clicked through the departures. The nine forty to Leeds was on time, for once. I stood under the clock and looked for her. A man with a guide dog asked me which platform was four. I walked him there, and the dog led the way. People moved around us like water round a stone. The announcer said our train in a voice like gravel. I still could not see her anywhere. Then someone touched my arm. It was not her, but her brother. He held out an envelope with my name on it. The handwriting was hers, small and slanted. I did not open it on the platform. I sat on the train and held it on my knee. The fields went past, green and grey. Somewhere after Peterborough, I opened it. There was one line inside. It said, \"Read this out loud.\" So I did.",
+          "parts": [
+            {
+              "from": 0,
+              "about": "the rain"
+            },
+            {
+              "from": 10,
+              "about": "the station"
+            },
+            {
+              "from": 20,
+              "about": "the envelope"
+            }
+          ]
+        }
+      ],
+      "chapter": 1,
+      "sentence": 13,
+      "readFrom": 10,
+      "changed": null,
+      "lastSaid": "",
+      "undo": null,
+      "current": {
+        "chapter": 2,
+        "title": "Platform Four",
+        "sentence": 14,
+        "of": 30,
+        "text": "The rain started before I reached the corner. It came sideways, the way it does in March. I pulled my collar up and kept walking. The bakery was shut, its blinds half down. A bus went past and soaked my shoes. I counted the lamp posts to keep my mind still. Eleven, twelve, thirteen. My phone buzzed twice and I ignored it. By the bridge, the rain had settled into a drizzle. I could hear the trains before I could see them. The station smelled of wet coats and coffee. A board above the gates clicked through the departures. The nine forty to Leeds was on time, for once. I stood under the clock and looked for her. A man with a guide dog asked me which platform was four. I walked him there, and the dog led the way. People moved around us like water round a stone. The announcer said our train in a voice like gravel. I still could not see her anywhere. Then someone touched my arm. It was not her, but her brother. He held out an envelope with my name on it. The handwriting was hers, small and slanted. I did not open it on the platform. I sat on the train and held it on my knee. The fields went past, green and grey. Somewhere after Peterborough, I opened it. There was one line inside. It said, \"Read this out loud.\" So I did."
+      }
+    }
+  }
+}
