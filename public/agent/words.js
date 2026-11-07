@@ -4,7 +4,8 @@
 
 const PHRASES = {
   stop: ['stop', 'stop it', 'stop that', 'stop reading', 'stop now', 'cancel', 'hang on', 'wait', 'shut up', 'be quiet', 'quiet',
-    'stop talking', 'stop speaking', 'shush', 'shh', 'hush', 'enough', "that's enough", 'quiet please'],
+    'stop talking', 'stop speaking', 'shush', 'shh', 'hush', 'enough', "that's enough", 'quiet please',
+    'no stop', 'no no stop', 'just stop', 'oh stop', 'pause', 'silence', 'enough already', 'stop the reading', 'hold on'],
   where: ['where am i', 'where was i', 'where are we'],
   undo: ['undo', 'undo that', 'undo it', 'take that back', 'go back', 'cancel that', 'put it back', 'put that back', 'undo undo'],
   carry_on: ['carry on', 'continue', 'keep going', 'go on', 'resume'],
@@ -22,6 +23,7 @@ const DENY = ['no', 'no thanks', "don't", "don't send it", 'not now', 'leave it'
 const FILLER = new Set(['um', 'uh', 'er', 'erm', 'please', 'murmur', 'hey', 'now', 'okay', 'ok', 'so', 'oops']);
 // Whole utterances that are made of fillers once those go ("what now", "what can Murmur do"): matched as said.
 const WHOLE = { and: 'more', 'what now': 'offer', 'what can murmur do': 'offer', 'what can murmur do for me': 'offer' };
+const STOPS = new Set(PHRASES.stop);
 export const GATE_GRACE_MS = 500;
 
 // Dictation's padding, off the planner's words: leading fillers, the wake word and "can you", a trailing "please",
@@ -59,6 +61,7 @@ function matchAt(ws, i, table) {
 export function hear(text, { gate = null, now = Date.now() } = {}) {
   const said = norm(text).replace(/[.,!?;:]/g, ' ').trim().replace(/\s+/g, ' ');
   if (WHOLE[said]) return { words: [{ kind: WHOLE[said] }], rest: '' };
+  if (STOPS.has(said)) return { words: [{ kind: 'stop' }], rest: '' }; // "No, stop!": a stop said whole, whatever its commas
   const ws = wordsOf(text);
   const table = gate ? CONFIRM_TABLE.concat(TABLE).sort((a, b) => b.words.length - a.words.length) : TABLE;
   const found = [];
