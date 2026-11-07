@@ -1,0 +1,137 @@
+{
+  "afterSeed": {
+    "chats": [
+      {
+        "id": "mum",
+        "name": "Mum",
+        "unread": 1,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Did you get home all right?"
+          },
+          {
+            "from": "me",
+            "text": "Yes, all fine. Love you."
+          },
+          {
+            "from": "them",
+            "text": "Lunch on Tuesday?"
+          }
+        ]
+      },
+      {
+        "id": "sam",
+        "name": "Sam",
+        "unread": 1,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Are you still coming to the quiz tonight? We start at seven."
+          }
+        ]
+      },
+      {
+        "id": "samira",
+        "name": "Samira",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "me",
+            "text": "Thanks for the lift."
+          },
+          {
+            "from": "them",
+            "text": "Any time. See you at choir."
+          }
+        ]
+      }
+    ],
+    "currentChat": null,
+    "draft": "",
+    "changed": null,
+    "reading": null,
+    "lastSent": null
+  },
+  "afterAction": {
+    "said": [
+      {
+        "name": "messages__openChat",
+        "params": {
+          "who": "Sam"
+        }
+      },
+      {
+        "name": "messages__reply",
+        "params": {
+          "text": "I'm ten minutes late."
+        }
+      },
+      {
+        "name": "messages__send",
+        "params": {}
+      }
+    ],
+    "state": {
+      "chats": [
+        {
+          "id": "mum",
+          "name": "Mum",
+          "unread": 1,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Did you get home all right?"
+            },
+            {
+              "from": "me",
+              "text": "Yes, all fine. Love you."
+            },
+            {
+              "from": "them",
+              "text": "Lunch on Tuesday?"
+            }
+          ]
+        },
+        {
+          "id": "sam",
+          "name": "Sam",
+          "unread": 1,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Are you still coming to the quiz tonight? We start at seven."
+            },
+            {
+              "from": "me",
+              "text": "I'm ten minutes late."
+            }
+          ]
+        },
+        {
+          "id": "samira",
+          "name": "Samira",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "me",
+              "text": "Thanks for the lift."
+            },
+            {
+              "from": "them",
+              "text": "Any time. See you at choir."
+            }
+          ]
+        }
+      ],
+      "currentChat": "sam",
+      "draft": "I'm ten minutes late.",
+      "changed": null,
+      "reading": null,
+      "lastSent": {
+        "to": "sam",
+        "text": "I'm ten minutes late."
+      }
+    }
+  }
+}
