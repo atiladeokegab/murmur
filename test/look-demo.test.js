@@ -35,7 +35,7 @@ test('first open says one sentence, only once, and reset re-arms it', async () =
   assert.equal(await firstOpen({ kv, say }), true);
   assert.equal(await firstOpen({ kv, say }), false);
   assert.deepEqual(said, [FIRST_WORDS]);
-  assert.equal(FIRST_WORDS, 'Tap anywhere and tell me what you need.');
+  assert.equal(FIRST_WORDS, 'Tap anywhere and speak.');
   await rearm({ kv });
   assert.equal(await firstOpen({ kv, say }), true);
 });
