@@ -1,7 +1,7 @@
 // The bus: every layer talks through these events, and only these (os/contract.md §Bus).
 // Payloads are plain JSON so the Inside view can relay them; emit() adds `t` (ms since epoch).
 export const EVENTS = ['heard', 'task:start', 'step:next', 'step:start', 'tap', 'step:verified', 'step:failed',
-  'confirm', 'ask', 'say', 'place', 'memory', 'undo', 'task:done', 'reset', 'mirror:frame', 'app:import', 'app:open'];
+  'confirm', 'ask', 'say', 'place', 'memory', 'undo', 'task:done', 'reset', 'mirror:frame', 'app:import', 'app:open', 'remote:hear'];
 
 export function createBus({ keep = 500 } = {}) {
   const subs = new Map();

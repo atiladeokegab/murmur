@@ -5,6 +5,8 @@ body.stage { height: 100svh; margin: 0; padding: 1rem 1.5rem 1.25rem; box-sizing
 .stage h1 { margin: 0; font-size: var(--fs-title); color: var(--c-quiet); letter-spacing: .02em; white-space: nowrap; }
 .stage #now { margin: 0; font-size: var(--fs-now-title); line-height: 1.15; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stage #now b { color: var(--c-accent); font-weight: 700; }
+.stage .tell input { width: min(28rem, 100%); font: inherit; font-size: 1.1rem; padding: 0.6rem 0.9rem; border-radius: 999px; border: 1px solid var(--c-quiet); background: var(--c-page); color: var(--c-ink); }
+.stage .tell input:focus-visible { outline: 3px solid var(--c-focus); outline-offset: 2px; }
 .stage main { display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; min-height: 0; }
 /* An original frame: a plain rounded body with an even bezel, no notch or brand cues. --s is set by stage.js. */
 .stage .phone-col { display: flex; flex-direction: column; align-items: center; gap: .5rem; min-height: 0; }
