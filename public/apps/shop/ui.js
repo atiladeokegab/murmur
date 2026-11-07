@@ -24,11 +24,12 @@ export function wire(root, handlers) {
   });
 }
 
-export const money = (p) => `£${(p / 100).toFixed(2)}`;
+export const money = (p) => `£${p % 100 ? (p / 100).toFixed(2) : p / 100}`; // "£88", not "£88.00", when spoken
 
 const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven',
   'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
-export const num = (n) => WORDS[n] ?? String(n);
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty'];
+export const num = (n) => WORDS[n] ?? (n < 60 ? TENS[Math.floor(n / 10)] + (n % 10 ? `-${WORDS[n % 10]}` : '') : String(n));
 export const minutes = (n) => (n <= 0 ? 'now' : n === 1 ? 'in one minute' : `in ${num(n)} minutes`);
 
 // "ten past", "half past", "quarter to", "nine forty": how a friend says a clock time.
@@ -40,7 +41,7 @@ export function spokenTime(d) {
   if (m === 45) return 'quarter to';
   if (m < 30 && m % 5 === 0) return `${num(m)} past`;
   if (m > 30 && m % 5 === 0) return `${num(60 - m)} to ${num(next)}`;
-  return `${num(h)} ${m < 10 ? `oh ${num(m)}` : m}`;
+  return `${num(h)} ${m < 10 ? `oh ${num(m)}` : num(m)}`;
 }
 
 export const CSS = `
