@@ -106,7 +106,7 @@ html.big .inside section { flex: none; max-height: none; min-height: 0; }
 html.big .inside section:has(#c-Actions) { flex: 1 1 auto; min-height: 4rem; } /* heading plus the step name */
 html.big .inside section:has(#c-Asked) { flex: none; max-height: 40%; overflow: hidden; } /* never shrinks to its heading: the readback and answer stay readable */
 html.big .inside section:has(#c-Memory) { display: none; }
-@media (max-height: 600px) { html.big .inside section:has(#c-Plan) { display: none; } } /* a short screen: Actions already names each step, and Asked keeps its room */
+@media (max-height: 700px) { html.big .inside section:has(#c-Plan) { display: none; } } /* a short screen: Actions already names each step, and Asked keeps its room */
 html.big .inside h2 { padding: .3rem .6rem; }
 html.big .inside li.old { display: none; } /* history lives on the laptop view; the room sees what is happening now */
 /* the room reads what was heard, the plan, and each step's verify; the paths, providers and params stay on the laptop */
