@@ -122,7 +122,7 @@ test('demo provider: refusals and the unknown are said, never planned', () => {
   assert.ok(u.say.length > 5);
   assert.equal(run('').say, 'Sorry, again?');
   assert.match(run('open the bank').say, /^I don't do banking/);
-  assert.match(run('open the camera').say, /no camera/);
+  assert.equal(run('open the camera').say, "I don't have Camera on this phone.");
   // An app missing from this phone is dropped by the validator, in words.
   assert.equal(run('next bus').dropped[0].say, "That app isn't on this phone.");
 });
