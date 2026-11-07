@@ -162,7 +162,7 @@ function chatView(c) {
     button(`Read ${who} message`, { id: 'msg-read', onclick: (e) => {
       // A person's tap reads aloud here; the agent's tap only starts it, and its run reads through ctx.say.
       M.startReading(s); save(); render();
-      if (e.isTrusted) speakItems(async (t) => os.say?.(t)).catch(() => {});
+      if (e.isTrusted) speakItems(async (t) => { if ((await os.say?.(t)) === false) throw new Error("Stopped."); }).catch(() => {});
     } }),
     el('ol', { className: 'app-chat', 'aria-label': 'The chat' }, c.messages.map((m) => el('li', { className: m.from === 'me' ? 'me' : 'them' },
       el('span', { className: 'app-who' }, m.from === 'me' ? 'You: ' : `${c.name}: `), m.text))),
