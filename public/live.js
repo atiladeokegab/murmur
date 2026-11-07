@@ -6,13 +6,19 @@ import { initAudioContext } from './sound/index.js';
 const WS = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
 
 // ---------- audio out: queue 16-bit PCM chunks back to back ----------
-let outCtx = null, nextAt = 0;
+let outCtx = null, outBus = null, nextAt = 0;
 const playing = new Set();
 /** The one AudioContext: the earcons' (sound/index.js), so voice and earcons share a clock and an open speaker. */
 export function audioOut() {
   outCtx ||= initAudioContext() || new AudioContext();
   if (outCtx.state === 'suspended') outCtx.resume();
   return outCtx;
+}
+/** Where Murmur's voice goes: one gain node to the speaker, so the orb can listen to it. */
+export function voiceOut() {
+  const ctx = audioOut();
+  if (!outBus) { outBus = ctx.createGain(); outBus.connect(ctx.destination); }
+  return outBus;
 }
 const SILENT = 0.004 * 32768; // about -48 dBFS: under the softest consonant tail measured on the ElevenLabs clips
 /** The part of a clip worth playing: leading and trailing silence cut, keeping 30 ms each side. [from, to) */
@@ -33,7 +39,7 @@ export function playPcm(b64, rate = 24000) {
   const ch = buf.getChannelData(0);
   for (let i = from; i < to; i++) ch[i - from] = pcm[i] / 32768;
   const src = ctx.createBufferSource();
-  src.buffer = buf; src.connect(ctx.destination);
+  src.buffer = buf; src.connect(voiceOut());
   nextAt = Math.max(nextAt, ctx.currentTime + 0.03);
   src.start(nextAt);
   nextAt += buf.duration;

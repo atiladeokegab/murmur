@@ -56,3 +56,11 @@ test('Gemini Live tool names become words the agent already hears', () => {
   assert.equal(toUtterance('phone', { request: 'Call Priya' }), 'Call Priya');
   assert.equal(toUtterance('send'), 'send');
 });
+
+test('orb level: silence is still, speech swells, a full-scale wave caps at 1', async () => {
+  const { rms } = await import('../public/os/orb.js');
+  assert.equal(rms(new Uint8Array(512).fill(128)), 0);
+  const wave = (amp) => Uint8Array.from({ length: 512 }, (_, i) => 128 + Math.round(amp * Math.sin(i / 8)));
+  assert.ok(rms(wave(20)) > 0.3 && rms(wave(20)) < 1, 'ordinary speech moves it');
+  assert.equal(rms(wave(127)), 1);
+});

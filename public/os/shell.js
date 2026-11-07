@@ -7,7 +7,8 @@ import { recogniser } from '../lib/gestures.js';
 import { loadLook, writeLook, applyLook } from '../look.js';
 import { createToolkit } from '../vendor/toolkit/index.js';
 import { browserKV } from '../ports/browser-kv.js';
-import { playPcm, stopAudio, audioOut } from '../live.js';
+import { playPcm, stopAudio, audioOut, voiceOut } from '../live.js';
+import { createOrb } from './orb.js';
 import * as passkey from '../passkey.js';
 import { byHand, checkFingerprint, payAttempt } from './gate.js';
 import { installByName, removeByName, restoreApps, availableApps } from '../sdk/plugin.js';
@@ -435,6 +436,7 @@ async function startGpt() {
   const { createGpt, toUtterance } = await import('../voice/gpt.js');
   gpt ||= createGpt({
     onCaption: (t) => show(t),
+    onStream: (kind, stream) => orb.attach(kind, stream),
     onTool: async (name, args) => { // the apps run through the agent, so /stage shows them; its lines come back for GPT to say
       const said = toUtterance(name, args);
       if (!said) return { say: "Done. I've set that up for you." };
@@ -478,6 +480,9 @@ function summon(o) {
   try { rec.start(); setListening(true); show('Listening'); } catch { showTyped(); }
 }
 function endTalk() { clearTimeout(silence); try { rec?.stop(); } catch { /* already stopped */ } }
+// The orb is the talk button: it reads the GPT streams, or the old path's voice out (cloud speech; the browser voice shows the state only).
+const orb = createOrb(talk, { ctx: audioOut, state: () => (gptOn ? 'live' : speaking ? 'speaking' : listening ? 'listening' : 'idle') });
+try { orb.attach('out', voiceOut()); } catch { /* no Web Audio */ }
 talk.addEventListener('click', summon);
 $('#talk-first').addEventListener('click', summon);
 talkAnywhere({ start: summon, listening: () => listening });

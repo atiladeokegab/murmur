@@ -24,9 +24,10 @@ export function createGpt(hooks) {
     const { token } = await r.json();
     pc = new RTCPeerConnection();
     audio = Object.assign(document.createElement('audio'), { autoplay: true });
-    pc.ontrack = (e) => { audio.srcObject = e.streams[0]; };
+    pc.ontrack = (e) => { audio.srcObject = e.streams[0]; hooks.onStream?.('out', e.streams[0]); };
     mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     pc.addTrack(mic.getTracks()[0]);
+    hooks.onStream?.('mic', mic);
     dc = pc.createDataChannel('oai-events');
     let chain = Promise.resolve();
     dc.onmessage = (e) => { chain = chain.then(async () => { for (const m of await handleEvent(JSON.parse(e.data), hooks)) send(m); }).catch(() => {}); };
