@@ -50,7 +50,7 @@ saveLook();
 // ---------- one voice: Murmur speaks, or the screen reader reads the one status region ----------
 const status = $('#say');
 const caps = QUIET ? {} : await fetch('/health').then((r) => r.json()).catch(() => ({}));
-let token = 0, lastLine = '';
+let token = 0, lastLine = '', listening = false;
 const readerSpeaks = () => look.speaker === 'reader';
 // Screen reader mode: TalkBack and VoiceOver take the taps, so a Talk button comes first in the reading order.
 function applySpeaker() { status.setAttribute('aria-live', readerSpeaks() ? 'polite' : 'off'); $('#talk-first').hidden = !readerSpeaks(); }
@@ -65,7 +65,8 @@ function speak(text, signal) {
   text = String(text || '');
   show(text);
   if (signal?.aborted) return Promise.resolve(false);
-  if (QUIET || !text) return Promise.resolve(true);
+  // Barge-in: while the mic is open nothing new is voiced (shown only), so the queue drains and the mic never hears Murmur
+  if (QUIET || !text || listening) return Promise.resolve(true);
   if (readerSpeaks()) return wait(Math.min(4000, 600 + text.length * 55), signal); // give TalkBack time to read it
   const my = token; // only Stop (hush) moves token: a later line queues behind a started one, never cuts it
   return new Promise((res) => {
@@ -392,7 +393,7 @@ const agentChoose = (c) => (c ? showSheet('choose', c, (v) => { agent.pick(Numbe
 // ---------- talk anywhere: a tap on blank space or a long press anywhere (os/talk.js), the bar, or Space ----------
 const talk = $('#talk'), talkLabel = $('#talk-label'), typed = $('#typed');
 const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null, listening = false, heard = '', silence = null, still = null;
+let rec = null, heard = '', silence = null, still = null;
 function showTyped(reason) { typed.hidden = false; if (reason) talkLabel.textContent = reason; $('#typed-text').focus(); }
 function setListening(on) { listening = on; talk.setAttribute('aria-pressed', String(on)); talkLabel.textContent = on ? 'Listening. Tap anywhere to finish' : 'Tap anywhere to talk'; }
 function summon() {
