@@ -10,7 +10,7 @@ import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
 import * as passkey from '../passkey.js';
 import { byHand } from './gate.js';
-import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
+import { installByName, removeByName, restoreApps, availableApps } from '../sdk/plugin.js';
 import { installToken } from '../agent/token.js';
 import { play, buzz, mute, unmute, isMuted } from '../sound/index.js';
 import { createPhone } from './phone.js';
@@ -153,13 +153,15 @@ for (const app of registry.list()) {
   await app.seed();
 }
 // Plug-ins (sdk/plugin.js): added apps come back on boot and mount exactly like the built-in ones.
+// After a removal: off the board; home() re-renders and focuses its first tile, so no second render after it.
+const dropApp = (x) => { if (x.ok) { delete roots[x.id]; delete kvs[x.id]; if (current === x.id) home(); else renderBoard(); } return x; };
 const plug = { registry, host: appsEl, port, os: osFor,
   // a plug-in's own Remove button: the sheet asks (gate delete), then the app leaves the board
   confirm: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true),
-  // home() re-renders the board and focuses its first tile; a second render after it would drop that focus
-  removed: (x) => { if (x.ok) { delete roots[x.id]; delete kvs[x.id]; if (current === x.id) home(); else renderBoard(); } speak(x.say, personal.signal); } };
+  removed: (x) => speak(dropApp(x).say, personal.signal) };
 const added = (r) => { roots[r.id] = r.root; kvs[r.id] = r.kv; return r; };
 for (const r of await restoreApps(plug)) added(r); // no renderBoard here: `day` is declared below (TDZ)
+async function remove(name) { return dropApp(await removeByName(name, plug)); } // the agent says r.say
 async function install(name) { const r = await installByName(name, plug); if (r.root) { added(r); renderBoard(); } return r; }
 
 function open(id, { focus = true } = {}) {
@@ -509,7 +511,7 @@ try {
   const { createAgent } = await import('../agent/index.js');
   agent = await createAgent({
     registry, bus, ctxFor, speak, librarian,
-    os: { open: (id) => open(id), current: () => current, install },
+    os: { open: (id) => open(id), current: () => current, install, remove },
     fingerprint: () => passkey.confirm(),
     agency: () => look.agency,
     onGate: agentGate, onChoose: agentChoose,
@@ -534,5 +536,5 @@ try {
     replay: async () => { const u = lastUtterance; await resetAll(); if (u) hear(u, 'replay'); }, stop: stopAll });
   roots.look = $('#app-look'); kvs.look = appKv('look', port);
 } catch (e) { console.error('Your look and the demo panel did not load', e); }
-window.murmur = { bus, registry, host, agent, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, install, ready: Promise.resolve(true) };
+window.murmur = { bus, registry, host, agent, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, install, remove, ready: Promise.resolve(true) };
 document.documentElement.dataset.ready = 'true';

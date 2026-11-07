@@ -21,6 +21,15 @@ export const INSTALL_APP = {
   params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
 };
 
+/** The agent's builtin tool: remove_app {name}. It asks first through the same delete sheet as the Remove button. */
+export const REMOVE_APP = {
+  describe: 'Take an added app off the phone, by its name',
+  params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+};
+
+// A spoken name against an app's id, name and manifest words ("the taxi app", "my groceries").
+const heard = (name) => { const q = String(name || '').toLowerCase(); return (x) => [x.id, x.name.toLowerCase(), ...(x.words || [])].some((w) => q.includes(w) || (q.length > 2 && w.includes(q))); };
+
 const port = (o) => o.port || browserKV({ prefix: 'murmur' });
 // The saved list is a trust boundary too: anything but an array of { id, path } strings is dropped, never fatal at boot.
 async function installed(o) {
@@ -117,9 +126,8 @@ export async function availableApps(o = {}) {
 
 /** install_app {name}: resolve a spoken name through the manifest and install. Never throws: { ok, say, id? }. */
 export async function installByName(name, o) {
-  const q = String(name || '').toLowerCase();
   const list = await availableApps(o);
-  const p = list.find((x) => [x.id, x.name.toLowerCase(), ...(x.words || [])].some((w) => q.includes(w) || (q.length > 2 && w.includes(q))));
+  const p = list.find(heard(name));
   if (!p) return { ok: false, say: `I can't find ${name}. I can add ${list.map((x) => x.name).join(', ')}.` };
   if (p.installed || o.registry.get(p.id)) return { ok: true, id: p.id, say: `${p.name} is already on your phone.` };
   try {
@@ -128,4 +136,12 @@ export async function installByName(name, o) {
   } catch (e) {
     return { ok: false, say: `I couldn't add ${p.name}. ${e.message}` };
   }
+}
+
+/** remove_app {name}: an added app by spoken name, then removeApp (asks first). A built-in gets "came with the phone". */
+export async function removeByName(name, o, confirm = o.confirm) {
+  const hit = heard(name);
+  const p = (await availableApps(o)).find((x) => x.installed && hit(x)) || o.registry.list().find(hit);
+  if (!p) return { ok: false, say: `There's no ${name} on your phone.` };
+  return removeApp(p.id, o, confirm);
 }

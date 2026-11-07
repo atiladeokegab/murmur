@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createBus, createRegistry, createCtx, appKv, mountApp, loadApps, runAction } from '../public/sdk/index.js';
-import { installApp, uninstallApp, removeApp, restoreApps, installByName, availableApps, PLUGINS, INSTALL_APP } from '../public/sdk/plugin.js';
+import { installApp, uninstallApp, removeApp, removeByName, restoreApps, installByName, availableApps, PLUGINS, INSTALL_APP, REMOVE_APP } from '../public/sdk/plugin.js';
 import { browserKV } from '../public/ports/browser-kv.js';
 import appIds from '../public/apps/apps.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
@@ -294,4 +294,27 @@ test('review: a failed save rolls an install back, and a failed uninstall leaves
   await assert.rejects(uninstallApp('taxi', { ...p.plug, port: broken }), /QuotaExceeded/);
   assert.ok(p.names().includes('taxi__book'), 'still installed, and still in the saved list');
   assert.ok((await phone({ storage: p.storage })).names().includes('taxi__book'));
+});
+
+test('remove_app by voice: the same delete sheet; a No keeps it; built-ins and unknown names are never asked', async () => {
+  const p = await phone();
+  assert.deepEqual(REMOVE_APP.params, INSTALL_APP.params);
+  assert.equal(typeof REMOVE_APP.describe, 'string');
+  await installByName('grocer', p.plug);
+  await installByName('taxi', p.plug);
+  const asked = [], answers = [false, true];
+  const confirm = async (q) => { asked.push(q); return answers.shift(); };
+  const no = await removeByName('Corner Grocer', p.plug, confirm);
+  assert.deepEqual([no.ok, no.cancelled, no.say], [false, true, 'Kept it.']);
+  assert.deepEqual(asked[0], { app: 'grocer', gate: 'delete', readback: 'Remove Corner Grocer from your phone?' });
+  assert.ok(p.names().includes('grocer__order'));
+  const yes = await removeByName('my groceries', p.plug, confirm);
+  assert.deepEqual([yes.ok, yes.id, yes.say], [true, 'grocer', 'Removed Corner Grocer.']);
+  assert.ok(!p.names().some((n) => n.startsWith('grocer__')) && p.names().includes('taxi__book'), 'only the named app goes');
+  assert.equal(asked.length, 2);
+  const built = await removeByName('Hello', p.plug, confirm);
+  assert.deepEqual([built.ok, built.say], [false, 'Hello came with the phone, so it stays.']);
+  assert.match((await removeByName('pizza', p.plug, confirm)).say, /There's no pizza on your phone/);
+  assert.match((await removeByName('Corner Grocer', p.plug, confirm)).say, /There's no Corner Grocer/, 'already gone');
+  assert.equal(asked.length, 2, 'none of those asked');
 });
