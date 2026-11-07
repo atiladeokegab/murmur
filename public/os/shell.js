@@ -161,7 +161,8 @@ const plug = { registry, host: appsEl, port, os: osFor,
   removed: (x) => speak(dropApp(x).say, personal.signal) };
 const added = (r) => { roots[r.id] = r.root; kvs[r.id] = r.kv; return r; };
 for (const r of await restoreApps(plug)) added(r); // no renderBoard here: `day` is declared below (TDZ)
-async function remove(name) { return dropApp(await removeByName(name, plug)); } // the agent says r.say
+// The agent passes its own gate (confirm(readback) => boolean) so a spoken yes answers; the agent says r.say.
+async function remove(name, { confirm } = {}) { return dropApp(await removeByName(name, plug, confirm && ((q) => confirm(q.readback)))); }
 async function install(name) { const r = await installByName(name, plug); if (r.root) { added(r); renderBoard(); } return r; }
 
 function open(id, { focus = true } = {}) {
