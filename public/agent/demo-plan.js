@@ -109,14 +109,17 @@ export function demoPlan(utterance, apps, context = {}) {
 function planOrWords(said, apps, context, dry) {
   const r = plan(said, apps, context, dry);
   const missing = r.kind === 'task' && r.plan.some((x) => x.tool.includes(SEP) && !apps.some((a) => a.id === x.tool.split(SEP)[0]));
-  if (!missing && !(r.kind === 'unknown' && r.say?.startsWith(MISS))) return r;
+  if (!missing && !(r.kind === 'unknown' && (r.say?.startsWith(MISS) || r.say?.startsWith(NO_APP)))) return r;
   const t = said.trim().replace(/[.!?]+$/, '');
   // An answer to a slot question ("Where to?" "The station") finishes the ask it answers.
   const again = context.asked && planOrWords(`${context.asked} ${t}`, apps, { ...context, asked: null }, dry);
-  return byWords(t, apps, context.app) || (again?.kind === 'task' ? again : null) || r;
+  let w = byWords(t, apps, context.app);
+  // "I don't have X" yields only to the open app's own action ("open a chapter" in Writer), never to a guess elsewhere
+  if (w && r.say?.startsWith(NO_APP) && !w.plan.every((x) => x.tool === 'ask' || (x.tool === 'open_app' ? x.params.app : x.tool.split(SEP)[0]) === context.app)) w = null;
+  return w || (again?.kind === 'task' ? again : null) || r;
 }
 
-const MISS = "I can't do that one yet.";
+const MISS = "I can't do that one yet.", NO_APP = "I don't have";
 const STOP = new Set('my the a an to of for in on at it is me please and with from your some what usual'.split(' ')); // "order my usual": the usual one
 const stem = (w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
 const words = (s) => String(s || '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().replace(/'/g, '').split(/[^a-z0-9]+/).filter(Boolean).map(stem);
@@ -131,7 +134,7 @@ export function byWords(t, apps, here) {
     const name = words(x.name), say = words(x.say), all = new Set([...name, ...say, ...words(x.describe), ...words(a.name), ...words(a.id)]);
     if (![...name, say[0], words(x.describe)[0]].includes(content[0])) continue;
     const nums = Object.values(x.params?.properties || {}).some((d) => d.type === 'number' || d.type === 'integer');
-    if (nums || (x.gate === 'pay' && x.params?.required?.length)) continue; // amounts, and money with a slot, stay with the hand-written words
+    if ((nums && content.some((w) => !all.has(w))) || (x.gate === 'pay' && x.params?.required?.length)) continue; // a spoken number, and money with a slot, stay with the hand-written words
     const n = new Set(content.filter((w) => all.has(w))).size;
     const f = fit(t, x, all);
     if (!f.slot && content.some((w) => !all.has(w))) continue; // words it has no place for ("next bus") are not this action
@@ -149,7 +152,7 @@ export function byWords(t, apps, here) {
   }
   const { a, x, params, gap } = best[0];
   if (gap) {
-    const props = x.params?.properties || {}, question = `${(props[gap]?.description || `Which ${gap}`).replace(/[.?]*$/, '')}?`;
+    const props = x.params?.properties || {}, question = props[gap]?.description ? `${props[gap].description.replace(/[.?]*$/, '')}?` : `Say it in full, like: ${x.describe.charAt(0).toLowerCase()}${x.describe.slice(1).replace(/[.?]*$/, '')}.`;
     return { kind: 'task', plan: [{ tool: 'open_app', params: { app: a.id } }, { tool: 'ask', params: { question } }], asked: t };
   }
   return { kind: 'task', plan: [{ tool: `${a.id}${SEP}${x.name}`, params }] };
@@ -157,7 +160,8 @@ export function byWords(t, apps, here) {
 
 // What is left once the action's own words go is its one string slot: "add milk" -> item: milk.
 function fit(t, x, all) {
-  const left = t.split(/\s+/).filter((w) => !all.has(words(w)[0])).join(' ').replace(/^(?:(?:my|the|a|an|to|for|some|of)\s+)+/i, '').trim();
+  let left = t.split(/\s+/).filter((w) => !all.has(words(w)[0])).join(' ').replace(/^(?:(?:my|the|a|an|to|for|some|of)\s+)+/i, '').trim();
+  if (words(left).every((w) => STOP.has(w)) || /^(?:an?\s+)?(?:item|word|tile|thing|something|one|chapter|event|place|name)$/i.test(left)) left = ''; // "take an item out": which item? ask
   const props = x.params?.properties || {}, need = x.params?.required || [];
   const slot = need.find((k) => props[k]?.type === 'string') || Object.keys(props).find((k) => props[k]?.type === 'string');
   const params = left && slot ? { [slot]: left } : {};
@@ -190,7 +194,7 @@ function plan(said, apps, context, dry) {
     return task([{ tool: 'edit_workflow', params: { name: m[1], drop: m[2] } }]);
   }
   if ((m = t.match(/^(?:run|start|do)\s+(.+)$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'run_workflow', params: { name: m[1] } }]);
-  if (/what do you (know|remember) about me/i.test(t)) return task([{ tool: 'recall', params: {} }]);
+  if (/what (?:do you|does murmur) (?:know|remember) about me|what murmur knows about me/i.test(t)) return task([{ tool: 'recall', params: {} }]);
 
   // The OS's own verbs
   // Install: "install X", "add X app", or "Add Northline Taxis" (capitalised words: a name, not "a flat white").
@@ -303,11 +307,16 @@ function plan(said, apps, context, dry) {
   if (/^what day is it(?: today)?$|^what(?:'?s| is) (?:the date|today'?s date|today)$/i.test(t)) return task([{ tool: 'say', params: { text: `It's ${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}.` } }]);
 
   // The Writer
-  if ((m = raw.match(/^(?:write|note|take a note|add a note|dictate)(?:\s+in\s+(?:the\s+)?(?:writer|notes))?[:,]?\s+([\s\S]+)$/i))) {
+  if ((m = raw.match(/^(?:write|note|take a note|add a note|dictate)(?:\s+in\s+(?:the\s+|my\s+)?(?:writer|notes|book))?[:,]?\s+([\s\S]+)$/i))) {
+    if (/^in\s+(?:the\s+|my\s+)?(?:writer|notes|book)$/i.test(m[1].trim())) return { ...task([{ tool: 'open_app', params: { app: 'writer' } }, { tool: 'ask', params: { question: 'What should I write?' } }]), asked: 'write' }; // the place, not the words
     return task([step('writer', ['dictate', 'write', 'add'], { text: corrected(m[1].trim()) })]);
   }
   if (/^read (?:me )?(?:my |the )?last page(?: in (?:the )?writer)?$/i.test(t) || /^read (?:me )?back (?:what i (?:wrote|said|dictated)|my writing)$/i.test(t) || /^read (?:me )?(?:my )?(?:book|notes|writing|page)$/i.test(t)) {
     return task([step('writer', ['readLastPage', 'readLast', 'read'])]);
+  }
+  if ((m = t.match(/^(?:open|go to|read)\s+(?:a\s+|the\s+)?chapter\s+(?:number\s+)?(\d+|[a-z]+)$/i))) { // "open a chapter" asked, "two" answered
+    const n = /^\d/.test(m[1]) ? Number(m[1]) : UNITS[m[1].toLowerCase()];
+    if (n) return task([step('writer', ['openChapter'], { n })]);
   }
   if (/^(?:new|start a new) chapter$/i.test(t)) return task([step('writer', ['newChapter', 'chapter'])]);
 

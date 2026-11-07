@@ -99,3 +99,16 @@ test('cheap hits: next appointment, read back, next one, again, the clock', () =
   assert.match(tool('what time is it'), /^say\{"text":"It's \d{1,2}:\d\d\."\}$/);
   assert.match(tool('what day is it'), /^say\{"text":"It's (Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day \d{1,2} [A-Z][a-z]+\."\}$/);
 });
+
+test('build-plugin phrases: a placeholder asks, a place is not the words, recall is recall', () => {
+  assert.equal(tool('take an item out'), 'open_app{"app":"grocer"} > ask{"question":"The item to take out?"}');
+  assert.equal(tool('milk', 'grocer', { asked: 'take an item out' }), 'grocer__remove{"item":"milk"}');
+  assert.equal(tool('write in the book', 'writer'), 'open_app{"app":"writer"} > ask{"question":"What should I write?"}');
+  assert.equal(tool('Buy milk on Tuesday', 'writer', { asked: 'write' }), 'writer__dictate{"text":"Buy milk on Tuesday"}');
+  assert.equal(tool('what Murmur knows about me'), 'recall{}');
+});
+test('"open a chapter" with Writer open asks for the number, and "two" opens it', () => {
+  assert.match(tool('open a chapter', 'writer'), /^open_app\{"app":"writer"\} > ask/);
+  assert.equal(tool('two', 'writer', { asked: 'open a chapter' }), 'writer__openChapter{"n":2}');
+  assert.equal(tool('open chapter 3', 'writer'), 'writer__openChapter{"n":3}');
+});
