@@ -100,8 +100,8 @@ test('demo provider: the §6 demo script', () => {
   assert.deepEqual(tools('Send it.', { app: 'messages' }), ['messages__send']);
   assert.deepEqual(tools('Save that as Reply to Mum'), ['save_workflow {"name":"Reply to Mum","slot":false}']);
   assert.deepEqual(tools('save that as message someone'), ['save_workflow {"name":"Message someone","slot":true}']);
-  assert.deepEqual(tools('Move lunch with Mum to Wednesday'), ['calendar__move {"what":"lunch with Mum","to":"Wednesday"}']);
-  assert.deepEqual(tools('Do it: move lunch with Mum to Wednesday.'), ['calendar__move {"what":"lunch with Mum","to":"Wednesday"}']);
+  assert.deepEqual(tools('Move lunch with Mum to Wednesday'), ['calendar__move {"event":"lunch with Mum","day":"Wednesday"}']);
+  assert.deepEqual(tools('Do it: move lunch with Mum to Wednesday.'), ['calendar__move {"event":"lunch with Mum","day":"Wednesday"}']);
   assert.deepEqual(tools('Order my usual'), ['shop__orderUsual', 'shop__pay']);
   assert.deepEqual(tools('order my usual coffee'), ['shop__orderUsual', 'shop__pay']);
   const teach = run('How do I move a meeting?');

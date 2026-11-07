@@ -206,7 +206,7 @@ test('"how do I…" is a dry run that speaks the hints, then does it on request'
   const before = JSON.stringify(s.state('calendar'));
   const out = await s.agent.hear('How do I move a meeting?');
   assert.equal(out.status, 'taught');
-  assert.equal(s.spoken.at(-1), 'Open Calendar, then Choose the plan under its day, then the day to move it to. Shall I do it, or walk you through?');
+  assert.equal(s.spoken.at(-1), `Open Calendar, then ${s.registry.get('calendar').actions.move.hint}. Shall I do it, or walk you through?`);
   assert.equal(JSON.stringify(s.state('calendar')), before);
   assert.ok(!s.ev('task:start').length);
   await s.agent.hear('do it');
@@ -214,7 +214,7 @@ test('"how do I…" is a dry run that speaks the hints, then does it on request'
   await s.agent.hear('How do I move a meeting?');
   const done = await s.agent.hear('Do it: move lunch with Mum to Wednesday.');
   assert.equal(done.status, 'done');
-  assert.equal(s.state('calendar').events.find((e) => e.id === 'lunch-mum').day, 'Wednesday');
+  assert.equal(s.state('calendar').events.find((e) => e.title === 'Lunch with Mum').day, 'Wednesday');
 });
 
 test('Teach me: each step waits for the person, then is verified', async () => {
