@@ -3,6 +3,7 @@
 # Usage: GEMINI_API_KEY=... ELEVENLABS_API_KEY=... scripts/deploy.sh      (without a key, Murmur runs on its demo voice)
 set -euo pipefail
 cd "$(dirname "$0")/.."
+if [ -f .env ]; then set -a; . ./.env; set +a; fi # keys come from the gitignored .env, never the command line
 ENV_VARS="NODE_ENV=production,MURMUR_RATE_PER_MIN=${MURMUR_RATE_PER_MIN:-600}" # a venue shares one wifi IP, so 40/min per IP throttles judges
 if [ -n "${GEMINI_API_KEY:-}" ]; then ENV_VARS="$ENV_VARS,GEMINI_API_KEY=$GEMINI_API_KEY"; fi
 if [ -n "${ELEVENLABS_API_KEY:-}" ]; then ENV_VARS="$ENV_VARS,ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY"; fi

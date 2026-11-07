@@ -88,12 +88,13 @@ const app = {
   id: 'weather',
   name: 'Weather',
 
-  async mount(r) {
+  async mount(r, os) {
     root = r;
     const bar = el('div', { className: 'app-list', role: 'group', 'aria-label': 'When' });
     for (const [k, p] of Object.entries(PERIODS)) {
-      const b = el('button', { type: 'button', id: `weather-${k}`, className: 'app-btn', textContent: p.label });
-      b.addEventListener('click', () => { shown = k; render(); });
+      // 4vw side padding keeps "This afternoon" on one line at 400%, as in Messages.
+      const b = el('button', { type: 'button', id: `weather-${k}`, className: 'app-btn', style: 'padding-inline: clamp(0.25rem, 4vw, 1rem)', textContent: p.label });
+      b.addEventListener('click', (e) => { shown = k; render(); if (e?.isTrusted) os?.say?.(app.read()); }); // a person's own tap hears it too
       bar.append(b);
     }
     root.append(el('h2', { id: 'weather-h', textContent: 'Weather' }), bar, el('div', { id: 'weather-body', className: 'app-body' }));
