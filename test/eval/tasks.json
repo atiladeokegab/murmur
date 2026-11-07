@@ -154,9 +154,9 @@
     {
       "id": "workflow-recipient-slot", "app": "mine", "utterance": "Save that as message someone.",
       "gap": "workflow with a slot", "setup": ["Draft a message to Mum: I'm at the library."],
-      "followups": [{ "when": "done", "say": "run message someone" }, { "when": "question", "say": "Samira" }],
+      "followups": [{ "when": "done", "say": "run message someone" }, { "when": "question", "expectedQuestion": "Who?", "say": "Samira" }],
       "expect": "The saved recipient is a slot. The run asks who and uses the answer, without reusing Mum or sending the draft.",
-      "assertions": ["state('mine').workflows.some(flow => flow.name === 'message someone' && flow.steps.some(step => step.params.who === '$who'))", "state('messages').currentChat === 'samira'", "state('messages').draft === \"I'm at the library.\"", "same(state('messages').lastSent, before('messages').lastSent)"],
+      "assertions": ["state('mine').workflows.some(flow => (flow.name || '').toLowerCase() === 'message someone' && flow.steps.some(step => step.params.who === '$who'))", "state('messages').currentChat === 'samira'", "state('messages').draft === \"I'm at the library.\"", "same(state('messages').lastSent, before('messages').lastSent)"],
       "asksBeforeSlotUse": true, "noGatedRuns": true, "requiresVerifiedStep": true
     },
     {

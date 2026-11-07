@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { EVENTS } from '../../public/sdk/bus.js';
 import { checkTrace, validateTasks } from './check.js';
 
 const step = { scope: 1, task: 't1', action: 'messages__send', app: 'messages', params: {}, gate: 'send' };
@@ -62,6 +63,27 @@ test('malformed trace records, unknown bus events and app mismatches fail closed
   wrongApp[4].app = 'messages';
   wrongApp[5].app = 'writer';
   assert.match(checkTrace(wrongApp).join(), /verify app differs from the step app/);
+});
+
+test('known OS builtins may start without app run or verify records, but cannot produce success ticks', () => {
+  const start = bus('step:start', { app: null, action: 'read_screen', params: {}, gate: null });
+  assert.deepEqual(checkTrace([start]), []);
+  const tick = bus('step:verified', { app: null, action: 'read_screen', gate: null });
+  assert.match(checkTrace([start, tick]).join(), /OS builtin tick has no real app verification/);
+
+  const forged = [start, run({ app: null, action: 'read_screen', gate: null }),
+    verify({ app: null, action: 'read_screen', gate: null }), tick];
+  assert.match(checkTrace(forged).join(), /OS builtin has no app action run|OS builtin has no app verifier|OS builtin tick has no real app verification/);
+});
+
+test('only canonical OS builtin names may start with app:null', () => {
+  const invented = bus('step:start', { app: null, action: 'invented_builtin', params: {}, gate: null });
+  assert.match(checkTrace([invented]).join(), /malformed OS builtin step/);
+});
+
+test('SDK bus event additions are recognized by the checker', () => {
+  assert.ok(EVENTS.includes('step:next'));
+  assert.deepEqual(checkTrace([{ kind: 'bus', name: 'step:next' }]), []);
 });
 
 test('a gate requires the registered readback from current app state to match what was confirmed', () => {

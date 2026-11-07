@@ -1,5 +1,6 @@
 import { isDeepStrictEqual as same } from 'node:util';
 import { EVENTS } from '../../public/sdk/bus.js';
+import { BUILTINS } from '../../public/sdk/registry.js';
 
 // Independent evidence comes from delegating wrappers around the real run/verify functions.
 export function checkTrace(trace, task = {}) {
@@ -29,13 +30,19 @@ export function checkTrace(trace, task = {}) {
     if (record.kind === 'fault' && !task.fault) fail(record, 'unexpected fault injection');
     const step = steps.get(record.scope);
     if (record.kind === 'bus' && record.name === 'step:start') {
-      if ((typeof record.scope !== 'string' && !Number.isSafeInteger(record.scope)) || record.scope === '' ||
-          typeof record.task !== 'string' || !record.task || typeof record.action !== 'string' || !record.action ||
-          typeof record.app !== 'string' || !record.app || !record.params || typeof record.params !== 'object' || Array.isArray(record.params) ||
-          ![null, 'send', 'pay', 'call', 'delete'].includes(record.gate ?? null)) fail(record, 'malformed app step');
+      const validScope = (typeof record.scope === 'string' && record.scope !== '') || Number.isSafeInteger(record.scope);
+      const validTask = typeof record.task === 'string' && !!record.task;
+      const validAction = typeof record.action === 'string' && !!record.action;
+      const validParams = !!record.params && typeof record.params === 'object' && !Array.isArray(record.params);
+      const validGate = [null, 'send', 'pay', 'call', 'delete'].includes(record.gate ?? null);
+      const builtin = record.app === null && Object.hasOwn(BUILTINS, record.action) && (record.gate ?? null) === null;
+      const appStep = typeof record.app === 'string' && !!record.app;
+      if (!validScope || !validTask || !validAction || !validParams || !validGate || (!builtin && !appStep)) {
+        fail(record, record.app === null ? 'malformed OS builtin step' : 'malformed app step');
+      }
       if (steps.has(record.scope)) fail(record, 'reused step scope');
       if (failedTasks.has(record.task)) fail(record, 'continued after a failed step');
-      steps.set(record.scope, { ...record, runs: 0, confirms: 0, opens: 0, fingerprints: 0, readbacks: [], checks: [], ticks: 0 });
+      steps.set(record.scope, { ...record, builtin, runs: 0, confirms: 0, opens: 0, fingerprints: 0, readbacks: [], checks: [], ticks: 0 });
     } else if (record.kind === 'gate:open') {
       if (!step || record.task !== step.task || !step.gate || record.gate !== step.gate || !Number.isFinite(record.at)) fail(record, 'malformed or unmatched gate opening');
       else {
@@ -67,6 +74,7 @@ export function checkTrace(trace, task = {}) {
       }
     } else if (record.kind === 'run') {
       if (task.dryRun) fail(record, 'explanation executed an app action');
+      if (step?.builtin) { fail(record, 'OS builtin has no app action run'); continue; }
       if (!step || record.action !== step.action || record.task !== step.task || !same(record.params, step.params)) {
         fail(record, 'run has no matching step');
         continue;
@@ -84,6 +92,7 @@ export function checkTrace(trace, task = {}) {
         step.fingerprints = 0;
       }
     } else if (record.kind === 'verify') {
+      if (step?.builtin) { fail(record, 'OS builtin has no app verifier'); continue; }
       if (!step || step.action !== record.action || record.task !== step.task || !same(step.params, record.params) || !step.runs) {
         fail(record, 'verify has no matching action run');
       } else {
@@ -95,7 +104,8 @@ export function checkTrace(trace, task = {}) {
         step.checks.push(record.result);
       }
     } else if (record.kind === 'bus' && record.name === 'step:verified') {
-      if (!step || step.action !== record.action || record.task !== step.task || record.app !== step.app || !step.runs || step.checks.length !== 1 || step.checks[0] !== true) fail(record, 'tick has no matching successful verify');
+      if (step?.builtin) fail(record, 'OS builtin tick has no real app verification');
+      else if (!step || step.action !== record.action || record.task !== step.task || record.app !== step.app || !step.runs || step.checks.length !== 1 || step.checks[0] !== true) fail(record, 'tick has no matching successful verify');
       else if (failedTasks.has(record.task)) fail(record, 'tick followed a stopped or failed step');
       else if (step.ticks++) fail(record, 'duplicate tick');
       else verified++;
