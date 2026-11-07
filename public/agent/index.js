@@ -27,6 +27,7 @@ if (globalThis.window) installToken(); // /api/* carries the device token from h
  * @param {(gate)=>boolean} [o.risky]  send/call need the fingerprint too (screen just locked, earphone out)
  */
 export const ACK = 'On it.';
+export const NARRATION_HOLD_MS = 150; // a question this soon after a step starts replaces the step's line
 
 export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, fingerprint = async () => false,
   agency = () => 'ask', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
@@ -36,10 +37,15 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   let lastSaid = '';
   // One voice, one line at a time: each line waits for the one before, so steps can act while a line is spoken.
   // Stop empties the queue (gen moves on), so nothing queued is said after it.
-  let chain = Promise.resolve(), gen = 0, pending = 0;
-  const speak = (text, signal) => {
-    const g = gen;
-    const go = () => (g !== gen || signal?.aborted ? false : rawSpeak(text, signal));
+  // A step's narration ("Opening the chat") is dropped if a question is asked before it starts: it waits a short
+  // hold when nothing else is being said, so "Sam or Samira?" 60 ms later is said whole, not after a clipped line.
+  let chain = Promise.resolve(), gen = 0, pending = 0, asked = 0;
+  const holds = new Set();
+  const hold = () => new Promise((r) => { const t = setTimeout(done, NARRATION_HOLD_MS); function done() { clearTimeout(t); holds.delete(done); r(); } holds.add(done); });
+  const speak = (text, signal, o) => {
+    const g = gen, a = asked;
+    const out = () => g !== gen || signal?.aborted || (o?.narration && a !== asked);
+    const go = () => (out() ? false : o?.narration ? hold().then(() => (out() ? false : rawSpeak(text, signal))) : rawSpeak(text, signal));
     const p = pending ? chain.then(go) : Promise.resolve(go()); // nothing being said: start now, not a tick later
     pending++;
     chain = p.catch(() => {}).finally(() => { pending--; });
@@ -47,6 +53,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   };
   const hush = () => { gen++; };
   const say = (text) => { if (!text) return Promise.resolve(); lastSaid = text; bus.emit('say', { text }); return Promise.resolve(speak(text)).catch(() => {}); };
+  const sayQuestion = (q) => { asked++; for (const done of [...holds]) done(); return say(q); };
   const describeStep = (s) => {
     const x = s.app && app(s.app)?.actions?.[s.action];
     if (!x) return s.tool;
@@ -59,17 +66,17 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   bus.on('step:start', (e) => { if (e.app) lastApp = e.app; });
   bus.on('memory', (e) => { if (e.proposal) { proposal = e.proposal; say(`${e.proposal.text} Yes, not now, or never?`); } });
 
-  const gates = createGates({ say, clock, fingerprint, risky, onChange: onGate });
+  const gates = createGates({ say: (t) => (t === 'Check your fingerprint.' ? say(t) : sayQuestion(t)), clock, fingerprint, risky, onChange: onGate });
   const memory = librarian ? attachMemory({ librarian, bus, clock }) : null;
   const workflows = librarian ? createWorkflows({ librarian, describe: describeStep }) : null;
-  const ask = (q) => new Promise((resolve) => { question = resolve; say(q); });
+  const ask = (q) => new Promise((resolve) => { question = resolve; sayQuestion(q); });
 
   /** ctx.choose lands here: say the question, and the next thing heard (or a tap on the sheet) picks. */
   const choose = ({ question: q, choices }) => new Promise((resolve) => {
     if (choice) choice.resolve(null);
     choice = { choices, resolve: (i) => { choice = null; onChoose(null); resolve(i); } };
     onChoose({ question: q, choices });
-    say(q);
+    sayQuestion(q);
   });
   const pickOf = (text, choices) => {
     const t = String(text).toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();

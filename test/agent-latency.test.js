@@ -101,7 +101,10 @@ test('ctx.type types letter by letter in a browser, instantly under reduced moti
     const t0 = Date.now();
     await ctx.type(el, 'Hi Sam');
     assert.deepEqual(seen, ['H', 'Hi', 'Hi ', 'Hi S', 'Hi Sa', 'Hi Sam']);
-    assert.ok(Date.now() - t0 >= 100, 'about 25 ms a letter');
+    assert.ok(Date.now() - t0 >= 50, 'about 10 ms a letter');
+    const long = 'x'.repeat(200), t1 = Date.now();
+    seen.length = 0; await ctx.type(el, long);
+    assert.ok(Date.now() - t1 < 600, 'long text is capped near 400 ms'); assert.equal(seen.at(-1), long); assert.ok(seen.length <= 40);
     seen.length = 0; reduce = true;
     await ctx.type(el, 'Hi Sam');
     assert.deepEqual(seen, ['Hi Sam']);

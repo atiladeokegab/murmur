@@ -44,10 +44,10 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
 
   const hooks = (task) => ({ bus: task.bus, ask: gates.ask, choose, signal: task.controller.signal,
     speak: (text, signal) => speak(text, signal) });
-  const say = async (task, text) => {
+  const say = async (task, text, o) => {
     if (!text) return;
     task.bus.emit('say', { text });
-    try { await speak(text, task.controller.signal); } catch { /* stopped mid-sentence */ }
+    try { await speak(text, task.controller.signal, o); } catch { /* stopped mid-sentence */ }
   };
 
   async function beat(task, ms) {
@@ -107,9 +107,11 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
         // Just do it: the step earcon and the panel carry each step, and the voice keeps to questions and the result
         // (the lead's 6 s bar). Ask and Teach still say every step.
         // The line starts with the tap, never before it: speech is queued, so the step does not wait for it.
-        if (mode === 'ask' || mode === 'teach') say(task, x.doing || gerund(x.describe));
-        // a spoken task is the yes for its first step; later changing steps get a beat to say stop
-        if (mode === 'ask' && CHANGES(step.action) && i > 0) await beat(task, BEAT_MS);
+        if (mode === 'ask' || mode === 'teach') say(task, x.doing || gerund(x.describe), { narration: mode === 'ask' }); // Teach waits for the person anyway
+        // a spoken task is the yes for its first step; later changing steps get a beat to say stop, unless a gate
+        // later in the plan asks anyway (the send's "Send it?" is the moment to say no, so typing starts at once)
+        const gateAhead = steps.slice(i + 1).some((s) => s.app && registry.get(s.app)?.actions?.[s.action]?.gate);
+        if (mode === 'ask' && CHANGES(step.action) && i > 0 && !gateAhead) await beat(task, BEAT_MS);
         if (task.stopped) { status = task.takenOver ? 'taken-over' : 'stopped'; break; }
       }
 

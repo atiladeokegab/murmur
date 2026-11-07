@@ -329,3 +329,13 @@ test("narration and who speaks: Murmur's voice or the status region, never both"
   assert.equal(gerund('Change a word'), 'Changing a word');
   assert.equal(gerund('Stop the timer'), 'Stopping the timer');
 });
+
+test('Ask me, Vertical 1: no clipped "Opening the chat" before "Sam or Samira?", and no beat before typing when Send asks anyway', async () => {
+  const s = await setup({ agency: () => 'ask' });
+  const t0 = s.clock.t;
+  const out = await gated(s, "Text Sam I'm ten minutes late", async () => { s.clock.t += 600; await s.agent.hear('send'); }, { choose: 'Sam' });
+  assert.equal(out.status, 'done');
+  const q = s.spoken.findIndex((t) => / or .+\?$/.test(t));
+  assert.ok(!s.spoken.slice(0, q).includes('Opening the chat'), 'the question replaced the step line');
+  assert.equal(s.clock.t - t0, 600, 'no 700 ms beat: the send gate is the moment to say no');
+});
