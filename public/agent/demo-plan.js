@@ -140,11 +140,11 @@ function plan(said, apps, context, dry) {
     // Anchored, so content ("text Sam I'm speeding up", "tell Mum to turn off the light") never changes a setting.
     const TXT = '(?:make |turn |set )?(?:the |my )?(?:text|writing|font|letters|words)(?: size)?';
     const VOX = '(?:make |set )?(?:the |your )?(?:voice|speech|talking)';
-    if (new RegExp(`^${TXT} (?:bigger|larger|up)$|^(?:bigger|larger) text$|^zoom in$`, 'i').test(t)) return look(['textBigger']);
-    if (new RegExp(`^${TXT} (?:smaller|down)$|^smaller text$|^zoom out$`, 'i').test(t)) return look(['textSmaller']);
+    if (new RegExp(`^${TXT} (?:bigger|larger|up)$|^(?:bigger|larger) text$|^zoom in$|^(?:increase|enlarge) ${TXT}$`, 'i').test(t)) return look(['textBigger']);
+    if (new RegExp(`^${TXT} (?:smaller|down)$|^smaller text$|^zoom out$|^(?:decrease|reduce|shrink) ${TXT}$`, 'i').test(t)) return look(['textSmaller']);
     if (new RegExp(`^${VOX} (?:faster|quicker)$|^(?:speak|talk) (?:faster|quicker|more quickly)$|^speed up$`, 'i').test(t)) return look(['voiceFaster']);
     if (new RegExp(`^${VOX} slower$|^(?:speak|talk) (?:slower|more slowly)$|^slow down$`, 'i').test(t)) return look(['voiceSlower']);
-    if ((m = t.match(/^(?:(?:switch|change|make|use|set|turn|go)(?:\s+(?:it|everything|the|screen|phone|colou?rs?|theme|to|into))*\s+)?(yellow on black|yellow|high contrast|dark|light|white|black)(?:\s+(?:mode|theme|colou?rs?))?$/i)) &&
+    if ((m = t.match(/^(?:(?:switch|change|make|use|set|turn|go)(?:\s+(?:it|everything|the|screen|phone|colou?rs?|theme|to|into|on))*\s+)?(yellow on black|yellow|high contrast|dark|light|white|black)(?:\s+(?:mode|theme|colou?rs?))?$/i)) &&
         (/^(?:switch|change|make|use|set|turn|go)\b/i.test(t) || /\s(?:mode|theme|colou?rs?)$|^yellow on black$|^high contrast$/i.test(t))) {
       const c = m[1].toLowerCase(), colours = /yellow|contrast/.test(c) ? 'yellow' : /light|white/.test(c) ? 'light' : 'dark';
       return look(['colours'], { colours });
@@ -174,7 +174,11 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:send|text)\s+(\w+)\s+a\s+(?:message|text|note)\s+(?:saying|that|to say)?\s*(.+)$/i)) ||
       (m = t.match(/^(?:send|write)\s+(?:a\s+)?(?:message|text|note)\s+to\s+(\w+)\s+(?:saying|that|to say)\s*(.+)$/i))) return msg(m[1], m[2], true);
   if ((m = t.match(/^(?:send|write)\s+(?:a\s+)?(?:message|text|note)\s+to\s+(\w+)$/i))) return msg(m[1], '', true);
-  if ((m = t.match(/^(?:text|message|msg|tell)\s+(?!it\b|that\b)(\w+)\s+(?:that\s+|saying\s+)?(.{2,})$/i))) {
+  if ((m = t.match(/^let\s+(\w+)\s+know\s+(?:that\s+)?(.{2,})$/i))) return msg(m[1], m[2], true);
+  if (/^(?:read|check|play)\s+(?:me\s+)?(?:my\s+|the\s+)?(?:new\s+|latest\s+|unread\s+)?(?:messages?|texts?)$|^(?:do i have|have i got|are there|got)?\s*any\s+(?:new\s+)?(?:messages|texts)$|^(?:what are |what's in )?my (?:messages|texts)$/i.test(t)) {
+    return task([step('messages', ['read'], { new: true })]);
+  }
+  if ((m = t.match(/^(?:text|message|msg|tell)\s+(?!it\b|that\b)(\w+)\s+(?:that\s+|saying\s+|and\s+(?:say|tell (?:him|her|them))(?:\s+that)?\s+)?(.{2,})$/i))) {
     return msg(m[1], m[2].replace(/^to\s+/i, ''), true);
   }
   if ((m = t.match(/^read\s+(\w+)'s\s+(?:latest\s+|last\s+)?(?:message|messages|text|chat)$/i)) || (m = t.match(/^what did\s+(\w+)\s+(?:say|write)$/i)) ||
@@ -187,12 +191,13 @@ function plan(said, apps, context, dry) {
 
   // Calendar (before the generic "change X to Y")
   if ((m = t.match(/^invite\s+(\w+)\s+to\s+(.+)$/i))) return task([step('calendar', ['invite'], { who: name(m[1]), event: clean(m[2]) })]);
-  if ((m = t.match(/^(?:move|reschedule|shift)\s+(?:my\s+)?(.+?)\s+(?:to|until)\s+(.+)$/i)) && (here === 'calendar' || !here || /lunch|meeting|dinner|appointment|coffee|event/i.test(m[1]))) {
+  if ((m = t.match(/^(?:move|reschedule|shift|push)\s+(?:my\s+)?(.+?)(?:\s+(?:back|forward|on))?\s+(?:to|until|till)\s+(.+)$/i)) && (here === 'calendar' || !here || /lunch|meeting|dinner|appointment|coffee|event/i.test(m[1]))) {
     const at = m[2].match(/^(.+?)\s+at\s+(.+)$/);
     return task([step('calendar', ['move', 'reschedule'], at ? { event: clean(m[1]), day: cap(at[1]), time: at[2] } : { event: clean(m[1]), day: cap(m[2]) })]);
   }
   if (/^move (?:a|my|the) (?:meeting|event|appointment)$/i.test(t)) return task([step('calendar', ['move', 'reschedule'])]);
-  if ((m = t.match(new RegExp(`^what'?s (?:on|happening)(?:\\s+(?:my|the)\\s+calendar)?(?:\\s+${DAY})?$`, 'i')))) {
+  if ((m = t.match(new RegExp(`^what'?s (?:on|happening)(?:\\s+(?:my|the)\\s+calendar)?(?:\\s+${DAY})?$`, 'i'))) ||
+      (m = t.match(new RegExp(`^(?:what (?:have i|do i have) (?:got )?(?:on )?|am i (?:busy|free) |what am i doing |what'?s my day (?:like )?)${DAY}$`, 'i')))) {
     return task([step('calendar', ['whatsOn', 'today', 'list', 'read'], m[1] ? { day: cap(m[1]) } : {})]);
   }
   if (/^what'?s next(?: on my calendar)?$/i.test(t)) return task([step('calendar', ['next', 'whatsNext', 'whatsOn'])]);
@@ -246,7 +251,7 @@ function plan(said, apps, context, dry) {
   if (/^(?:read |what are |show )?(?:my |the )?(?:recent|last) (?:bank )?(?:payments|transactions|spending)$|^what have i (?:spent|paid)(?: recently)?$/i.test(t)) return task([step('bank', ['recent'], {})]);
   if (/^freeze (?:my |the )?(?:bank )?card$/i.test(t)) return task([step('bank', ['freezeCard'], {})]);
   // "Pay Sam twenty pounds", "Pay Samira five pounds fifty", "Send Sam £20 please", "... from Murmur Bank"
-  if ((m = t.replace(/\s+from (?:the |my )?(?:murmur )?bank$/i, '').match(/^(?:pay|send)\s+(\w+)\s+(?:£\s*)?(\d+(?:\.\d\d)?|[a-z -]+?)(?:\s+(?:pounds?|quid)(?:\s+(?:and\s+)?(?!please\b)(\d\d|[a-z -]+?)(?:\s+p(?:ence)?)?)?)?(?:,?\s+please)?$/i))
+  if ((m = t.replace(/\s+from (?:the |my )?(?:murmur )?bank$/i, '').match(/^(?:pay|send|give)\s+(\w+)\s+(?:£\s*)?(\d+(?:\.\d\d)?|[a-z -]+?)(?:\s+(?:pounds?|quid)(?:\s+(?:and\s+)?(?!please\b)(\d\d|[a-z -]+?)(?:\s+p(?:ence)?)?)?)?(?:,?\s+please)?$/i))
     && money(m[2]) > 0 && (!m[3] || (money(m[3]) > 0 && money(m[3]) < 100))) {
     return task([step('bank', ['payPerson', 'pay'], { who: name(m[1]), amount: money(m[2]) + (m[3] ? money(m[3]) / 100 : 0) })]);
   }
@@ -259,9 +264,10 @@ function plan(said, apps, context, dry) {
     if (m[3]) slots.day = m[3];
     return task([step('travel', ['findFlights', 'search', 'find'], slots)]);
   }
+  if (/^(?:when'?s|when is|what time is|show me|where'?s|tell me about|check)\s+my\s+flight$/i.test(t) && apps.some((a) => a.id === 'travel')) return task([{ tool: 'open_app', params: { app: 'travel' } }]);
   if ((m = t.match(/^(?:book|hold)\s+(?:the\s+)?(.+)$/i))) return task([step('travel', ['hold', 'book', 'pick'], { flight: m[1] })]);
 
-  if ((m = t.match(/^(?:open|go to|show|play|start)\s+(?:the\s+|my\s+)?(.+?)(?:\s+and\s+.+)?$/i))) {
+  if ((m = t.match(/^(?:open|go to|show|play|start)\s+(?:the\s+|my\s+)?(.+?)(?:\s+app)?(?:\s+and\s+.+)?$/i))) {
     const app = apps.find((a) => [a.id, a.name.toLowerCase(), a.name.toLowerCase().replace(/^the\s+/, '')].includes(m[1].toLowerCase()));
     if (app) return task([{ tool: 'open_app', params: { app: app.id } }]);
     if (/^(?:open|go to)\b/i.test(t)) return { kind: 'unknown', plan: [], say: `I don't have ${cap(m[1])} on this phone.` };

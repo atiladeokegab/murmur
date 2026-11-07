@@ -32,8 +32,9 @@ export async function runAction({ registry, name, params, bus, ctxFor, n = 1, of
     if (gate) {
       const readback = r.action.readback ? r.action.readback(r.app.state(), v.params) : r.app.read();
       if (!(await ctx.confirm(gate, readback))) {
-        bus.emit('step:failed', { ...base, reason: NOT[gate], cancelled: true });
-        return { ok: false, reason: NOT[gate], cancelled: true };
+        const no = gate === 'pay' && /\b(hold|held)\b/i.test(readback || '') ? 'Not held.' : NOT[gate]; // same test as the "Hold?" question
+        bus.emit('step:failed', { ...base, reason: no, cancelled: true });
+        return { ok: false, reason: no, cancelled: true };
       }
     }
     await r.action.run(v.params, ctx);

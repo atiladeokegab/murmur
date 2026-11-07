@@ -347,3 +347,15 @@ test('a travel hold (a pay gate that reads "held for 24 hours") asks "Hold?", a 
   g.ask({ gate: 'pay', readback: 'Pay Sam £20. From Murmur Bank.' }); g.cancel();
   assert.deepEqual(said, ['The 9:40 to Lisbon, £120, held for 24 hours. Hold?', 'Pay Sam £20. From Murmur Bank. Pay?']);
 });
+
+test('a No to a hold says "Not held.", a No to a payment still says "Not paid."', async () => {
+  const { runAction } = await import('../public/sdk/run.js');
+  const no = async (readback) => {
+    const action = { gate: 'pay', readback: () => readback, run() {}, verify: () => true };
+    const app = { id: 't', name: 'T', state: () => ({}), read: () => '', place: () => ({}) };
+    const registry = { resolve: () => ({ app, action }) };
+    return (await runAction({ registry, name: 't__x', params: {}, bus: { emit() {} }, ctxFor: () => ({ confirm: async () => false }) })).reason;
+  };
+  assert.equal(await no('The 9:40 to Lisbon, £120, held for 24 hours. Hold?'), 'Not held.');
+  assert.equal(await no('Pay Sam £20. From Murmur Bank. Pay?'), 'Not paid.');
+});
