@@ -48,7 +48,7 @@ test('bank: on the board, seeded state is exactly state.example.json, field name
   const { s } = await phone();
   assert.deepEqual(s(), example);
   assert.deepEqual(Object.keys(s()).sort(), ['balance', 'cardFrozen', 'draft', 'lastPaid', 'payees', 'screen', 'transactions']);
-  assert.deepEqual(s().payees.map((p) => p.name), ['Mum', 'Sam', 'Samira', 'Landlord']);
+  assert.deepEqual(s().payees.map((p) => p.name), ['Mum', 'Sam', 'Landlord']);
   assert.equal(s().balance, 124050);
 });
 
@@ -59,6 +59,7 @@ test('bank: the contract shape; only pay and split are gated, both with a readba
   }
   assert.deepEqual(Object.entries(bank.actions).filter(([, a]) => a.gate).map(([k, a]) => [k, a.gate]), [['payPerson', 'pay'], ['splitBill', 'pay']]);
   assert.equal(bank.actions.freezeCard.gate, null);
+  assert.ok(!bank.actions.payPerson.undo && !bank.actions.splitBill.undo, 'gated actions have no undo (contract §8)');
   assert.equal(bank.actions.freezeCard.readback(), 'Freezing your card ending 4821.');
 });
 
@@ -93,16 +94,16 @@ test('balance and recent: press the real buttons and say it in words', async () 
   assert.match(bank.read(), /^Recent payments\. Today, you paid Corner Café/);
 });
 
-test('pay Samira £20: the gate reads "Pay Samira £20. From Murmur Bank." and the money moves once', async () => {
+test('pay Sam £20: the gate reads "Pay Sam £20. From Murmur Bank." and the money moves once', async () => {
   const { run, asked, taps, s, bus } = await phone({ answers: [true] });
-  const r = await run('payPerson', { who: 'Samira', amount: 20, note: 'Lunch' });
+  const r = await run('payPerson', { who: 'Sam', amount: 20, note: 'Lunch' });
   assert.equal(r.ok, true, r.reason);
-  assert.deepEqual(asked, [{ gate: 'pay', readback: 'Pay Samira £20. From Murmur Bank.' }]);
+  assert.deepEqual(asked, [{ gate: 'pay', readback: 'Pay Sam £20. From Murmur Bank.' }]);
   assert.equal(s().balance, 124050 - 2000);
-  assert.deepEqual(s().lastPaid, { to: ['samira'], pence: [2000], total: 2000, tx: ['t5'], cancelled: false });
+  assert.deepEqual(s().lastPaid, { to: ['sam'], pence: [2000], total: 2000, tx: ['t5'], cancelled: false });
   assert.equal(s().transactions.at(-1).note, 'Lunch');
-  assert.deepEqual(taps, ['Pay someone', 'Samira', 'Amount in pounds', 'What it is for, if you like', 'Pay Samira £20']);
-  assert.equal(bank.read(), 'Paid Samira twenty pounds. Your balance is one thousand, two hundred and twenty pounds and fifty pence.');
+  assert.deepEqual(taps, ['Pay someone', 'Sam', 'Amount in pounds', 'What it is for, if you like', 'Pay Sam £20']);
+  assert.equal(bank.read(), 'Paid Sam twenty pounds. Your balance is one thousand, two hundred and twenty pounds and fifty pence.');
   assert.equal(bus.log.filter((e) => e.name === 'confirm').length, 1);
 });
 
@@ -116,21 +117,15 @@ test('a No on pay moves no money', async () => {
   assert.equal(s().lastPaid, null);
 });
 
-test('"Sam" asks "Sam or Samira?", then reads the exact payee back; a No there moves nothing', async () => {
-  const ok = await phone({ answers: [true, true], picks: ['Sam'] });
-  assert.equal((await ok.run('payPerson', { who: 'Sam', amount: 20 })).ok, true);
-  assert.deepEqual(ok.asked.map((a) => a.readback), ['Pay Sam or Samira £20. From Murmur Bank.', 'Pay Sam £20. From Murmur Bank.']);
-  assert.deepEqual(ok.bus.log.filter((e) => e.name === 'ask').map((e) => e.payload?.question ?? e.question), ['Sam or Samira?']);
-  assert.deepEqual(ok.s().lastPaid.to, ['sam']);
-
-  const no = await phone({ answers: [true, false], picks: ['Samira'] });
-  const r = await no.run('payPerson', { who: 'Sam', amount: 20 });
-  assert.equal(r.ok, false); assert.equal(r.reason, 'Not paid.');
-  assert.equal(no.s().balance, 124050);
-
-  const none = await phone({ answers: [true], picks: [] });
-  assert.equal((await none.run('payPerson', { who: 'Sam', amount: 20 })).reason, 'No one chosen.');
-  assert.equal(none.s().balance, 124050);
+test('Sam is one payee now; two matching names still ask, and the early readback names both', () => {
+  const s = M.fresh();
+  assert.deepEqual(M.resolve(s, 'Sam'), { id: 'sam' });
+  assert.match(M.resolve(s, 'Bob').none, /Bob isn't one of your payees/);
+  s.payees.push({ id: 'samira', name: 'Samira' });
+  const r = M.resolve(s, 'Sam');
+  assert.equal(r.ask.question, 'Sam or Samira?');
+  assert.deepEqual(r.ask.choices.map((c) => c.id), ['sam', 'samira']);
+  assert.equal(M.readbackFor(s, ['Sam'], 2000), 'Pay Sam or Samira £20. From Murmur Bank.');
 });
 
 test('split £61.01 between Mum and Landlord: one gate, odd penny to the first', async () => {
@@ -151,11 +146,10 @@ test('more than the balance fails in words and moves nothing', async () => {
   assert.equal(s().balance, 124050);
 });
 
-test('undo is "cancel within 8 s": the Cancel button gives the money back; after 8 s it is gone', async () => {
-  const { run, ctxFor, s, button } = await phone({ answers: [true] });
+test('cancel within 8 s: the Cancel button gives the money back; after 8 s it is gone', async () => {
+  const { run, press, s } = await phone({ answers: [true] });
   await run('payPerson', { who: 'Mum', amount: 20 });
-  assert.ok(button('Cancel this payment'));
-  await bank.actions.payPerson.undo(ctxFor(bank));
+  await press('Cancel this payment');
   assert.equal(s().balance, 124050);
   assert.equal(s().lastPaid.cancelled, true);
   assert.equal(bank.read().split('. ')[0], 'Cancelled');

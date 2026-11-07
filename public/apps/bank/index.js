@@ -16,7 +16,7 @@ async function toScreen(ctx, screen, opener) {
   if (opener) await ctx.tap(q(opener));
 }
 
-/** Each spoken name to one payee id; "Sam" asks "Sam or Samira?". Returns { ids, asked }. */
+/** Each spoken name to one payee id; two matches ask, as in "Sam or Samira?". Returns { ids, asked }. */
 async function whoIs(ctx, whos) {
   const ids = []; let asked = false;
   for (const w of whos) {
@@ -46,11 +46,6 @@ async function fillAndPay(ctx, { ids, asked }, total, note) {
   if (why) throw new Error(why);
 }
 
-const cancelUndo = async (ctx) => {
-  if (!M.canCancel(s)) throw new Error('Too late to cancel: it has gone.');
-  await toScreen(ctx, 'paid');
-  await ctx.tap(q('#bank-cancel'));
-};
 const paidTo = (st, whos) => {
   const lp = st.lastPaid;
   if (!lp || lp.cancelled) return false;
@@ -102,7 +97,7 @@ const app = {
       describe: 'Pay one of your payees an amount in pounds',
       doing: 'Paying',
       params: { type: 'object', properties: {
-        who: { type: 'string', description: 'The name as said: Mum, Sam, Samira or Landlord' },
+        who: { type: 'string', description: 'The name as said: Mum, Sam or Landlord' },
         amount: { type: 'number', description: 'Pounds, for example 20 or 12.50' },
         note: { type: 'string', description: 'What it is for, if they said' },
       }, required: ['who', 'amount'] },
@@ -116,9 +111,6 @@ const app = {
         await fillAndPay(ctx, who, pence(p.amount), p.note);
       },
       verify: (st, p) => (paidTo(st, [p.who]) && st.lastPaid.total === pence(p.amount)) || 'It did not pay.',
-      // shortcut: the runner treats every gated step as final, so this undo is reached only by the Cancel button's
-      // own path today; it starts working by voice if the runner offers undo for pay within 8 s.
-      undo: cancelUndo,
     },
     splitBill: {
       describe: 'Split a bill total equally and pay each person their share',
@@ -138,7 +130,6 @@ const app = {
         await fillAndPay(ctx, who, pence(p.total), '');
       },
       verify: (st, p) => (paidTo(st, p.who) && st.lastPaid.total === pence(p.total)) || 'It did not pay everyone.',
-      undo: cancelUndo,
     },
     freezeCard: {
       describe: 'Freeze the bank card so nobody can use it',

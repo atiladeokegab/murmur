@@ -10,7 +10,7 @@ export const STEPS = {
 export const CHOICES = {
   theme: { label: 'Colours', options: { dark: 'Dark', light: 'Light', yellow: 'Yellow on black' } },
   speaker: { label: 'Who speaks', options: { murmur: 'Murmur', reader: 'My screen reader' } },
-  agency: { label: 'How much Murmur does', options: { ask: 'Ask me', do: 'Just do it', teach: 'Teach me' } },
+  agency: { label: 'How much Murmur does', options: { ask: 'Ask me', just: 'Just do it', teach: 'Teach me' } },
 };
 const DEFAULTS = { size: 100, rate: 1, theme: 'dark', speaker: 'murmur', agency: 'ask', learning: true };
 
@@ -45,7 +45,7 @@ function el(tag, props = {}, ...kids) {
 // The toolkit: the host's if it passed one, else our own on the same localStorage. Never fatal.
 async function lib() {
   if (toolkit) return toolkit;
-  if (os.librarian) return (toolkit = { librarian: os.librarian, datastore: os.datastore });
+  if (os.librarian && os.datastore) return (toolkit = { librarian: os.librarian, datastore: os.datastore }); // both, or our own
   try {
     const [{ createToolkit }, { browserKV }] = await Promise.all([import('../../vendor/toolkit/index.js'), import('../../ports/browser-kv.js')]);
     toolkit = createToolkit({ kv: browserKV() });

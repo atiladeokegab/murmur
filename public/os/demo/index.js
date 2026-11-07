@@ -1,5 +1,5 @@
-// Demo controls: reset, next morning, mode, replay. Behind one discreet control: a long press on the clock,
-// or the ` key. The rehearsal list is /os/demo/ (index.html here). Lesson 42: the lead knows these cold.
+// Demo controls: reset, next morning, mode, replay. Behind one discreet control, the same as the shell's:
+// three taps on the clock within 1.5 s, or Shift+D. The rehearsal list is /os/demo/ (index.html here). Lesson 42: the lead knows these cold.
 import { rearm } from '../onboard/index.js';
 
 export const CONTROLS = [
@@ -7,9 +7,9 @@ export const CONTROLS = [
   { key: 'nextMorning', label: 'Next morning', words: 'Moves the seeded week on a day, so Murmur proposes Put the bus first?' },
   { key: 'mode', label: 'Mode', words: 'Switches who speaks: Murmur, or the screen reader.' },
   { key: 'replay', label: 'Replay', words: 'Runs the last task again, gates included.' },
+  { key: 'planner', label: 'Planner', words: 'Switches the planner: Gemini, or offline. The fallback if Gemini hangs.' },
 ];
-export const HOLD_MS = 1500;
-export const KEY = '`';
+export const TAPS = 3, WITHIN_MS = 1500;
 
 /**
  * @param {object} o
@@ -21,8 +21,9 @@ export const KEY = '`';
  * @param {function} [o.replay] (task) => Promise: the agent's runner for a whole plan; default runs each step
  * @param {function} [o.stop]   stops a running task before a reset
  * @param {object} [o.onboard]  { kv } for the first-open flag, re-armed on reset
+ * @param {function} [o.planner] flips the planner (offline or Gemini) and says which
  */
-export function createDemo({ registry, bus, run, say = async () => {}, board = {}, replay, stop, onboard = {} }) {
+export function createDemo({ registry, bus, run, say = async () => {}, board = {}, replay, stop, onboard = {}, planner }) {
   const lastTask = () => [...bus.log].reverse().find((e) => e.name === 'task:start');
   return {
     async reset() {
@@ -42,6 +43,10 @@ export function createDemo({ registry, bus, run, say = async () => {}, board = {
       const who = look.state().speaker === 'reader' ? 'murmur' : 'reader';
       return run('look__whoSpeaks', { who });
     },
+    async planner() {
+      if (!planner) return say('Planner needs the shell.');
+      return planner();
+    },
     async replay() {
       const t = lastTask();
       if (!t) return say('Nothing to replay yet.');
@@ -55,11 +60,11 @@ export function createDemo({ registry, bus, run, say = async () => {}, board = {
 }
 
 /**
- * Opens the demo panel on a 1.5 s press of `trigger` (the clock), or the ` key anywhere.
- * Inside the panel, keys 1 to 4 run the controls in order and Escape closes it. A control closes the panel
+ * Opens the demo panel on three taps on `trigger` (the clock) within 1.5 s, or Shift+D anywhere.
+ * Inside the panel, keys 1 to 5 run the controls in order and Escape closes it. A control closes the panel
  * before it runs, so the mirror shows the phone, not the panel. Returns { open, close, panel, off }.
  */
-export function bindDemo(trigger, demo, { doc = trigger.ownerDocument, hold = HOLD_MS } = {}) {
+export function bindDemo(trigger, demo, { doc = trigger.ownerDocument, now = () => Date.now() } = {}) {
   if (doc.head && !doc.getElementById('demo-css')) {
     const css = doc.createElement('link');
     Object.assign(css, { id: 'demo-css', rel: 'stylesheet', href: new URL('demo.css', import.meta.url).href });
@@ -97,24 +102,25 @@ export function bindDemo(trigger, demo, { doc = trigger.ownerDocument, hold = HO
   doc.body.append(panel);
   const open = () => { back = doc.activeElement; panel.hidden = false; buttons[0].focus(); };
 
-  let timer = null;
-  const down = () => { clearTimeout(timer); timer = setTimeout(open, hold); };
-  const up = () => clearTimeout(timer);
+  let taps = [];
+  const tap = () => {
+    const t = now();
+    taps = [...taps.filter((x) => t - x < WITHIN_MS), t];
+    if (taps.length >= TAPS) { taps = []; open(); }
+  };
   const onKey = (e) => {
     if (panel.hidden) {
-      if (e.key === KEY && !/^(INPUT|TEXTAREA)$/.test(e.target?.tagName || '')) { e.preventDefault?.(); open(); }
+      if (e.key === 'D' && e.shiftKey && !/^(INPUT|TEXTAREA)$/.test(e.target?.tagName || '')) { e.preventDefault?.(); open(); }
       return;
     }
     if (e.key === 'Escape') close();
     const c = CONTROLS[Number(e.key) - 1];
     if (c) { e.preventDefault?.(); fire(c); }
   };
-  trigger.addEventListener('pointerdown', down);
-  for (const t of ['pointerup', 'pointerleave', 'pointercancel']) trigger.addEventListener(t, up);
-  trigger.addEventListener('contextmenu', (e) => e.preventDefault?.()); // a long press must not open the browser menu
+  trigger.addEventListener('click', tap);
   doc.addEventListener('keydown', onKey);
   const off = () => {
-    trigger.removeEventListener?.('pointerdown', down);
+    trigger.removeEventListener?.('click', tap);
     doc.removeEventListener?.('keydown', onKey);
     panel.remove?.();
   };

@@ -10,12 +10,12 @@ import { fakeDocument, fakeStorage } from './fake-dom.js';
 const example = JSON.parse(readFileSync(new URL('../public/apps/calendar/state.example.json', import.meta.url)));
 
 // One phone with only Calendar on it. answers: the ask-first sheet's yes/no; picks: the choice sheet's labels.
-async function phone({ answers = [], picks = [] } = {}) {
+async function phone({ answers = [], picks = [], confirm } = {}) {
   const doc = fakeDocument(), bus = createBus(), registry = createRegistry();
   registry.register(calendar);
   const port = browserKV({ storage: fakeStorage(), prefix: 'murmur' });
   const kv = appKv('calendar', port);
-  const root = await mountApp(calendar, doc.body, { kv, bus, say: (text) => bus.emit('say', { text }) });
+  const root = await mountApp(calendar, doc.body, { kv, bus, say: (text) => bus.emit('say', { text }), confirm });
   await calendar.reset();
   const ask = async () => answers.shift() ?? false;
   const choose = async ({ choices }) => { const want = picks.shift(); const i = choices.findIndex((c) => c === want); return i < 0 ? null : i; };
@@ -69,6 +69,8 @@ test('calendar: "Move lunch with Mum to Wednesday" is free, moved, verified, off
   assert.deepEqual(p.s().lastMoved, { id: 'lunch', from: 'Tuesday', to: 'Wednesday', time: '12:30' });
   assert.equal(p.last('step:verified').action, 'calendar__move');
   assert.equal(calendar.place().next, 'invite');
+  assert.equal(p.root.querySelector('#cal-day-Wednesday').getAttribute('aria-pressed'), 'true', 'the event\'s day stays pressed while it is open');
+  assert.equal(p.root.querySelector('mark').textContent, 'Wednesday');
   await calendar.actions.move.undo(p.ctxFor(calendar));
   assert.equal(ev(p.s(), 'lunch').day, 'Tuesday');
   // the verify is the app's truth: a state where it didn't move fails with a reason
@@ -106,6 +108,19 @@ test('calendar: invite is gated with a readback from state; no means nothing sen
   assert.equal(c.payload?.readback ?? c.readback, 'Send Mum an invite: Lunch with Mum, Wednesday at 12:30 pm.');
   assert.deepEqual(ev(yes.s(), 'lunch').invited, ['Mum']);
   assert.deepEqual(yes.s().lastInvite, { id: 'lunch', who: 'Mum' });
+});
+
+test("calendar: a person's own Send invite tap gets the shell's ask-first sheet with the same readback", async () => {
+  for (const yes of [false, true]) {
+    const asked = [];
+    const { root, s } = await phone({ confirm: async (q) => { asked.push(q); return yes; } });
+    const tap = async (id) => { root.querySelector(`#${id}`).dispatchEvent({ type: 'click', isTrusted: true }); await new Promise((r) => setTimeout(r)); };
+    await tap('cal-day-Tuesday'); await tap('cal-ev-lunch'); await tap('cal-invite');
+    const who = root.querySelector('#cal-who'); who.value = 'Mum'; who.dispatchEvent(new Event('input'));
+    await tap('cal-send');
+    assert.deepEqual(asked, [{ gate: 'send', readback: 'Send Mum an invite: Lunch with Mum, Tuesday at 12:30 pm.' }]);
+    assert.deepEqual(ev(s(), 'lunch').invited, yes ? ['Mum'] : []);
+  }
 });
 
 test('calendar: add an event, a bad day fails in words, and reset brings the seed back', async () => {

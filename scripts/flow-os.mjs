@@ -1,5 +1,6 @@
 // Dev only: the shell end to end in Chromium. PLAYWRIGHT=<pkg> node scripts/flow-os.mjs [url] [outdir]
 // With no agent on the branch, a task is driven the way the runner does it: task:start, runAction per step, task:done.
+import { existsSync } from 'node:fs';
 const { chromium } = await import(process.env.PLAYWRIGHT || 'playwright');
 const url = process.argv[2] || 'http://localhost:8080/?quiet';
 const out = process.argv[3] || 'shots';
@@ -7,8 +8,11 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 757 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
-page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
-page.on('response', (r) => { if (r.status() >= 400 && !/\/agent\/index\.js$/.test(r.url())) errors.push(`${r.status()} ${r.url()}`); });
+// A module from a branch not merged here (no file under public/) is skipped by the shell; anything else is an error.
+const absent = (u) => { try { return !existsSync(`public${new URL(u).pathname}`); } catch { return false; } };
+page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text()) && !/did not load: .*imported module: (\S+)/.test(m.text())) errors.push(m.text()); });
+page.on('console', (m) => { const u = /did not load: .*imported module: (\S+)/.exec(m.text())?.[1]; if (u && !absent(u)) errors.push(m.text()); });
+page.on('response', (r) => { if (r.status() >= 400 && !absent(r.url())) errors.push(`${r.status()} ${r.url()}`); });
 const check = (name, ok, got = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${got ? `: ${got}` : ''}`); if (!ok) errors.push(name); };
 const ready = () => page.waitForSelector('html[data-ready="true"]');
 await page.goto(url); await ready();
@@ -25,6 +29,12 @@ check('a tile opens its app and focuses its heading', await page.evaluate(() => 
 check('the place line shows', (await page.locator('#place').textContent()).length > 0, await page.locator('#place').textContent());
 await page.goBack(); await page.waitForTimeout(100);
 check('Back closes the app', await page.evaluate(() => !document.querySelector('#board-view').hidden && document.querySelector('#app-hello').hidden));
+
+await page.evaluate(() => { window.murmur.open('hello'); window.murmur.home(); window.murmur.open('hello'); });
+await page.waitForTimeout(300);
+check('closing then opening at once keeps one Back entry', await page.evaluate(() => history.state?.d === 1 && !document.querySelector('#app-hello').hidden));
+await page.goBack(); await page.waitForTimeout(100);
+check('and Back still closes it', await page.evaluate(() => !document.querySelector('#board-view').hidden));
 
 // A task the way the runner drives it.
 const task = (yes) => page.evaluate(async (yes) => {

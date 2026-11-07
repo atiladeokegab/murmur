@@ -9,11 +9,12 @@ const SEED = [
   { id: 'callsam', title: 'Call Sam', day: 'Friday', time: '19:00', mins: 30, with: 'Sam', invited: [] },
 ];
 
-let root = null, kv = null;
+let root = null, kv = null, osConfirm = null;
 let events = [], shown = TODAY, open = null, picking = false, clash = null, adding = false, inviting = false;
 let lastMoved = null, lastAdded = null, lastInvite = null, status = '';
 let draft = { title: '', day: '', time: '', to: '', who: '' };
 let before = null; // the last move's starting point, for undo
+let pressed = null; // the control just pressed: where a moved event takes off from
 let personal = false; // a person's own tap moves focus; the agent's taps leave it on Stop
 
 // ---------- plain helpers (pure: verify and readback use them on state) ----------
@@ -82,7 +83,7 @@ function el(tag, props = {}, ...kids) {
 const $ = (id) => root.querySelector(`#${id}`);
 function btn(id, text, onClick, cls = 'choice') {
   const b = el('button', { type: 'button', id, className: cls, textContent: text });
-  b.addEventListener('click', (e) => { personal = !!e?.isTrusted; onClick(); });
+  b.addEventListener('click', (e) => { personal = !!e?.isTrusted; pressed = b; onClick(); });
   return b;
 }
 function field(id, label, key, type = 'text') {
@@ -101,7 +102,40 @@ function doMove(to, time) {
   events.sort(order);
   shown = to; picking = false; clash = null;
   status = `Moved to ${to} at ${spoken(time)}.`;
+  const from = pressed?.getBoundingClientRect?.();
   save(); render('cal-status');
+  fly(from, e.title, $(`cal-day-${to}`));
+}
+const still = () => !!root.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+/** The moved event lifts off where it was pressed, arcs up and lands on its new day, which then gives a small bounce. */
+function fly(from, title, dayBtn) {
+  if (!from || !dayBtn?.animate || still()) return;
+  dayBtn.scrollIntoView?.({ block: 'nearest' });
+  const to = dayBtn.getBoundingClientRect();
+  const chip = el('div', { className: 'cal-fly', textContent: title, 'aria-hidden': 'true' });
+  root.ownerDocument.body.append(chip); // outside the app: main's container query would trap a fixed element
+  const c = chip.getBoundingClientRect();
+  const x0 = from.left + from.width / 2 - c.width / 2, y0 = from.top + from.height / 2 - c.height / 2;
+  chip.style.left = `${x0}px`; chip.style.top = `${y0}px`;
+  const dx = to.left + to.width / 2 - c.width / 2 - x0, dy = to.top + to.height / 2 - c.height / 2 - y0;
+  const lift = Math.min(120, Math.abs(dy) / 3 + 40);
+  const a = chip.animate([
+    { transform: 'translate(0, 0) scale(0.6)', opacity: 0 },
+    { transform: 'translate(0, -8px) scale(1.05)', opacity: 1, offset: 0.15 },
+    { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - lift}px) scale(1)`, opacity: 1, offset: 0.55 },
+    { transform: `translate(${dx}px, ${dy}px) scale(0.85)`, opacity: 1, offset: 0.9 },
+    { transform: `translate(${dx}px, ${dy}px) scale(0.5)`, opacity: 0 },
+  ], { duration: 780, easing: 'cubic-bezier(.3,.7,.2,1)' });
+  let landed = false;
+  const land = () => {
+    if (landed) return;
+    landed = true;
+    chip.remove();
+    dayBtn.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.1)' }, { transform: 'scale(0.97)' }, { transform: 'scale(1)' }],
+      { duration: 380, easing: 'ease-out' });
+  };
+  a.onfinish = a.oncancel = land;
+  setTimeout(land, 1000); // never leave the chip on screen if the animation is starved
 }
 function pickDay(to) {
   const e = ev(), time = timeOf(draft.to) || e.time;
@@ -120,9 +154,19 @@ function addEvent() {
   status = `Added ${title} on ${day} at ${spoken(time)}.`;
   save(); render('cal-status');
 }
+const inviteLine = (e, who) => `Send ${who} an invite: ${e.title}, ${e.day} at ${spoken(e.time)}.`;
 function sendInvite() {
   const e = ev(), who = draft.who.trim();
   if (!who) { status = 'Say who to invite.'; return render('cal-status'); }
+  // A person's own tap gets the shell's ask-first sheet too; the agent's tap was already asked by the runner.
+  if (personal && osConfirm) {
+    return osConfirm({ gate: 'send', readback: inviteLine(e, who) }).then((ok) => {
+      if (ok) invited(e, who); else { status = 'Not sent.'; render('cal-status'); }
+    });
+  }
+  invited(e, who);
+}
+function invited(e, who) {
   if (!e.invited.some((w) => w.toLowerCase() === who.toLowerCase())) e.invited.push(who);
   lastInvite = { id: e.id, who }; inviting = false; draft.who = '';
   status = `Invite sent to ${who}.`;
@@ -132,8 +176,9 @@ function sendInvite() {
 function render(focusId) {
   const e = ev();
   const days = DAYS.map((d) => {
-    const b = btn(`cal-day-${d}`, d === TODAY ? `${d}, today` : d, () => show(d), d === shown && !e && !adding ? 'choice yes' : 'choice');
-    b.setAttribute('aria-pressed', String(d === shown && !e && !adding));
+    const on = d === shown && !adding;
+    const b = btn(`cal-day-${d}`, d === TODAY ? `${d}, today` : d, () => show(d), on ? 'choice yes' : 'choice');
+    b.setAttribute('aria-pressed', String(on));
     return b;
   });
   let body;
@@ -144,7 +189,8 @@ function render(focusId) {
         btn('cal-cancel', 'Cancel', () => { adding = false; status = ''; render('cal-day-h'); }))];
   } else if (e) {
     body = [el('h3', { id: 'cal-ev-h', tabIndex: -1, textContent: e.title }),
-      el('p', { id: 'cal-ev-when', textContent: `${e.day} at ${spoken(e.time)}${e.with ? `, with ${e.with}` : ''}.${e.invited.length ? ` Invited: ${e.invited.join(', ')}.` : ''}` }),
+      el('p', { id: 'cal-ev-when' }, lastMoved?.id === e.id ? el('mark', { className: 'changed', textContent: e.day }) : el('span', { textContent: e.day }),
+        el('span', { textContent: ` at ${spoken(e.time)}${e.with ? `, with ${e.with}` : ''}.${e.invited.length ? ` Invited: ${e.invited.join(', ')}.` : ''}` })),
       el('div', { className: 'choices' },
         btn('cal-close', 'Close', () => { open = null; picking = inviting = false; clash = null; status = ''; render('cal-day-h'); }),
         btn('cal-move', 'Move', () => { picking = true; inviting = false; clash = null; draft.to = e.time; render('cal-pick-h'); }),
@@ -155,7 +201,11 @@ function render(focusId) {
           btn('cal-keep', `Keep it on ${e.day}`, () => { clash = null; picking = false; status = `${e.title} stays on ${e.day}.`; render('cal-status'); })));
     } else if (picking) {
       body.push(el('h4', { id: 'cal-pick-h', tabIndex: -1, textContent: `Move ${e.title} to` }), ...field('cal-to-time', 'At', 'to'),
-        el('div', { className: 'choices' }, ...DAYS.map((d) => btn(`cal-to-${d}`, d, () => pickDay(d)))));
+        el('div', { className: 'cal-grid', role: 'group', 'aria-label': 'Days' }, ...DAYS.map((d) => {
+          const b = btn(`cal-to-${d}`, d === e.day ? `${d}, now` : d, () => pickDay(d));
+          if (d === e.day) b.setAttribute('aria-current', 'true');
+          return b;
+        })));
     } else if (inviting) {
       body.push(...field('cal-who', 'Who to invite', 'who'), btn('cal-send', 'Send invite', sendInvite, 'choice yes'));
     }
@@ -169,7 +219,9 @@ function render(focusId) {
   root.querySelector('#cal-days').replaceChildren(...days);
   root.querySelector('#cal-body').replaceChildren(...body);
   $('cal-status').textContent = status;
-  if (focusId && personal) $(focusId)?.focus?.();
+  const target = focusId && $(focusId);
+  target?.scrollIntoView?.({ block: focusId === 'cal-pick-h' ? 'start' : 'nearest', behavior: still() ? 'auto' : 'smooth' });
+  if (target && personal) target.focus?.({ preventScroll: true });
   personal = false;
 }
 
@@ -192,19 +244,25 @@ const app = {
   name: 'Calendar',
 
   async mount(r, os) {
-    root = r; kv = os.kv;
+    root = r; kv = os.kv; osConfirm = os.confirm || null;
     // Tokens only (os/contract.md §2.1); the buttons reuse the shell's .choice.
     const style = el('style', { textContent: `#app-calendar{padding:0 var(--gutter)}#app-calendar ol{padding:0}
-#app-calendar li{padding:var(--ring) 0}#app-calendar label{display:block;margin-top:var(--ring)}
+#app-calendar li{padding:var(--ring) 0}#app-calendar label,#app-calendar h4{display:block;margin-top:var(--gutter)}
 #app-calendar .choices{margin:var(--ring) 0}#app-calendar li .choice{width:100%;justify-items:start;text-align:start}
-#app-calendar input{box-sizing:border-box;width:100%;min-height:var(--h-link);font:inherit;font-size:var(--fs-sheet);background:var(--c-board);color:var(--c-ink);border:var(--bw-talk) solid var(--c-ink);border-radius:var(--r-btn)}` });
+#app-calendar .cal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,8rem),1fr));gap:calc(var(--ring) * 2);margin:var(--ring) 0}
+#app-calendar .cal-grid .choice[aria-current]{border-style:dashed}
+#app-calendar h3,#app-calendar h4{font-size:var(--fs-title);margin:var(--gutter) 0 var(--ring)}
+#app-calendar label,#app-calendar p{font-size:var(--fs-sheet)}#cal-status:empty{margin:0}
+#app-calendar mark.changed{background:var(--c-mark);color:var(--c-on-mark);border-radius:var(--ring);padding:0 var(--ring)}
+.cal-fly{position:fixed;z-index:20;pointer-events:none;padding:var(--pad-tile);border-radius:var(--r-btn);background:var(--c-accent);color:var(--c-on-accent);font-weight:700;font-size:var(--fs-sheet);white-space:nowrap}
+#app-calendar input{box-sizing:border-box;width:100%;padding:0 var(--gutter);min-height:var(--h-link);font:inherit;font-size:var(--fs-sheet);background:var(--c-board);color:var(--c-ink);border:var(--bw-talk) solid var(--c-ink);border-radius:var(--r-btn)}` });
     root.append(style, el('h2', { id: 'calendar-h', textContent: 'Calendar' }),
       el('p', { id: 'cal-status', role: 'status' }),
       el('div', { className: 'choices' },
         btn('cal-next', "What's next", () => { const n = nextOf(events); open = n?.id ?? null; adding = picking = inviting = false; clash = null;
           if (n) shown = n.day; status = n ? '' : 'Nothing else this week.'; render(n ? 'cal-ev-h' : 'cal-status'); }),
         btn('cal-add', 'Add an event', () => { adding = true; open = null; picking = inviting = false; clash = null; status = ''; render('cal-add-h'); })),
-      el('div', { id: 'cal-days', className: 'choices', role: 'group', 'aria-label': 'Days' }),
+      el('div', { id: 'cal-days', className: 'cal-grid', role: 'group', 'aria-label': 'Days' }),
       el('div', { id: 'cal-body' }));
     events = ((await kv.get('events')) || []).sort(order);
     render();
@@ -359,7 +417,7 @@ const app = {
       },
       readback(s, p) {
         const e = matches(s.events, p.event)[0];
-        return e ? `Send ${p.who} an invite: ${e.title}, ${e.day} at ${spoken(e.time)}.` : `There's nothing called ${p.event} this week.`;
+        return e ? inviteLine(e, p.who) : `There's nothing called ${p.event} this week.`;
       },
       async run(p, ctx) {
         const e = matches(events, p.event)[0]; // the same event the readback named

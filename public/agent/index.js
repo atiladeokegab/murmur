@@ -8,6 +8,9 @@ import { createRunner, createGates } from './runner.js';
 import { createWorkflows, lastChain } from './workflows.js';
 import { attachMemory } from './memory.js';
 import { placeLine } from './narrate.js';
+import { installToken } from './token.js';
+
+if (globalThis.window) installToken(); // /api/* carries the device token from here on
 
 /**
  * @param {object} o
@@ -94,9 +97,9 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     }
   }
 
-  async function runPlan(utterance, steps, mode = null) {
+  async function runPlan(utterance, steps, mode = null, plan = {}) {
     taskMode = mode;
-    try { return await runner.run({ utterance, steps }); } finally { taskMode = null; }
+    try { return await runner.run({ utterance, steps, plan }); } finally { taskMode = null; }
   }
 
   async function runWorkflow(name, utterance) {
@@ -108,7 +111,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   async function where() {
     const a = app(current()), pl = a?.place?.();
     if (a && pl) bus.emit('place', { app: a.id, ...pl });
-    await say(placeLine(pl));
+    await say(pl?.say || placeLine(pl)); // an app's own where-am-I sentence wins
   }
 
   async function reservedWord(w) {
@@ -181,7 +184,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     }
     const wf = p.steps.find((s) => s.tool === 'run_workflow');
     if (wf) return runWorkflow(wf.params.name, rest);
-    return runPlan(rest, p.steps);
+    return runPlan(rest, p.steps, null, { provider: p.provider, ...(p.model ? { model: p.model } : {}) });
   }
 
   return {
@@ -194,6 +197,11 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     pick: (i) => choice?.resolve(i),
     /** Android Back or the Stop bar: same as "stop". */
     stop: () => reservedWord({ kind: 'stop' }),
+    takeOver: () => reservedWord({ kind: 'take_over' }),
+    undo: () => runner.undo(),
+    carryOn: () => reservedWord({ kind: 'carry_on' }),
+    /** Mine's Run button: the saved workflow as its own task (asks a slot, keeps every gate). */
+    runWorkflow: (name) => runWorkflow(name, `run ${name}`),
     /** Yes / Not now / Never on the proposal sheet. */
     respond: (id, answer) => { proposal = null; return memory?.respond(id, answer); },
     get offer() { return offer; },

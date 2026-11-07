@@ -7,7 +7,6 @@ export const CANCEL_MS = 8000;
 export const seedPayees = () => [
   { id: 'mum', name: 'Mum' },
   { id: 'sam', name: 'Sam' },
-  { id: 'samira', name: 'Samira' },
   { id: 'landlord', name: 'Landlord' },
 ];
 // Oldest first; "recent" reads the last three, newest first.
@@ -63,7 +62,7 @@ export function toPence(v) {
 // ---------- who ----------
 const norm = (s) => String(s || '').trim().toLowerCase();
 export const payee = (s, id) => s.payees.find((p) => p.id === id) || null;
-/** Every payee a spoken name could mean: "Sam" is Sam and Samira, so the caller must ask. */
+/** Every payee a spoken name could mean; more than one means the caller must ask. */
 export function candidates(s, who) {
   const w = norm(who);
   if (!w) return [];
@@ -97,7 +96,7 @@ export function planOf(s, d = s.draft) {
 const list = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}` : xs[0] || '');
 /** The exact words read before any money moves: "Pay Sam £20. From Murmur Bank." */
 export const readback = (plan) => `Pay ${list(plan.map((p) => `${p.name} ${shown(p.pence)}`))}. From Murmur Bank.`;
-/** The readback before the names are settled (the runner asks before run can ask "Sam or Samira?"). */
+/** The readback before the names are settled (the runner asks before run can ask "Sam or Samira?" when two names match). */
 export function readbackFor(s, whos, pence, mode = 'pay') {
   const each = mode === 'split' ? shares(pence, whos.length) : [pence];
   return readback(whos.map((w, i) => ({ name: nameOf(s, w), pence: each[i] })));
