@@ -11,6 +11,7 @@ import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
 import * as passkey from '../passkey.js';
 import { byHand } from './gate.js';
+import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
 // Optional modules from other branches: boot never depends on them. The token must wrap fetch before any /api call.
 const optional = (p) => import(p).catch(() => null);
 (await optional('../agent/token.js'))?.installToken();
@@ -129,10 +130,8 @@ const roots = {}, kvs = {};
 let current = null, agentPress = false;
 let personal = new AbortController(); // the person's own reads (Read it); Stop aborts it too
 const cursor = createCursor(document);
-for (const app of registry.list()) {
-  kvs[app.id] = appKv(app.id, port);
-  roots[app.id] = await mountApp(app, appsEl, {
-    kv: kvs[app.id], bus, registry,
+const osFor = (app, kv) => ({
+    kv, bus, registry,
     say: (t) => speak(t, personal.signal),
     // A person's own tap on a gated control is their yes (Pay still checks the fingerprint); when the agent
     // pressed it, the runner already asked.
@@ -140,9 +139,17 @@ for (const app of registry.list()) {
       passkey: { usable: fingerprintUsable, confirm: () => passkey.confirm() },
       sheet: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true) })),
     get workflows() { return agent?.workflows; },
-  });
+});
+for (const app of registry.list()) {
+  kvs[app.id] = appKv(app.id, port);
+  roots[app.id] = await mountApp(app, appsEl, osFor(app, kvs[app.id]));
   await app.seed();
 }
+// Plug-ins (sdk/plugin.js): added apps come back on boot and mount exactly like the built-in ones.
+const plug = { registry, host: appsEl, port, os: osFor };
+const added = (r) => { roots[r.id] = r.root; kvs[r.id] = r.kv; return r; };
+for (const r of await restoreApps(plug)) added(r); // no renderBoard here: `day` is declared below (TDZ)
+async function install(name) { const r = await installByName(name, plug); if (r.root) { added(r); renderBoard(); } return r; }
 
 function open(id, { focus = true } = {}) {
   const app = registry.get(id);
@@ -198,7 +205,18 @@ function renderBoard() {
     [...btn.children].forEach((c) => c.setAttribute('aria-hidden', 'true'));
     btn.addEventListener('click', () => { open(app.id); if (line.say) speak(line.say, personal.signal); });
     return el('li', { className: now ? 'now' : '' }, btn);
-  }));
+  }), addTile());
+}
+function addTile() {
+  const btn = el('button', { className: 'tile', type: 'button' }, el('span', { className: 'when' }),
+    el('span', { className: 'what' }, el('span', { className: 'title', textContent: 'Add an app' })), el('span', { className: 'key' }));
+  btn.addEventListener('click', async () => {
+    const l = (await availableApps(plug)).filter((p) => !p.installed);
+    if (!l.length) return speak('Every app is already added.', personal.signal);
+    const i = await sheetChoose({ question: 'Which app do you want to add?', choices: l.map((p) => p.name) });
+    if (i != null) speak((await install(l[i].id)).say, personal.signal);
+  });
+  return el('li', {}, btn);
 }
 setInterval(() => { const f = $('#board .now .flap'); if (f) f.replaceWith(flap(nowTime())); }, 15000);
 
@@ -544,7 +562,7 @@ try {
   const { createAgent } = await import('../agent/index.js');
   agent = await createAgent({
     registry, bus, ctxFor, speak, librarian,
-    os: { open: (id) => open(id), current: () => current },
+    os: { open: (id) => open(id), current: () => current, install },
     fingerprint: () => passkey.confirm(),
     agency: () => look.agency,
     onGate: agentGate, onChoose: agentChoose,
@@ -562,5 +580,5 @@ if (look.nolook) { nl.hidden = false; document.documentElement.classList.add('no
 const first = !store.get('welcomed', false);
 show(first ? 'Tap anywhere and tell me what you need.' : '');
 if (first) store.set('welcomed', true);
-window.murmur = { bus, registry, host, agent, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, ready: Promise.resolve(true) };
+window.murmur = { bus, registry, host, agent, install, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, ready: Promise.resolve(true) };
 document.documentElement.dataset.ready = 'true';
