@@ -269,7 +269,7 @@ test("where am I reads the app's place", async () => {
   assert.equal(s.spoken.at(-1), placeLine(s.registry.get('messages').place()));
   assert.match(s.spoken.at(-1), /^Mum's chat, your reply/);
   assert.equal(s.ev('place').at(-1).app, 'messages');
-  assert.equal(placeLine({ where: "Mum's chat", item: 'your reply', n: 2, of: 2, next: 'send it' }), "Mum's chat, your reply, sentence 2 of 2. Next: send it?");
+  assert.equal(placeLine({ where: "Mum's chat", item: 'your reply', n: 2, of: 2, next: 'send it' }), "Mum's chat, your reply, sentence 2 of 2.");
 });
 
 test('three identical runs propose "just do it"; never means never', async () => {

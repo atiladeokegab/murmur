@@ -6,6 +6,6 @@ export function placeLine(p) {
   if (!p) return "You're on the board.";
   if (typeof p === 'string') return p;
   const bits = [p.where, p.item, p.n && p.of ? `sentence ${p.n} of ${p.of}` : null].filter(Boolean);
-  const next = p.next ? ` Next: ${p.next.replace(/[?.]$/, '')}?` : '';
+  const next = ''; // the lead, 7 Nov: never tell people where buttons are; Murmur just does it
   return `${bits.join(', ') || "You're on the board"}.${next}`;
 }
