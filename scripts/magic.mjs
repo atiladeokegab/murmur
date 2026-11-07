@@ -1,11 +1,12 @@
 // Dev only: how smooth Vertical 1 feels, in numbers. Runs "Text Sam I'm ten minutes late" N times on a phone
 // viewport, answers "Sam" and "yes" like a quick person, and scores the median run against the demo targets.
-// PLAYWRIGHT=<pkg> node scripts/magic.mjs [url] [--runs 3] [--out dir] [--demo-plan: skip /api/plan, plan in the browser]   (exits 1 if any row fails)
+// PLAYWRIGHT=<pkg> node scripts/magic.mjs [url] [--runs 3] [--out dir] [--demo-plan: skip /api/plan, plan in the browser] [--first-open: let the guided welcome play out, then the task]   (exits 1 if any row fails)
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv.splice(i, 2)[1] : d; };
 const RUNS = Number(opt('--runs', 3));
 const OUT = opt('--out', 'magic-out');
 const DEMO_PLAN = argv.includes('--demo-plan') && argv.splice(argv.indexOf('--demo-plan'), 1);
+const FIRST_OPEN = argv.includes('--first-open') && argv.splice(argv.indexOf('--first-open'), 1);
 const URL_ = argv[0] || 'https://murmur-901257379404.europe-west1.run.app';
 const SAY = "Text Sam I'm ten minutes late";
 const REACT_MS = 300; // a quick person answers this long after the question stops sounding
@@ -161,11 +162,30 @@ async function once({ browser, devices }, n) {
   if (DEMO_PLAN) await page.route('**/api/plan', (q) => q.abort()); // the browser's own demo planner plans instead
   const ready = () => page.waitForSelector('html[data-ready="true"]', { timeout: 30000 });
   await page.goto(URL_, { timeout: 30000 }); await ready();
-  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('murmur:welcomed', 'true'); });
+  // A returning person by default: the guided welcome already said (os.onboard 'said' and 'done'); --first-open leaves it owed.
+  await page.evaluate((first) => { localStorage.clear(); if (!first) for (const k of ['said', 'done']) localStorage.setItem(`murmur:os.onboard:${k}`, 'true'); }, !!FIRST_OPEN);
   await page.reload({ timeout: 30000 }); await ready();
   // No tap first: any tap starts listening, and headless recognition never ends. The autoplay flag unlocks audio.
   // shortcut: the transcript is injected, so the shell's 1.5 s end-of-speech wait before hear() is not measured.
   await page.waitForTimeout(1200);
+  let welcome = null;
+  if (FIRST_OPEN) { // score the welcome like a task, from page start to 1.5 s of quiet, then give the task
+    // Headless Chromium reports userActivation.hasBeenActive, so the welcome speaks at boot with no tap (a tap would start listening).
+    const tap = 0;
+    const wEnd = await page.evaluate(async (tap) => {
+      const M = window.__magic, cap = tap + 40000;
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 100));
+        const now = performance.now(), mine = M.sounds.filter((s) => s.start >= tap);
+        const last = Math.max(tap, ...mine.map((s) => s.end ?? s.audibleEnd ?? now));
+        if ((mine.length && now - last > 1500) || (!mine.length && now - tap > 8000) || now > cap) return last;
+      }
+    }, tap);
+    const W = await page.evaluate(() => window.__magic);
+    const w = score({ t0: tap, answers: [], sentAt: wEnd - tap, M: { ...W, shifts: W.shifts.filter((x) => x.t <= wEnd), cursor: [] } });
+    welcome = { ms: Math.round(wEnd - tap), firstSound: w.firstSound, maxGap: w.maxGap, gaps: w.gaps, cls: w.cls, shifts: w.shifts, dropped: w.dropped,
+      lines: W.sounds.filter((x) => x.start >= tap && x.text).map((x) => x.text.slice(0, 40)) };
+  }
   const r = await page.evaluate(drive, { SAY, REACT_MS });
   const M = await page.evaluate(() => window.__magic);
   const ok = M.events.find((e) => e.name === 'task:done' && e.ok);
@@ -177,7 +197,7 @@ async function once({ browser, devices }, n) {
   await video.saveAs(path).catch(() => {}); await video.delete().catch(() => {});
   const s = score({ ...r, M, sentAt: ok ? ok.t - r.t0 : null });
   const t0Wall = origin + r.t0;
-  return { ...s, doneLine, errors, video: path, t0InVideo: (t0Wall - born) / 1000,
+  return { ...s, welcome, doneLine, errors, video: path, t0InVideo: (t0Wall - born) / 1000,
     net: net.filter((x) => x.at >= t0Wall - 50).map((x) => ({ ...x, at: Math.round(x.at - t0Wall) })) };
 }
 
@@ -220,6 +240,8 @@ for (const [i, r] of runs.entries()) {
   if (!r) continue;
   console.log(`run ${i + 1}: gaps ${r.gaps.map((g) => `${fmt(g.from, 's')}→${fmt(g.to, 's')}`).join(', ') || 'none'}; answers ${r.answers.map((a) => `${a.word}@${fmt(a.t, 's')}`).join(', ')}; api ${r.net.map((x) => `${x.path.slice(5)} ${x.status} ${fmt(x.ms)}@${fmt(x.at, 's')}`).join(', ')}; slow frames ${r.slow.map((f) => `${f.ms}ms@${fmt(f.t, 's')}`).join(' ') || 'none'}; shifts ${r.shifts.map((x) => `${x.v.toFixed(3)}@${fmt(x.t, 's')} ${x.who}`).join(', ') || 'none'}${r.errors.length ? `; errors: ${r.errors.join(' | ')}` : ''}`);
 }
+for (const [i, r] of runs.entries()) if (r?.welcome) { const w = r.welcome;
+  console.log(`run ${i + 1} welcome: ${fmt(w.ms, 's')} long, first sound ${fmt(w.firstSound)} after page start, longest silence ${fmt(w.maxGap)}, CLS ${fmt(w.cls, 'n')}, dropped ${w.dropped}; lines ${w.lines.join(' | ') || 'none tagged'}`); }
 console.log(`\nVideos and runs.json in ${OUT}`);
 process.exit(fail ? 1 : 0);
 }
