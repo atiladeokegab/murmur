@@ -6,6 +6,7 @@ import { browserKV } from '../public/ports/browser-kv.js';
 import bank from '../public/apps/bank/index.js';
 import * as M from '../public/apps/bank/model.js';
 import appIds from '../public/apps/apps.js';
+import { createRunner, createGates } from '../public/agent/runner.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
 
 const example = JSON.parse(readFileSync(new URL('../public/apps/bank/state.example.json', import.meta.url)));
@@ -247,4 +248,46 @@ test('every control is a real, named button, input or label; no literal colours'
   }
   assert.ok(root.querySelector('#bank-amount').labels.length === 1);
   assert.doesNotMatch(source, /#[0-9a-f]{3,6}\b|rgb\(|style\./i);
+});
+
+// The real runner and gates (public/agent/runner.js): resolve before the gate, one readback, the fingerprint.
+async function agentRig({ samira = false, pick = null, answer }) {
+  const doc = fakeDocument(), bus = createBus(), registry = createRegistry();
+  registry.register(bank);
+  const kv = appKv('bank', browserKV({ storage: fakeStorage(), prefix: 'murmur' }));
+  if (samira) await kv.set('state', withSamira());
+  const root = await mountApp(bank, doc.body, { kv, bus, confirm: async () => true, say: async () => {} });
+  if (!samira) await bank.reset();
+  const said = [];
+  let t = 0; const clock = { now: () => (t += 1000) };
+  const gates = createGates({ clock, fingerprint: async () => true, say: async (x) => { said.push(x); },
+    onChange: (g) => { if (g) setImmediate(() => (answer ? gates.yes({ button: true }) : gates.no())); } });
+  const choose = async ({ choices }) => { const i = choices.indexOf(pick); return i < 0 ? null : i; };
+  const ctxFor = (app, h) => createCtx({ app, root, kv, cursor: { async moveTo() {}, hide() {} }, ...h });
+  const runner = createRunner({ registry, bus, ctxFor, gates, choose, clock, sleep: async () => {} });
+  const r = await runner.run({ utterance: 'Pay Sam twenty pounds', steps: [{ tool: 'bank__payPerson', app: 'bank', action: 'payPerson', params: { who: 'Sam', amount: 20 } }] });
+  return { r, readbacks: said.filter((x) => /^Pay /.test(x)), questions: questions(bus), s: bank.state() };
+}
+
+test('agent: "Pay Sam twenty pounds" reads back once and pays; a No moves no money', async () => {
+  const yes = await agentRig({ answer: true });
+  assert.equal(yes.r.status, 'done', JSON.stringify(yes.r));
+  assert.deepEqual(yes.readbacks, ['Pay Sam £20. From Murmur Bank. Pay?']);
+  assert.deepEqual(yes.questions, []);
+  assert.equal(yes.s.balance, 124050 - 2000);
+  const no = await agentRig({ answer: false });
+  assert.equal(no.r.status, 'cancelled'); assert.equal(no.r.line, 'Not paid.');
+  assert.equal(no.s.balance, 124050);
+});
+
+test('agent: with a Samira, one "Sam or Samira?" then one exact readback; no pick pays nothing', async () => {
+  const picked = await agentRig({ samira: true, pick: 'Samira', answer: true });
+  assert.equal(picked.r.status, 'done', JSON.stringify(picked.r));
+  assert.deepEqual(picked.questions, ['Sam or Samira?']);
+  assert.deepEqual(picked.readbacks, ['Pay Samira £20. From Murmur Bank. Pay?']);
+  assert.deepEqual(picked.s.lastPaid.to, ['samira']);
+  const none = await agentRig({ samira: true, answer: true });
+  assert.equal(none.r.line, 'Not paid.');
+  assert.deepEqual(none.readbacks, []);
+  assert.equal(none.s.balance, 124050);
 });
