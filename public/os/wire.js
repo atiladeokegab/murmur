@@ -5,7 +5,7 @@ import look, { settings as lookSettings, onSettings } from '../apps/look/index.j
 import { createDemo, bindDemo } from './demo/index.js';
 import { firstOpen } from './onboard/index.js';
 
-const SHARED = ['size', 'theme', 'rate', 'speaker', 'agency'];
+const SHARED = ['size', 'theme', 'rate', 'speaker', 'agency', 'answers'];
 
 /**
  * @param {object} o

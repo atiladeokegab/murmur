@@ -151,13 +151,12 @@ test('the Writer: dictate, change, new chapter, open chapter', async () => {
   assert.equal(r.reason, "There's no chapter 9. The book has 3.");
 });
 
-test('Mine: explain, run, and delete only after the yes', async () => {
+test('Mine: explain, and delete only after the yes; running is the OS run_workflow', async () => {
   const p = await phone({ answers: [false, true] });
   let r = await p.run('mine__explain', { name: 'my morning' });
   assert.ok(r.ok, r.reason);
   assert.equal(p.said.at(-1), "My morning: say what's on today, then open Mum's chat, then read the new message.");
-  r = await p.run('mine__run', { name: 'My morning' });
-  assert.ok(r.ok, r.reason);
+  assert.equal(p.registry.get('mine').actions.run, undefined, 'no mine__run: a spoken run is the OS run_workflow, which really runs the steps');
   r = await p.run('mine__delete', { name: 'My morning' });
   assert.deepEqual([r.ok, r.reason], [false, 'Kept it.']);
   assert.equal(mine.state().workflows.length, 1);
