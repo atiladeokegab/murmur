@@ -4,9 +4,19 @@
 import * as M from './model.js';
 
 let s = M.fresh();
-let root = null, os = null, body = null, paying = null;
+let root = null, os = null, body = null, busy = null; // busy: the last money or card change, settled after its save
 const q = (sel) => root && root.querySelector(sel);
-const save = () => os?.kv?.set('state', s);
+const persist = () => Promise.resolve(os?.kv?.set('state', s));
+const save = () => { persist().catch(() => {}); }; // screens and drafts only: losing one loses no money
+/** A money or card change: kept only once it is saved; a failed save puts everything back. '' = done, else why not. */
+async function commit(change, failed) {
+  const before = structuredClone(s);
+  const why = change();
+  if (why) return why;
+  try { await persist(); } catch { s = before; render(); return failed; }
+  render();
+  return '';
+}
 const pence = (amount) => Math.round(Number(amount) * 100);
 const typed = (p) => (p % 100 ? (p / 100).toFixed(2) : String(p / 100));
 
@@ -53,7 +63,7 @@ async function fillAndPay(ctx, mode, opener, { ids, asked }, total, note, agreed
     throw new Error("That isn't what you agreed to, so nothing was paid.");
   }
   await ctx.tap(q('#bank-pay'));
-  const why = await paying; // the click's handler awaits os.confirm; settle it before the runner verifies
+  const why = await busy; // the click's handler awaits os.confirm and the save; settle it before the runner verifies
   if (why) throw new Error(why);
 }
 
@@ -91,8 +101,8 @@ const app = {
     root.append(el('h2', { id: 'bank-h' }, 'Bank'), body = el('div', { className: 'app-body' }));
     render();
   },
-  async seed() { if (!Number.isInteger(s?.balance)) s = M.fresh(); await save(); render(); },
-  async reset() { s = M.fresh(); await save(); render(); },
+  async seed() { if (!Number.isInteger(s?.balance)) s = M.fresh(); await persist(); render(); },
+  async reset() { s = M.fresh(); await persist(); render(); },
   state: () => structuredClone(s),
   read: () => M.read(s),
   place: () => M.place(s),
@@ -172,12 +182,18 @@ const app = {
       async run(p, ctx) {
         await ctx.say(app.actions.freezeCard.readback());
         await toScreen(ctx, 'home');
-        if (!s.cardFrozen) await ctx.tap(q('#bank-freeze'));
+        if (s.cardFrozen) return;
+        await ctx.tap(q('#bank-freeze'));
+        const why = await busy;
+        if (why) throw new Error(why);
       },
       verify: (st) => st.cardFrozen === true || 'The card is not frozen.',
       async undo(ctx) {
         await toScreen(ctx, 'home');
-        if (s.cardFrozen) await ctx.tap(q('#bank-freeze'));
+        if (!s.cardFrozen) return;
+        await ctx.tap(q('#bank-freeze'));
+        const why = await busy;
+        if (why) throw new Error(why);
       },
     },
   },
@@ -190,10 +206,9 @@ async function payTap() {
   const plan = M.planOf(s);
   if (!plan.length) return 'Choose who to pay and how much.';
   const yes = os?.confirm ? os.confirm({ gate: 'pay', readback: M.readback(plan) }) : false; // called before any await
-  if (!(await yes)) return 'Not paid.';
-  const why = M.pay(s);
+  if ((await yes) !== true) return 'Not paid.'; // only a literal yes pays
+  const why = await commit(() => M.pay(s), "I couldn't save it, so nothing was paid.");
   if (!why) setTimeout(render, M.CANCEL_MS + 50)?.unref?.(); // the Cancel button goes after 8 s
-  save(); render();
   return why;
 }
 
@@ -229,7 +244,7 @@ function homeView() {
     button('Pay someone', { id: 'bank-pay-open', onclick: () => { M.openForm(s, 'pay'); save(); render(); } }),
     button('Split a bill', { id: 'bank-split-open', onclick: () => { M.openForm(s, 'split'); save(); render(); } }),
     button(`${s.cardFrozen ? 'Unfreeze' : 'Freeze'} ${M.CARD}`, { id: 'bank-freeze', 'aria-pressed': s.cardFrozen,
-      onclick: () => { s.cardFrozen = !s.cardFrozen; save(); render(); } }),
+      onclick: () => { busy = commit(() => { s.cardFrozen = !s.cardFrozen; return ''; }, "I couldn't save it, so your card didn't change."); } }),
   );
 }
 
@@ -270,7 +285,7 @@ function formView() {
 function payButton() {
   const plan = M.planOf(s);
   const label = plan.length ? M.readback(plan).replace(/\. From Murmur Bank\.$/, '') : 'Pay';
-  return button(label, { id: 'bank-pay', className: 'app-btn primary', disabled: !plan.length, onclick: () => { paying = payTap(); } });
+  return button(label, { id: 'bank-pay', className: 'app-btn primary', disabled: !plan.length, onclick: () => { busy = payTap(); } });
 }
 function renderPay() { q('#bank-pay-slot')?.replaceChildren(payButton()); }
 
@@ -279,7 +294,7 @@ function paidView() {
   return el('div', { className: 'app-body' },
     el('h3', { className: 'app-h3' }, s.lastPaid?.cancelled ? 'Cancelled' : 'Paid'),
     el('p', { className: 'app-done', role: 'status' }, M.paidWords(s, M.shown)),
-    live && button('Cancel this payment', { id: 'bank-cancel', onclick: () => { if (M.cancel(s)) { save(); render(); } } }),
+    live && button('Cancel this payment', { id: 'bank-cancel', onclick: () => { busy = commit(() => (M.cancel(s) ? '' : 'Too late to cancel.'), "I couldn't save it, so the payment stands."); } }),
     live && el('p', { className: 'app-why' }, 'You can cancel for 8 seconds.'),
     back());
 }

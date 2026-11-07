@@ -7,6 +7,7 @@ import bank from '../public/apps/bank/index.js';
 import * as M from '../public/apps/bank/model.js';
 import appIds from '../public/apps/apps.js';
 import { createRunner, createGates } from '../public/agent/runner.js';
+import { attachMemory, observationOf } from '../public/agent/memory.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
 
 const example = JSON.parse(readFileSync(new URL('../public/apps/bank/state.example.json', import.meta.url)));
@@ -19,7 +20,9 @@ async function phone({ answers = [], hand = [], picks = [], saved = null } = {})
   const doc = fakeDocument(), bus = createBus(), registry = createRegistry();
   registry.register(bank);
   const port = browserKV({ storage: fakeStorage(), prefix: 'murmur' });
-  const kv = appKv('bank', port);
+  const real = appKv('bank', port);
+  let broken = false; // breakSave(): every later save rejects, as a full quota does
+  const kv = { ...real, set: async (k, v) => { if (broken) throw new Error('QuotaExceededError'); return real.set(k, v); } };
   const asked = [], taps = [], spoken = [];
   let agentPress = false;
   const confirm = async ({ gate, readback }) => {
@@ -47,7 +50,7 @@ async function phone({ answers = [], hand = [], picks = [], saved = null } = {})
   const said = () => bus.log.filter((e) => e.name === 'say').map((e) => e.payload?.text ?? e.text);
   const button = (text) => [...root.all()].find((n) => n.tagName === 'BUTTON' && controlName(n).startsWith(text));
   const press = async (text) => { const b = button(text); assert.ok(b, `no button "${text}"`); b.click(); await tick(); await tick(); };
-  return { root, bus, run, runResolved, said, asked, taps, spoken, ctxFor, port, button, press, s: () => bank.state() };
+  return { breakSave: () => { broken = true; }, stored: () => real.get('state'), root, bus, run, runResolved, said, asked, taps, spoken, ctxFor, port, button, press, s: () => bank.state() };
 }
 
 test('bank: on the board, seeded state is exactly state.example.json, field names pinned', async () => {
@@ -199,6 +202,74 @@ test('Pay is pressed only when the form moves exactly the readback: "Mum and Mum
   assert.equal(s().balance, 124050);
   assert.equal(s().lastPaid, null);
   assert.ok(!taps.some((x) => /^Pay Mum/.test(x)), 'Pay never pressed');
+});
+
+test('Prometheus (a): Mum picked by hand, then split £60 between Sam and Landlord pays exactly £30 and £30', async () => {
+  const { press, run, asked, s } = await phone({ answers: [true] });
+  await press('Split a bill');
+  await press('Mum');
+  const r = await run('splitBill', { who: ['Sam', 'Landlord'], total: 60 });
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual(asked.map((a) => a.readback), ['Pay Sam £30 and Landlord £30. From Murmur Bank.']);
+  assert.deepEqual(s().lastPaid.to, ['sam', 'landlord']);
+  assert.deepEqual(s().lastPaid.pence, [3000, 3000]);
+  assert.equal(s().balance, 124050 - 6000);
+});
+
+test('Prometheus (b): a duplicate Sam fails before any money moves', async () => {
+  const { run, s, taps } = await phone({ answers: [true] });
+  const r = await run('splitBill', { who: ['Sam', 'Sam'], total: 60 });
+  assert.equal(r.ok, false);
+  assert.equal(s().balance, 124050);
+  assert.equal(s().transactions.length, 4);
+  assert.ok(!taps.some((x) => /^Pay Sam/.test(x)), 'Pay never pressed');
+});
+
+test('Prometheus (c): a failed save pays nothing, in memory or on disk, and says so', async () => {
+  const p = await phone({ answers: [true] });
+  p.breakSave();
+  const r = await p.run('payPerson', { who: 'Mum', amount: 20 });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "I couldn't save it, so nothing was paid.");
+  assert.equal(p.s().balance, 124050);
+  assert.equal(p.s().lastPaid, null);
+  assert.equal(p.s().transactions.length, 4);
+  assert.equal((await p.stored()).balance, 124050);
+
+  const f = await phone();
+  f.breakSave();
+  const rf = await f.run('freezeCard');
+  assert.equal(rf.ok, false);
+  assert.equal(rf.reason, "I couldn't save it, so your card didn't change.");
+  assert.equal(f.s().cardFrozen, false);
+});
+
+test('Prometheus (d): a task that touches Bank is finance and is never logged, mixed tasks too', async () => {
+  assert.equal(observationOf({ apps: ['bank'], actions: ['bank__payPerson'] }).category, 'finance');
+  const task = async (apps) => {
+    const bus = createBus(), logged = [];
+    attachMemory({ librarian: { logObservation: async (o) => { logged.push(o); return { logged: true }; } }, bus });
+    bus.emit('task:start', { task: 't1', utterance: '', plan: [] });
+    apps.forEach((app, i) => bus.emit('step:verified', { task: 't1', action: `${app}__x`, app, n: i + 1, of: apps.length, ms: 1 }));
+    bus.emit('task:done', { task: 't1', ms: 1, ok: true });
+    await tick(); await tick();
+    return logged.length;
+  };
+  assert.equal(await task(['messages']), 1, 'the probe can see a log');
+  assert.equal(await task(['bank']), 0);
+  assert.equal(await task(['messages', 'bank']), 0);
+  assert.equal(await task(['bank', 'messages']), 0);
+});
+
+test('Prometheus (e): a hand tap pays only on a literal true from os.confirm', async () => {
+  for (const answer of [{ result: false }, 'yes', 1]) {
+    const { press, root, s } = await phone({ hand: [answer] });
+    await press('Pay someone'); await press('Mum');
+    const amount = root.querySelector('#bank-amount');
+    amount.value = '20'; amount.dispatchEvent(new Event('input', { bubbles: true }));
+    await press('Pay Mum £20');
+    assert.equal(s().balance, 124050, JSON.stringify(answer));
+  }
 });
 
 test('split £61.01 between Mum and Landlord: one gate, odd penny to the first', async () => {
