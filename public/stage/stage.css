@@ -7,6 +7,8 @@ body.stage { height: 100svh; margin: 0; padding: .5rem 1.5rem .5rem 1rem; box-si
 .stage #now { margin: 0; font-size: var(--fs-now-title); line-height: 1.15; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stage #now b { color: var(--c-accent); font-weight: 700; }
 .stage main, .stage .phone-col { display: contents; }
+.stage .tell input { width: min(28rem, 100%); font: inherit; font-size: 1.1rem; padding: 0.6rem 0.9rem; border-radius: 999px; border: 1px solid var(--c-quiet); background: var(--c-page); color: var(--c-ink); }
+.stage .tell input:focus-visible { outline: 3px solid var(--c-focus); outline-offset: 2px; }
 /* An original frame: a plain rounded body with an even bezel, no notch or brand cues. --s is set by stage.js. */
 .stage .phone-label { grid-column: 2; grid-row: 2; margin: 0; font-size: var(--fs-talk); color: var(--c-quiet); white-space: nowrap; }
 .stage .phone-label.live { color: var(--c-ink); font-weight: 700; }

@@ -493,6 +493,17 @@ function endTalk() { clearTimeout(silence); try { rec?.stop(); } catch { /* alre
 // The orb is the talk button: it reads the GPT streams, or the old path's voice out (cloud speech; the browser voice shows the state only).
 const orb = createOrb(talk, { ctx: audioOut, state: () => (gptOn ? 'live' : speaking ? 'speaking' : listening ? 'listening' : 'idle') });
 try { orb.attach('out', voiceOut()); } catch { /* no Web Audio */ }
+// /stage's "Tell Murmur" box: a remote:hear on this phone's room runs exactly as if spoken (gates too: "yes" confirms).
+import('../inside/forward.js').then(({ roomFrom }) => {
+  const room = roomFrom(location);
+  if (!room || typeof EventSource === 'undefined') return;
+  const q = new URLSearchParams({ room });
+  try { const t = localStorage.getItem('murmur.token'); if (t) q.set('t', t); } catch { /* no storage */ }
+  new EventSource(`/api/bus/stream?${q}`).onmessage = (m) => {
+    let e; try { e = JSON.parse(m.data); } catch { return; }
+    if (e.type === 'remote:hear' && e.text) hear(String(e.text).slice(0, 300), 'typed');
+  };
+}).catch(() => {});
 talk.addEventListener('click', summon);
 $('#talk-first').addEventListener('click', summon);
 talkAnywhere({ start: summon, listening: () => listening });

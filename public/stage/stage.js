@@ -79,6 +79,14 @@ const q = new URLSearchParams();
 if (token) q.set('t', token);
 q.set('room', room);
 const src = new EventSource(`/api/bus/stream?${q}`);
+// Type on the stage, the phone does it: one remote:hear on the room bus; the phone runs it as if spoken.
+$('tell').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const box = $('tell-text'), text = box.value.trim();
+  if (!text) return;
+  box.value = '';
+  fetch(`/api/bus${pass}`, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { 'x-murmur-token': token } : {}) }, body: JSON.stringify({ type: 'remote:hear', text }) }).catch(() => {});
+});
 let heard = '';
 src.onmessage = (m) => {
   let e; try { e = JSON.parse(m.data); } catch { return; }
