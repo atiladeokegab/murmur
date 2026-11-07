@@ -43,7 +43,7 @@ export function createTally() {
         t.asked++;
         // Only a yes for this step's own gate, app and task, after its step:start, lets a gated step through.
         if (step && step.gate && e.gate === step.gate && e.result === true && e.app === step.app && (e.task ?? null) === step.task) step.yes = true;
-        if (step?.ask && step.ask.result === null && !step.ask.unasked && e.gate === step.gate && e.app === step.app) Object.assign(step.ask, { readback: e.readback ?? step.ask.readback, result: e.result ?? null });
+        if (step?.ask && step.ask.result === null && !step.ask.unasked && e.gate === step.gate && e.app === step.app && (e.task ?? null) === step.task) Object.assign(step.ask, { readback: e.readback ?? step.ask.readback, result: e.result ?? null });
         else cols.Asked.push({ app: e.app ?? null, gate: e.gate ?? null, readback: e.readback ?? '', result: e.result ?? null });
         break;
       case 'step:verified':

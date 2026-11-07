@@ -160,3 +160,15 @@ test('Asked shows a gated step\'s question as it starts, fills it on the answer,
   add('confirm', { app: 'shop', gate: 'pay', readback: 'by hand', result: false });
   assert.equal(m.columns().Asked.length, 3, 'a later confirm never fills a closed row');
 });
+
+test('an old task\'s late confirm never fills a new task\'s pending Asked row', () => {
+  const m = createTally();
+  const add = (type, p) => m.add({ type, ...p });
+  add('task:start', { task: 'new', utterance: 'pay', plan: [] });
+  add('step:start', { task: 'new', action: 'pay', app: 'shop', label: 'Paying', params: {}, gate: 'pay' });
+  add('confirm', { task: 'old', app: 'shop', gate: 'pay', readback: 'Pay £9?', result: true });
+  assert.deepEqual(m.columns().Asked[0], { app: 'shop', gate: 'pay', readback: 'Paying', result: null }, 'the new row stays pending');
+  assert.equal(m.columns().Asked.length, 2, 'the old confirm gets its own row');
+  add('confirm', { task: 'new', app: 'shop', gate: 'pay', readback: 'Pay £3?', result: true });
+  assert.deepEqual(m.columns().Asked[0], { app: 'shop', gate: 'pay', readback: 'Pay £3?', result: true });
+});
