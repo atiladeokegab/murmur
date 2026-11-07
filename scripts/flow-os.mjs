@@ -22,7 +22,7 @@ const focused = () => page.evaluate(() => document.activeElement?.id || document
 
 const tiles = await page.locator('#board .tile').count();
 check('board has a Now tile on top', await page.locator('#board li.now:first-child .tile').count() === 1, `${tiles} tiles`);
-check('first open says the one onboarding line', /Tap anywhere and tell me/.test(await page.locator('#say').textContent()));
+check('first open says the one onboarding line', /^Tap anywhere and speak\.$/.test(await page.locator('#say').textContent()));
 
 await page.locator('#board .tile').first().click();
 check('a tile opens its app and focuses its heading', await page.evaluate(() => document.activeElement.tagName === 'H2' && !document.querySelector('#app-hello').hidden));
@@ -64,12 +64,15 @@ check('focus moves to Stop on task start', true, await page.locator('#stop').get
 check('the Stop bar is at least 96 px', (await page.locator('#stop').boundingBox()).height >= 96);
 await page.waitForSelector('dialog[open]');
 await page.screenshot({ path: `${out}/os-gate.png` });
+const asks = await page.evaluate(() => [document.querySelector('#sheet-title').textContent, document.querySelector('#step').textContent, document.querySelector('#say').textContent]);
+check('with the sheet up, the heading and caption ask its question', asks[1] === asks[0] && asks[2].endsWith(asks[0]), asks.join(' | '));
 const r = await run;
 const seen = await page.evaluate(() => [window.sheetSeen, window.earlyYes]);
 check('the gate sheet asked with the readback', seen[0]?.kind === 'confirm' && seen[0].gate === 'send' && /Sam/.test(seen[0].readback), seen[0]?.readback);
 check('a yes in the first 0.5 s is ignored', seen[1] === false);
 check('both steps verified after the tap on Send', r.a.ok && r.b.ok);
-check('the Done line shows and takes focus', /Sent to Sam/.test(await page.locator('#done-line').textContent()) && (await focused()) === 'done-line');
+check('the Done line shows and focus goes to Talk', /Sent to Sam/.test(await page.locator('#done-line').textContent()) && (await focused()) === 'talk');
+check('Talk comes first in Tab order', await page.evaluate(() => [...document.querySelectorAll('button, a[href], input')].find((b) => b.checkVisibility())?.id === 'talk'), await page.evaluate(() => [...document.querySelectorAll('button, a[href], input')].find((b) => b.checkVisibility())?.outerHTML.slice(0, 80)));
 check('ticks list both steps', (await page.locator('#ticks li.ok').count()) === 2);
 await page.screenshot({ path: `${out}/os-done.png` });
 
