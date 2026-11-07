@@ -49,6 +49,7 @@ const task = (yes) => page.evaluate(async (yes) => {
   const p = runAction({ registry, name: 'hello__send', params: {}, bus, ctxFor, n: 2, of: 2 });
   await new Promise((r) => setTimeout(r, 300));
   window.sheetSeen = host.sheet.pending();
+  window.asks = [document.querySelector('#sheet-title').textContent, document.querySelector('#step').textContent, document.querySelector('#say').textContent, document.querySelector('#sheet').open];
   window.earlyYes = host.sheet.yes(); // inside the 0.5 s grace: ignored
   await new Promise((r) => setTimeout(r, 300));
   if (yes) document.querySelector('#sheet-yes').click(); else document.querySelector('#sheet-no').click();
@@ -64,14 +65,14 @@ check('focus moves to Stop on task start', true, await page.locator('#stop').get
 check('the Stop bar is at least 96 px', (await page.locator('#stop').boundingBox()).height >= 96);
 await page.waitForSelector('dialog[open]');
 await page.screenshot({ path: `${out}/os-gate.png` });
-const asks = await page.evaluate(() => [document.querySelector('#sheet-title').textContent, document.querySelector('#step').textContent, document.querySelector('#say').textContent]);
-check('with the sheet up, the heading and caption ask its question', asks[1] === asks[0] && asks[2].endsWith(asks[0]), asks.join(' | '));
 const r = await run;
 const seen = await page.evaluate(() => [window.sheetSeen, window.earlyYes]);
 check('the gate sheet asked with the readback', seen[0]?.kind === 'confirm' && seen[0].gate === 'send' && /Sam/.test(seen[0].readback), seen[0]?.readback);
 check('a yes in the first 0.5 s is ignored', seen[1] === false);
+const asks = await page.evaluate(() => window.asks);
+check('with the sheet up, the heading and caption ask its question', asks[3] && asks[1] === asks[0] && asks[2].endsWith(asks[0]), asks.join(' | '));
 check('both steps verified after the tap on Send', r.a.ok && r.b.ok);
-check('the Done line shows and focus goes to Talk', /Sent to Sam/.test(await page.locator('#done-line').textContent()) && (await focused()) === 'talk');
+check('the Done line shows and takes focus', /Sent to Sam/.test(await page.locator('#done-line').textContent()) && (await focused()) === 'done-line');
 check('Talk comes first in Tab order', await page.evaluate(() => [...document.querySelectorAll('button, a[href], input')].find((b) => b.checkVisibility())?.id === 'talk'), await page.evaluate(() => [...document.querySelectorAll('button, a[href], input')].find((b) => b.checkVisibility())?.outerHTML.slice(0, 80)));
 check('ticks list both steps', (await page.locator('#ticks li.ok').count()) === 2);
 await page.screenshot({ path: `${out}/os-done.png` });

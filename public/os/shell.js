@@ -286,7 +286,7 @@ bus.on('*', (name, e) => {
       const ms = Math.max(0, (e.undo.until ?? Date.now() + 8000) - Date.now());
       undoTimer = setTimeout(() => { panel = { ...panel, done: panel.done && { ...panel.done, undo: null } }; renderPanel(); }, ms);
       $('#undo').focus();
-    } else $('#talk').focus(); // focus on Talk for what's next; the status region says the line
+    } else $('#done-line').focus(); // talk anywhere needs no focus, so the Done line keeps it (Atlas)
     return;
   }
   if (name === 'undo') ding('undo');
@@ -378,7 +378,7 @@ function sheetConfirm({ gate, readback, grace = true }) {
   });
 }
 // Every pay, hand or agent: the fingerprint or no pay (gate.js). The spoken or tapped yes never stands alone.
-const fingerprint = () => checkFingerprint({ passkey: { has: passkey.hasPasskey, available: passkey.available, confirm: passkey.confirm }, say: (t) => speak(t, personal.signal) });
+const fingerprint = (signal) => checkFingerprint({ passkey: { has: passkey.hasPasskey, available: passkey.available, confirm: passkey.confirm }, say: (t) => speak(t, personal.signal), signal });
 function sheetChoose({ question, choices }) {
   return new Promise((resolve) => {
     showSheet('choose', { question, choices }, (v) => { pending = null; closeSheet(); resolve(Number.isInteger(v) ? v : null); });

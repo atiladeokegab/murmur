@@ -62,6 +62,25 @@ test('a hung availability check is inside the same deadline: nothing paid, no cr
   assert.deepEqual(f.said, ['No fingerprint, so nothing was paid.']);
 });
 
+test('Stop or the deadline while the availability check is pending: a late yes starts no fingerprint prompt (Prometheus)', async () => {
+  let ready;
+  const f = fp({ available: () => new Promise((res) => { ready = res; }) });
+  const a = payAttempt((signal) => f.run({ signal }));
+  await new Promise((r) => setTimeout(r, 5));
+  a.cancel(); // Stop
+  assert.equal(await a.result, false);
+  ready(true); await new Promise((r) => setTimeout(r, 5));
+  assert.equal(f.calls.confirm, 0, 'no WebAuthn prompt after Stop');
+  assert.deepEqual(f.said, [], 'Stop speaks for itself');
+  let ready2, fire;
+  const g = fp({ available: () => new Promise((res) => { ready2 = res; }) });
+  const p = g.run({ wait: () => new Promise((r) => { fire = r; }) });
+  await new Promise((r) => setTimeout(r, 5));
+  fire(); assert.equal(await p, false);
+  ready2(true); await new Promise((r) => setTimeout(r, 5));
+  assert.equal(g.calls.confirm, 0, 'no WebAuthn prompt after the deadline');
+});
+
 test('ctx.confirm records the fingerprint the host checked, and {result:false} is a no', async () => {
   for (const [a, result, fp] of [[true, true, undefined], [false, false, undefined], [{ result: true, fingerprint: true }, true, true], [{ result: false, fingerprint: true }, false, true]]) {
     const { bus, seen } = rec();
