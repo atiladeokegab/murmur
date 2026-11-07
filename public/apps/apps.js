@@ -2,6 +2,8 @@
 export default [
   'hello',
   'messages',
+  'whatsapp',
+  'instagram',
   'writer',
   'mine',
   'calendar',

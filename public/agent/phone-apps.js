@@ -2,8 +2,6 @@
 // Names are text only (no logos or colours); every person is invented; nothing is ever sent, paid, called or deleted.
 export const PHONE_APPS = [
   { name: 'Spotify', also: [], does: 'music', line: 'Opening Spotify. Playing your liked songs.', steps: ['Opening Your Library', 'Opening Liked Songs', 'Pressing Play'] },
-  { name: 'WhatsApp', also: ['whats app'], does: 'chat', line: 'Opening WhatsApp. Two new messages, from Priya and Tomas.', steps: ['Opening Chats', 'Finding the unread chats', 'Reading the newest'] },
-  { name: 'Instagram', also: ['insta'], does: 'photos', line: 'Opening Instagram. Three new photos from Priya, from her walk by the sea.', steps: ['Opening the feed', 'Scrolling to the newest', 'Reading the captions'] },
   { name: 'Netflix', also: [], does: 'shows', line: 'Opening Netflix. Playing the next episode of Harbour Lights.', steps: ['Opening Continue watching', 'Choosing Harbour Lights', 'Pressing Play'] },
   { name: 'YouTube', also: ['you tube'], does: 'videos', line: 'Opening YouTube. Playing the newest video from your subscriptions.', steps: ['Opening Subscriptions', 'Choosing the newest', 'Pressing Play'] },
   { name: 'Podcasts', also: ['podcast'], does: 'podcasts', line: 'Opening Podcasts. Playing the newest episode of Slow News.', steps: ['Opening Your shows', 'Choosing Slow News', 'Pressing Play'] },
