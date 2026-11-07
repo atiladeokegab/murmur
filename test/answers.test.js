@@ -7,6 +7,7 @@ import { createAgent } from '../public/agent/index.js';
 import { hear } from '../public/agent/words.js';
 import { demoPlan } from '../public/agent/demo-plan.js';
 import { describeRegistry } from '../public/agent/plan.js';
+import { planUtterance } from '../public/agent/planner.js';
 import { createBus, createRegistry, runAction } from '../public/sdk/index.js';
 import { moreLine } from '../public/apps/calendar/index.js';
 import { settings } from '../public/apps/look/index.js';
@@ -15,14 +16,14 @@ import { agoWords } from '../public/apps/messages/model.js';
 
 const tick = () => new Promise((r) => setImmediate(r));
 
-async function setup(answers = () => 'short') {
+async function setup(answers = () => 'short', extra = {}) {
   const clock = { t: Date.UTC(2026, 10, 7, 8, 40), now() { return this.t; } };
   const sleep = async (ms) => { clock.t += ms; await tick(); };
   const { librarian } = createToolkit({ kv: memoryKV(), clock });
   const p = await phone();
   const spoken = [];
   const agent = createAgent({ registry: p.registry, bus: p.bus, ctxFor: p.ctxFor, librarian, agency: () => 'just', answers, clock, sleep,
-    planOpts: { offline: true }, speak: async (t) => { spoken.push(t); } });
+    planOpts: { offline: true }, speak: async (t) => { spoken.push(t); }, ...extra });
   return { ...p, agent, spoken, clock };
 }
 
@@ -148,6 +149,22 @@ test('a move with Mum ends on a statement, never a dead question, and "tell Mum"
   assert.ok(s.agent.gates.current, 'the send gate opened');
   await s.agent.yes(); await said;
   assert.deepEqual(s.state('messages').lastSent, { to: 'mum', text: 'Lunch is now on Friday at 12:30.' });
+});
+
+test('a move and a send in one plan: "tell Mum" afterwards offers nothing already sent', async () => {
+  const both = async (text, apps, ctx, o) => {
+    if (text !== 'Move lunch to Friday and text Mum') return planUtterance(text, apps, ctx, o);
+    const a = await planUtterance('Move lunch to Friday', apps, ctx, o), b = await planUtterance('Text Mum Lunch is now on Friday', apps, ctx, o);
+    return { ...a, steps: [...a.steps, ...b.steps] };
+  };
+  const s = await setup(undefined, { plan: both });
+  const h = s.agent.hear('Move lunch to Friday and text Mum');
+  for (let i = 0; i < 50 && !s.agent.gates.current; i++) await tick();
+  await s.agent.yes(); await h;
+  assert.equal(s.state('messages').lastSent?.text, 'Lunch is now on Friday.', 'the plan sent it');
+  const t = s.agent.hear('tell Mum'); for (let i = 0; i < 50; i++) await tick();
+  const gate = s.agent.gates.current?.readback || ''; if (gate) await s.agent.no(); else await s.agent.stop(); await t;
+  assert.doesNotMatch(gate, /Lunch is now/, 'no second offer of the update already sent');
 });
 
 test('"tell Mum" describes a move once, and not after 2 minutes', async () => {

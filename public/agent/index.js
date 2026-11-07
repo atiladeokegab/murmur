@@ -157,8 +157,9 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     taskMode = mode;
     try {
       const r = await runner.run({ utterance, steps, plan });
+      // a send in the same plan already told them: clear, else a finished move arms "tell Mum" (Atlas, 6726f01)
       if (steps.some((x) => x.tool === 'messages__send')) movedAt = null;
-      if (r.status === 'done' && steps.some((x) => x.tool === 'calendar__move')) movedAt = clock.now();
+      else if (r.status === 'done' && steps.some((x) => x.tool === 'calendar__move')) movedAt = clock.now();
       lastMore = r.more || '';
       if (lastMore && answers() === 'detailed') await say(lastMore);
       return r;
