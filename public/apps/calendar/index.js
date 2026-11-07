@@ -414,7 +414,8 @@ const app = {
       params: {
         type: 'object',
         properties: { title: { type: 'string', description: 'What it is, like Coffee with Ana' }, day: dayParam,
-          time: { type: 'string', description: 'The time, like 10am or 14:30' } },
+          time: { type: 'string', description: 'The time, like 10am or 14:30' },
+          remind: { type: 'boolean', description: 'True when the person said "remind me to"' } },
         required: ['title', 'day', 'time'],
       },
       async run(p, ctx) {
@@ -422,7 +423,8 @@ const app = {
         for (const [id, v] of [['cal-what', p.title], ['cal-when-day', p.day], ['cal-when-time', p.time]]) { await ctx.tap($(id)); await ctx.type($(id), v); }
         await ctx.tap($('cal-save'));
         if (adding) throw new Error(status || "It didn't save.");
-        await ctx.say(status);
+        const e = events.find((x) => x.id === lastAdded), d = e.day === TODAY ? '' : e.day === DAYS[DAYS.indexOf(TODAY) + 1] ? ' tomorrow' : ` on ${e.day}`;
+        await ctx.say(p.remind ? `Reminder set: ${e.title.charAt(0).toLowerCase()}${e.title.slice(1)} at ${spoken(e.time)}${d}.` : status);
       },
       verify(s, p) {
         const e = s.events.find((x) => x.id === s.lastAdded);

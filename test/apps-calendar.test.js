@@ -198,3 +198,11 @@ test("calendar: a person's own Delete every event tap asks first; no confirm mea
   bare.root.querySelector('#cal-clear').dispatchEvent({ type: 'click', isTrusted: true }); await new Promise((r) => setTimeout(r));
   assert.equal(bare.s().events.length, 3);
 });
+
+test('calendar: a reminder says "Reminder set", today or tomorrow', async () => {
+  const p = await phone();
+  assert.equal((await p.run('calendar__add', { title: 'Water the plants', day: 'today', time: '7am', remind: true })).ok, true);
+  assert.ok(p.said().includes('Reminder set: water the plants at 7 am.'));
+  assert.equal((await p.run('calendar__add', { title: 'Call Ana', day: 'tomorrow', time: '9am', remind: true })).ok, true);
+  assert.ok(p.said().includes('Reminder set: call Ana at 9 am tomorrow.'));
+});

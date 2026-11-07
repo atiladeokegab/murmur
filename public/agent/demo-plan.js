@@ -373,11 +373,12 @@ function plan(said, apps, context, dry) {
     const at = m[3] && clock(m[3]);
     return task([step('calendar', ['add', 'create'], { event: cap(m[1].replace(/^an?\s+/i, '')), day: cap(m[2]), ...(at ? { time: at } : {}) })]);
   }
-  // "Remind me to take my medicine at eight tonight": a plain calendar add, today unless tomorrow is said
-  if ((m = t.match(/^remind me (?:to\s+)?(.+?)\s+at\s+(.+?)(?:\s+(tonight|this evening|today|tomorrow(?: morning| evening| night)?))?$/i)) && clock(m[2])) {
-    let at = clock(m[2]);
+  // "Remind me to take my medicine at eight tonight", "... tomorrow morning": a plain calendar add, said as a reminder
+  if ((m = t.match(/^remind me (?:to\s+)?(.+?)(?:\s+at\s+(.+?))?(?:\s+(tonight|this evening|this morning|today|tomorrow(?: morning| evening| night)?))?$/i)) && (m[2] ? clock(m[2]) : /morning/i.test(m[3] || ''))) {
+    let at = m[2] ? clock(m[2]) : '9am'; // "tomorrow morning" with no time: 9 am
     if (/night|evening/i.test(m[3] || '') && /am$/.test(at) && parseInt(at, 10) < 12) at = at.replace(/am$/, 'pm');
-    return task([step('calendar', ['add', 'create'], { event: cap(m[1]), day: /tomorrow/i.test(m[3] || '') ? 'Tomorrow' : 'Today', ...(at ? { time: at } : {}) })]);
+    if (/morning/i.test(m[3] || '') && /pm$/.test(at)) at = at.replace(/pm$/, 'am');
+    return task([step('calendar', ['add', 'create'], { event: cap(m[1]), day: /tomorrow/i.test(m[3] || '') ? 'Tomorrow' : 'Today', time: at, remind: true })]);
   }
   if ((m = t.match(/^(?:do i have|have i got|is there) anything (?:on )?(tomorrow|today)?\s*(?:this )?(?:morning|afternoon|evening|tonight|later)?$/i))) {
     return task([step('calendar', ['whatsOn', 'today', 'list', 'read'], { day: cap(m[1] || 'today') })]);
@@ -541,7 +542,7 @@ const UNITS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, ei
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100, a: 1 };
 /** "three", "3:30", "10am" -> "3pm", "3:30pm", "10am": a bare 1 to 7 is the afternoon (a dentist at three). */
 function clock(s) {
-  const m = String(s).trim().match(/^(\d{1,2}|[a-z]+)(?:[:.](\d\d)|\s+(thirty|fifteen|forty five))?\s*(am|pm|a\.m\.|p\.m\.|o'?clock|in the (?:morning|afternoon|evening))?$/i);
+  const m = String(s).trim().match(/^(\d{1,2}|[a-z]+)(?:[:.](\d\d)|\s+(thirty|fifteen|forty five))?\s*(am|pm|a\.\s?m\.?|p\.\s?m\.?|o'?clock|in the (?:morning|afternoon|evening))?$/i); // "7 a.m": the sentence's last dot is gone
   const h = m && (/^\d/.test(m[1]) ? Number(m[1]) : UNITS[m[1].toLowerCase()]);
   if (!h || h > 23) return null;
   const mm = m[2] || { thirty: '30', fifteen: '15', 'forty five': '45' }[m[3]?.toLowerCase()] || '';

@@ -125,7 +125,7 @@ test('blind 60 regressions: no claim on a verb alone, another app\'s noun, or a 
 });
 
 test('blind 60 misses, round 2: remind, this afternoon, a new note, a lot bigger, hello, who wrote', () => {
-  assert.equal(tool('Remind me to take my medicine at eight tonight'), 'calendar__add{"title":"Take my medicine","day":"Today","time":"8pm"}');
+  assert.equal(tool('Remind me to take my medicine at eight tonight'), 'calendar__add{"title":"Take my medicine","day":"Today","time":"8pm","remind":true}');
   assert.equal(tool('Do I have anything this afternoon'), 'calendar__whatsOn{"day":"Today"}');
   for (const u of ['I want to write something', 'Start a new note']) assert.equal(tool(u), 'open_app{"app":"writer"} > ask{"question":"What should I write?"}', u);
   assert.equal(tool('Buy milk', 'writer', { asked: 'write' }), 'writer__dictate{"text":"Buy milk"}');
@@ -224,4 +224,15 @@ test('the co-designer video: who are you, my location, Westfield, and a message 
   assert.equal(messages.state().currentChat, 'tony');
   assert.equal(messages.actions.openChat.verify(messages.state(), { who: 'tony' }), true);
   assert.equal(messages.state().chats.find((c) => c.id === 'tony').name, 'Tony');
+});
+
+test('"remind me to water the plants at 7 a.m." and friends add a calendar reminder', () => {
+  const p = (s) => demoPlan(s, reg, { app: null, workflows: [] }).plan[0];
+  for (const [s, time, day] of [['Remind me to water the plants at 7 a.m.', '7am', 'Today'], ['remind me to water the plants at 7am', '7am', 'Today'],
+    ['remind me to water the plants at seven', '7pm', 'Today'], ["remind me to water the plants at 7 o'clock", '7pm', 'Today'],
+    ['remind me to water the plants tomorrow morning', '9am', 'Tomorrow'], ['remind me to water the plants at seven tomorrow morning', '7am', 'Tomorrow']]) {
+    const x = p(s);
+    assert.equal(x?.tool, 'calendar__add', s);
+    assert.deepEqual([x.params.title, x.params.time, x.params.day, x.params.remind], ['Water the plants', time, day, true], s);
+  }
 });
