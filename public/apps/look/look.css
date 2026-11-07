@@ -1,0 +1,15 @@
+/* Your look: Station board tokens only (public/app.css). One column, rows reflow at 400%. */
+#app-look { display: flex; flex-direction: column; gap: 1.25rem; padding: var(--gutter); max-width: var(--w-column); }
+#app-look h2 { font-size: var(--fs-sheet-h); margin: 0; }
+#app-look h3 { font-size: var(--fs-title); margin: 0; flex-basis: 100%; }
+.look-row { display: flex; flex-wrap: wrap; gap: 0.75rem; border-top: 1px solid var(--c-slat); padding-top: 1rem; }
+.look-row button {
+  min-height: var(--h-link); min-width: var(--h-link); flex: 1 1 12rem; padding: 0.5rem 1rem;
+  border: var(--bw-talk) solid var(--c-ink); border-radius: var(--r-btn);
+  background: var(--c-board); color: var(--c-ink); font-size: var(--fs-sheet); font-weight: 700; text-align: start; cursor: pointer;
+}
+.look-row button:hover { background: var(--c-board-hover); }
+.look-row button[aria-pressed="true"] { background: var(--c-accent); color: var(--c-on-accent); border-color: var(--c-accent); }
+.look-row button[aria-disabled="true"] { color: var(--c-quiet); border-color: var(--c-quiet); border-style: dashed; }
+#look-known { flex-basis: 100%; margin: 0; padding-inline-start: 1.5rem; font-size: var(--fs-sheet); }
+#look-known:empty { display: none; }
