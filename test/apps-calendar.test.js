@@ -144,6 +144,9 @@ test('calendar: day, time and event matching', () => {
   assert.equal(dayOf('tomorrow'), 'Tuesday');
   assert.equal(dayOf('Weds'), 'Wednesday');
   assert.equal(dayOf('nope'), null);
+  assert.equal(dayOf('um Wednesday'), 'Wednesday');
+  assert.equal(dayOf('Wednesday please'), 'Wednesday');
+  assert.equal(dayOf('please'), null);
   assert.equal(timeOf('7:30 pm'), '19:30');
   assert.equal(timeOf('12am'), '00:00');
   assert.equal(timeOf('25:00'), null);

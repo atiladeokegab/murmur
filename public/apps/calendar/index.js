@@ -22,8 +22,11 @@ const mins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m
 const order = (a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || mins(a.time) - mins(b.time);
 /** "today", "tomorrow", "wed", "Wednesday" -> "Wednesday"; null if not a day. */
 export function dayOf(s, today = TODAY) {
-  const q = String(s ?? '').trim().toLowerCase();
-  if (!q || q === 'today') return today;
+  const raw = String(s ?? '').trim().toLowerCase();
+  // dictation leaves fillers in: "um Wednesday", "Wednesday please"
+  const q = raw.replace(/[^a-z ]/g, ' ').replace(/\b(um+|uh+|erm?|please|on|this|the|like|so)\b/g, ' ').trim().replace(/\s+/g, ' ');
+  if (!raw || q === 'today') return today;
+  if (q.includes(' ')) return q.split(' ').map((w) => dayOf(w, today)).find(Boolean) ?? null;
   if (q === 'tomorrow') return DAYS[(DAYS.indexOf(today) + 1) % 7];
   return DAYS.find((d) => q.length >= 3 && d.toLowerCase().startsWith(q.slice(0, 3)) && d.toLowerCase().startsWith(q.replace(/s$/, ''))) ?? null;
 }
