@@ -16,7 +16,7 @@ const tick = () => new Promise((r) => setImmediate(r));
 
 // One phone with only Bank on it. answers: the runner's ask-first sheet; hand: os.confirm for a person's own tap.
 // Like the shell (public/os/shell.js), os.confirm answers yes at once while the agent's ctx.tap is pressing.
-async function phone({ answers = [], hand = [], picks = [], saved = null } = {}) {
+async function phone({ answers = [], hand = [], picks = [], saved = null, approach = null, sheet = null } = {}) {
   const doc = fakeDocument(), bus = createBus(), registry = createRegistry();
   registry.register(bank);
   const port = browserKV({ storage: fakeStorage(), prefix: 'murmur' });
@@ -28,6 +28,7 @@ async function phone({ answers = [], hand = [], picks = [], saved = null } = {})
   const confirm = async ({ gate, readback }) => {
     if (agentPress) return true;
     asked.push({ gate, readback, byHand: true });
+    await sheet?.(root); // what happens on the screen while the sheet is open
     return hand.shift() ?? false;
   };
   if (saved) await kv.set('state', saved);
@@ -36,7 +37,7 @@ async function phone({ answers = [], hand = [], picks = [], saved = null } = {})
   const ask = async ({ gate, readback }) => { asked.push({ gate, readback }); return answers.shift() ?? false; };
   const choose = async ({ choices }) => { const i = choices.indexOf(picks.shift()); return i < 0 ? null : i; };
   const ctxFor = (app) => {
-    const ctx = createCtx({ app, root, bus, kv, cursor: { async moveTo(el, n) { taps.push(n); }, hide() {} }, ask, choose, signal: new AbortController().signal });
+    const ctx = createCtx({ app, root, bus, kv, cursor: { async moveTo(el, n) { taps.push(n); await approach?.(el, root); }, hide() {} }, ask, choose, signal: new AbortController().signal });
     const tap = ctx.tap;
     ctx.tap = async (...a) => { agentPress = true; try { await tap(...a); } finally { agentPress = false; } };
     return ctx;
@@ -306,6 +307,47 @@ test('cancel within 8 s: the Cancel button gives the money back; after 8 s it is
   assert.equal(st.balance, 124050 - 500);
   assert.equal(M.cancel(st, 1000 + M.CANCEL_MS - 1), true);
   assert.equal(st.balance, 124050);
+});
+
+const retype = (input, v) => { input.value = v; input.dispatchEvent(new Event('input', { bubbles: true })); };
+
+test('Prometheus: yes to "Pay Sam £20", then the amount becomes 30 while the cursor travels to Pay: nothing moves', async () => {
+  let changed = false;
+  const approach = (el, root) => { if (el.id === 'bank-pay' && !changed) { changed = true; retype(root.querySelector('#bank-amount'), '30'); } };
+  const { run, s, stored } = await phone({ answers: [true], approach });
+  const r = await run('payPerson', { who: 'Sam', amount: 20 });
+  assert.ok(changed, 'the form really changed mid-approach');
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "That isn't what you agreed to, so nothing was paid.");
+  assert.equal(s().balance, 124050); assert.equal(s().lastPaid, null);
+  assert.equal((await stored()).balance, 124050);
+});
+
+test('by hand: a form changed while the sheet is open pays nothing; the result is said on the shell line', async () => {
+  const sheet = (root) => retype(root.querySelector('#bank-amount'), '200');
+  const { press, s, root, spoken, asked } = await phone({ hand: [true], sheet });
+  await press('Pay someone'); await press('Mum');
+  retype(root.querySelector('#bank-amount'), '20');
+  await press('Pay Mum £20');
+  assert.equal(asked[0].readback, 'Pay Mum £20. From Murmur Bank.');
+  assert.equal(s().balance, 124050, 'the yes covered £20, the form said £200: nothing moves');
+  assert.equal(s().lastPaid, null);
+  assert.equal(spoken.at(-1), "That isn't what you agreed to, so nothing was paid.");
+});
+
+test('Atlas: a screen change keeps keyboard focus in Bank, and the paid screen adds no second live region', async () => {
+  const { button, press, root, s, spoken } = await phone({ hand: [true] });
+  const doc = root.ownerDocument;
+  for (const [open, h] of [['Hear your balance', 'Your balance'], ['Back to your account', null], ['Pay someone', 'Pay someone']]) {
+    button(open).focus(); await press(open);
+    assert.ok(root.contains(doc.activeElement), `focus stayed in Bank after ${open}`);
+    if (h) assert.equal(doc.activeElement.textContent, h);
+  }
+  await press('Mum'); retype(root.querySelector('#bank-amount'), '20');
+  await press('Pay Mum £20');
+  assert.equal(s().screen, 'paid');
+  assert.equal([...root.all()].filter((n) => n.getAttribute?.('role') === 'status').length, 0, 'the shell owns the one live line');
+  assert.deepEqual(spoken.at(-1), 'Paid Mum twenty pounds.');
 });
 
 test('by hand: tapping Pay asks through os.confirm with the same readback; a No pays nothing', async () => {

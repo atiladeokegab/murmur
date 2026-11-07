@@ -111,14 +111,14 @@ export function pick(s, id) {
   else d.to = [id];
 }
 /** Moves the money. Returns '' when paid, else the reason in words. */
-export function pay(s, now = Date.now()) {
-  const plan = planOf(s);
+/** Moves exactly `plan` (what was agreed), never whatever the form says by now. */
+export function pay(s, now = Date.now(), plan = planOf(s), note = s.draft.note) {
   if (!plan.length) return 'Choose who to pay and how much.';
   const total = plan.reduce((a, p) => a + p.pence, 0);
   if (total > s.balance) return `That's more than your balance of ${spoken(s.balance)}.`;
   const ids = plan.map((p) => {
     const id = `t${s.transactions.length + 1}`;
-    s.transactions.push({ id, name: p.name, pence: -p.pence, when: 'Today', note: s.draft.note || '', cancelUntil: now + CANCEL_MS });
+    s.transactions.push({ id, name: p.name, pence: -p.pence, when: 'Today', note: note || '', cancelUntil: now + CANCEL_MS });
     return id;
   });
   s.balance -= total;

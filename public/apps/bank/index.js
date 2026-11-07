@@ -5,6 +5,10 @@ import * as M from './model.js';
 
 let s = M.fresh();
 let root = null, os = null, body = null, busy = null; // busy: the last money or card change, settled after its save
+let shownScreen = null; // the screen last drawn, so render knows when the screen changed
+let approved = null; // the plan the agent's yes covers, fixed before it presses Pay: { plan, note }
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const STALE = "That isn't what you agreed to, so nothing was paid.";
 const q = (sel) => root && root.querySelector(sel);
 const persist = () => Promise.resolve(os?.kv?.set('state', s));
 const save = () => { persist().catch(() => {}); }; // screens and drafts only: losing one loses no money
@@ -59,12 +63,16 @@ async function fillAndPay(ctx, mode, opener, { ids, asked }, total, note, agreed
   const amount = q('#bank-amount');
   await ctx.tap(amount); await ctx.type(amount, d.amount);
   if (note) { const n = q('#bank-note'); await ctx.tap(n); await ctx.type(n, note); }
-  if (M.readback(M.planOf(s)) !== agreed || (mode === 'pay' && s.draft.note !== d.note)) {
-    throw new Error("That isn't what you agreed to, so nothing was paid.");
-  }
-  await ctx.tap(q('#bank-pay'));
-  const why = await busy; // the click's handler awaits os.confirm and the save; settle it before the runner verifies
-  if (why) throw new Error(why);
+  if (M.readback(M.planOf(s)) !== agreed || (mode === 'pay' && s.draft.note !== d.note)) throw new Error(STALE);
+  // Fixed now: the form can still change while the cursor travels to Pay, so the click checks against this.
+  approved = { plan: M.planOf(s, d), note: d.note };
+  busy = null;
+  try {
+    await ctx.tap(q('#bank-pay'));
+    const why = await busy; // the click's handler awaits os.confirm and the save; settle it before the runner verifies
+    if (busy === null) throw new Error(STALE); // the Pay pressed was not the live one
+    if (why) throw new Error(why);
+  } finally { approved = null; }
 }
 
 /**
@@ -202,12 +210,16 @@ export default app;
 
 // A person's own tap on Pay asks through os.confirm (the shell adds the fingerprint). When the agent pressed it,
 // the runner already asked and os.confirm answers yes at once. No os.confirm: nothing moves.
-async function payTap() {
-  const plan = M.planOf(s);
+// The plan is fixed at the click: a form changed since the agent's check, or while the sheet is open, pays nothing.
+async function payTap(btn) {
+  const plan = M.planOf(s), note = s.draft.note, wanted = approved;
   if (!plan.length) return 'Choose who to pay and how much.';
+  if (btn?.isConnected === false || (wanted && !same(wanted, { plan, note }))) return STALE;
   const yes = os?.confirm ? os.confirm({ gate: 'pay', readback: M.readback(plan) }) : false; // called before any await
   if ((await yes) !== true) return 'Not paid.'; // only a literal yes pays
-  const why = await commit(() => M.pay(s), "I couldn't save it, so nothing was paid.");
+  const why = await commit(() => (same(M.planOf(s), plan) && s.draft.note === note ? M.pay(s, Date.now(), plan, note) : STALE),
+    "I couldn't save it, so nothing was paid.");
+  if (!wanted) os?.say?.(why || M.paidWords(s)); // a person's own tap hears the result on the shell's one voice line
   if (!why) setTimeout(render, M.CANCEL_MS + 50)?.unref?.(); // the Cancel button goes after 8 s
   return why;
 }
@@ -232,7 +244,16 @@ const speakIfPerson = (e, text) => { if (e.isTrusted) os?.say?.(text); };
 function render() {
   if (!body) return;
   const view = { balance: balanceView, recent: recentView, pay: formView, split: formView, paid: paidView }[s.screen] || homeView;
+  const a = root.ownerDocument.activeElement, had = !!a && root.contains(a), moved = shownScreen !== s.screen;
+  const payee = a?.getAttribute?.('data-payee');
   body.replaceChildren(view());
+  shownScreen = s.screen;
+  if (!had) return;
+  // The focused control was just replaced: the same control on the same screen, else the new screen's heading.
+  const kept = !moved && ((a.id && body.querySelector(`#${a.id}`)) || (payee && body.querySelector(`[data-payee="${payee}"]`)));
+  const h = kept || body.querySelector('h3') || root.querySelector('h2');
+  if (!kept) h.tabIndex = -1;
+  h.focus();
 }
 
 function homeView() {
@@ -285,7 +306,7 @@ function formView() {
 function payButton() {
   const plan = M.planOf(s);
   const label = plan.length ? M.readback(plan).replace(/\. From Murmur Bank\.$/, '') : 'Pay';
-  return button(label, { id: 'bank-pay', className: 'app-btn primary', disabled: !plan.length, onclick: () => { busy = payTap(); } });
+  return button(label, { id: 'bank-pay', className: 'app-btn primary', disabled: !plan.length, onclick: (e) => { busy = payTap(e.currentTarget); } });
 }
 function renderPay() { q('#bank-pay-slot')?.replaceChildren(payButton()); }
 
@@ -293,7 +314,7 @@ function paidView() {
   const live = M.canCancel(s);
   return el('div', { className: 'app-body' },
     el('h3', { className: 'app-h3' }, s.lastPaid?.cancelled ? 'Cancelled' : 'Paid'),
-    el('p', { className: 'app-done', role: 'status' }, M.paidWords(s, M.shown)),
+    el('p', { className: 'app-done' }, M.paidWords(s, M.shown)),
     live && button('Cancel this payment', { id: 'bank-cancel', onclick: () => { busy = commit(() => (M.cancel(s) ? '' : 'Too late to cancel.'), "I couldn't save it, so the payment stands."); } }),
     live && el('p', { className: 'app-why' }, 'You can cancel for 8 seconds.'),
     back());
