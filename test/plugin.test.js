@@ -76,7 +76,7 @@ test('a bad gate is refused, and money or message actions may not skip the ask',
   const p = await phone();
   await assert.rejects(installApp(bad('launcher', `{ go: { describe: 'Go', doing: 'Going', gate: 'launch', run() {}, verify: () => true } }`), p.plug),
     /gate must be one of/);
-  for (const k of ['pay', 'sendMoney', 'transfer', 'callDriver']) {
+  for (const k of ['pay', 'sendMoney', 'transfer', 'callDriver', 'order', 'bookRide', 'checkout']) {
     await assert.rejects(installApp(bad(`sneaky${k.toLowerCase()}`, `{ ${k}: { describe: 'Do it', doing: 'Doing it', gate: null, run() {}, verify: () => true } }`), p.plug),
       /must have a gate/, k);
   }
@@ -145,7 +145,7 @@ test('install_app by spoken name, through the manifest', async () => {
   const p = await phone();
   assert.deepEqual(Object.keys(INSTALL_APP.params.properties), ['name']);
   const list = await availableApps(p.plug);
-  assert.deepEqual(list.map((x) => [x.id, x.installed]), [['taxi', false]]);
+  assert.deepEqual(list.map((x) => [x.id, x.installed]), [['taxi', false], ['grocer', false]]);
   const miss = await installByName('pizza', p.plug);
   assert.equal(miss.ok, false);
   assert.match(miss.say, /I can't find pizza\. I can add Northline Taxis/);
@@ -154,4 +154,51 @@ test('install_app by spoken name, through the manifest', async () => {
   assert.match(r.say, /^Added Northline Taxis\./);
   assert.ok(p.names().includes('taxi__book'));
   assert.match((await installByName('Northline', p.plug)).say, /already on your phone/);
+});
+
+const GROCER = new URL('grocer/index.js', PLUGINS).href;
+
+test('a second plug-in: Corner Grocer installs by name beside taxi, and both come back after a reload', async () => {
+  const p = await phone();
+  assert.equal((await installByName('the taxi app', p.plug)).ok, true);
+  const g = await installByName('my groceries', p.plug);
+  assert.equal(g.ok, true, g.say);
+  assert.match(g.say, /^Added Corner Grocer\./);
+  for (const n of ['grocer__basket', 'grocer__add', 'grocer__remove', 'grocer__order', 'taxi__book']) assert.ok(p.names().includes(n), n);
+  assert.match(p.registry.tools().find((t) => t.name === 'grocer__order').description, /asked first: pay/);
+  const again = await phone({ storage: p.storage });
+  assert.ok(again.names().includes('grocer__order') && again.names().includes('taxi__book'));
+  assert.deepEqual((await availableApps(again.plug)).map((x) => x.installed), [true, true]);
+});
+
+test('grocer: add and remove go through the controls; an unknown item fails in words', async () => {
+  const p = await phone();
+  p.add(await installApp(GROCER, p.plug));
+  const s = () => p.registry.get('grocer').state();
+  assert.deepEqual(s().basket, ['milk', 'bread', 'eggs', 'bananas']);
+  assert.equal((await p.run('grocer__basket', {})).ok, true);
+  const add = await p.run('grocer__add', { item: 'a box of tea' });
+  assert.equal(add.ok, true, add.reason);
+  assert.ok(s().basket.includes('tea'));
+  const rm = await p.run('grocer__remove', { item: 'bananas' });
+  assert.equal(rm.ok, true, rm.reason);
+  assert.deepEqual(s().basket, ['milk', 'bread', 'eggs', 'tea']);
+  const bad = await p.run('grocer__add', { item: 'caviar' });
+  assert.equal(bad.ok, false);
+  assert.match(bad.reason, /We don't sell caviar/);
+  assert.match((await p.run('grocer__remove', { item: 'cheese' })).reason, /cheese is not in your basket/);
+});
+
+test('grocer: a No at the pay gate orders nothing; a Yes hears the exact readback and orders', async () => {
+  const p = await phone({ answers: [false, true] });
+  p.add(await installApp(GROCER, p.plug));
+  const no = await p.run('grocer__order', {});
+  assert.deepEqual([no.ok, no.cancelled, no.reason], [false, true, 'Not paid.']);
+  assert.equal(p.registry.get('grocer').state().order, null);
+  assert.equal(p.asked[0].gate, 'pay');
+  assert.equal(p.asked[0].readback, 'Order your basket: milk, bread, eggs and bananas, £5.70, delivered by 6 pm. Pay?');
+  const yes = await p.run('grocer__order', {});
+  assert.equal(yes.ok, true, yes.reason);
+  assert.equal(p.registry.get('grocer').state().order.total, 570);
+  assert.equal((await phone({ storage: p.storage })).registry.get('grocer').state().order.total, 570, 'the order survives a reload');
 });
