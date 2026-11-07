@@ -19,7 +19,7 @@ const LIVE_URL = process.env.MURMUR_LIVE_URL || ''; // test only: point the brow
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json' };
-const PAGES = { '/': 'index.html', '/race': 'race.html', '/inside': 'inside/index.html' };
+const PAGES = { '/': 'index.html', '/race': 'race.html', '/inside': 'inside/index.html', '/stage': 'stage/index.html' };
 
 function send(res, status, body, type = 'application/json') {
   res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });

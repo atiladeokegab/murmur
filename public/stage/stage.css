@@ -1,0 +1,14 @@
+/* Stage: the phone and Inside side by side for a projector. Tokens from /app.css only. */
+body.stage { height: 100svh; margin: 0; padding: 1rem 1.5rem 1.25rem; box-sizing: border-box; overflow: hidden;
+  display: grid; grid-template-rows: auto 1fr; gap: 1rem; background: var(--c-page); color: var(--c-ink); font-family: var(--f-read); line-height: var(--lh); }
+.stage header { display: flex; align-items: baseline; gap: 2rem; min-width: 0; }
+.stage h1 { margin: 0; font-size: var(--fs-title); color: var(--c-quiet); letter-spacing: .02em; white-space: nowrap; }
+.stage #now { margin: 0; font-size: var(--fs-now-title); line-height: 1.15; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage #now b { color: var(--c-accent); font-weight: 700; }
+.stage main { display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; min-height: 0; }
+/* An original frame: a plain rounded body with an even bezel, no notch or brand cues. --s is set by stage.js. */
+.stage .phone { --s: 1; width: calc(406px * var(--s)); height: calc(860px * var(--s)); align-self: center; }
+.stage .phone iframe { display: block; width: 390px; height: 844px; border: 8px solid var(--c-slat); border-radius: 44px;
+  background: var(--c-page); transform: scale(var(--s)); transform-origin: 0 0; box-sizing: content-box; }
+.stage .inside-frame { width: 100%; height: 100%; border: 0; border-radius: var(--r-now); background: var(--c-page); min-width: 0; }
+@media (prefers-reduced-motion: no-preference) { .stage #now { transition: color var(--t-glide); } }
