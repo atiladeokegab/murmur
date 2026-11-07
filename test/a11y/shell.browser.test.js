@@ -24,6 +24,7 @@ after(async () => {
 async function shellPage() {
   const page = await browser.newPage();
   await page.addInitScript(() => {
+    localStorage.setItem('murmur:os.onboard:said', 'true');
     window.__tts = [];
     window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {

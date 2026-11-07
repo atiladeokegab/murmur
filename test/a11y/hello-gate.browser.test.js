@@ -24,8 +24,11 @@ after(async () => {
 test('a hand-tapped Hello Send shows its readback and No leaves the sent list unchanged', async () => {
   const page = await browser.newPage();
   try {
-    await page.addInitScript(() => localStorage.clear());
-    await page.goto(url);
+    await page.addInitScript(() => {
+      localStorage.clear();
+      localStorage.setItem('murmur:look', JSON.stringify({ speaker: 'reader', planner: 'offline' }));
+    });
+    await page.goto(`${url}?quiet`);
     await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
     await page.evaluate(() => murmur.open('hello'));
 

@@ -24,6 +24,7 @@ for (const cancel of ['Stop', 'Back']) {
     const page = await browser.newPage();
     try {
       await page.addInitScript(() => {
+        localStorage.setItem('murmur:look', JSON.stringify({ speaker: 'reader', planner: 'offline' }));
         localStorage.setItem('murmur:passkey', 'AQ');
         Object.defineProperty(navigator, 'credentials', { value: {
           get: () => new Promise((resolve) => { window.finishAuthentication = resolve; }),
@@ -68,3 +69,42 @@ for (const cancel of ['Stop', 'Back']) {
     } finally { await page.close(); }
   });
 }
+
+test('Stop prevents a late availability result from opening a fingerprint prompt', async () => {
+  const page = await browser.newPage();
+  try {
+    await page.addInitScript(() => {
+      localStorage.setItem('murmur:look', JSON.stringify({ speaker: 'reader', planner: 'offline' }));
+      localStorage.removeItem('murmur:passkey');
+      window.availabilityChecks = window.fingerprintPrompts = 0;
+      const available = new Promise((resolve) => { window.finishAvailability = resolve; });
+      window.PublicKeyCredential = class {};
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable = () => {
+        window.availabilityChecks++;
+        return available;
+      };
+      Object.defineProperty(navigator, 'credentials', { value: { create: async () => {
+        window.fingerprintPrompts++;
+        return null;
+      } } });
+    });
+    await page.goto(url);
+    await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+    await page.evaluate(() => {
+      window.approval = 'pending';
+      const app = murmur.registry.list()[0];
+      murmur.host.ctxFor(app).confirm('pay', 'Pay one simulated pound.').then(
+        (ok) => { window.approval = ok; }, () => { window.approval = false; },
+      );
+    });
+    await page.locator('#sheet-yes').waitFor();
+    await page.waitForTimeout(550);
+    await page.locator('#sheet-yes').click();
+    await page.waitForFunction(() => window.availabilityChecks > 0);
+    await page.evaluate(() => murmur.host.verbs.stop());
+    await page.waitForFunction(() => window.approval === false);
+    await page.evaluate(() => window.finishAvailability(true));
+    await page.waitForTimeout(100);
+    assert.equal(await page.evaluate(() => window.fingerprintPrompts), 0);
+  } finally { await page.close(); }
+});
