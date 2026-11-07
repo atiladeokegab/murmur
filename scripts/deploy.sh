@@ -7,6 +7,7 @@ if [ -f .env ]; then set -a; . ./.env; set +a; fi # keys come from the gitignore
 ENV_VARS="NODE_ENV=production,MURMUR_RATE_PER_MIN=${MURMUR_RATE_PER_MIN:-600}" # a venue shares one wifi IP, so 40/min per IP throttles judges
 if [ -n "${GEMINI_API_KEY:-}" ]; then ENV_VARS="$ENV_VARS,GEMINI_API_KEY=$GEMINI_API_KEY"; fi
 if [ -n "${ELEVENLABS_API_KEY:-}" ]; then ENV_VARS="$ENV_VARS,ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY"; fi
+if [ -n "${OPENAI_API_KEY:-}" ]; then ENV_VARS="$ENV_VARS,OPENAI_API_KEY=$OPENAI_API_KEY"; fi
 if [ -n "${GEMINI_MODEL:-}" ]; then ENV_VARS="$ENV_VARS,GEMINI_MODEL=$GEMINI_MODEL"; fi
 if [ -n "${GEMINI_TTS_MODEL:-}" ]; then ENV_VARS="$ENV_VARS,GEMINI_TTS_MODEL=$GEMINI_TTS_MODEL"; fi
 # shortcut: --max-instances 1 because lib/relay.js is in memory; move the ring to a shared store before scaling out.
