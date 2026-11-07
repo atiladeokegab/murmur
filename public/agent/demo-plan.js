@@ -62,12 +62,13 @@ const DAY = '(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tom
 // it is installed (BANK_WORDS), so with no Bank app "bank" and "balance" are still refused.
 const NO_GO = /\b(transfer (?:\w+ )?(?:[£€$]|\d+|money|funds|pounds|quid|euros|dollars)|wire (?:\w+ )?(?:[£€$]|\d+|money|funds|cash|pounds|quid|euros|dollars)|iban|account numbers?|sort code|my pin|pin (?:number|code)|card numbers?|online banking|(?:log|sign)(?:ging)? ?in(?:to)? (?:to )?(?:my |an? |the )?(?:\w+ )?(?:account|bank)|between (?:my )?accounts|overdraft|doctor|gp|prescription|medication|diagnos\w*|nhs|benefits|universal credit|tax return|hmrc|passport|driving licence|council tax|savings|mortgage|loan|credit card|pin number|move (?:my |some )?money|barclays|hsbc|lloyds|natwest|santander|monzo|starling|nationwide|halifax|revolut|tsb|metro bank|first direct|virgin money|co-?op bank|american express|amex|paypal|chase (?:bank|account|balance|card|app)|my chase|(?:current|joint|another|other|bank) account|(?:from|to|into) (?:my |an? |the )?accounts?|gbp|usd|eur)\b/i;
 const BANK_WORDS = /\b(bank|banking|balance)\b/i;
-// Credentials never go, in words or in digits: a sort code (12-34-56), an 8-digit account number, a 13 to 19 digit card, an IBAN.
-const CREDENTIALS = /\b(sort code|account numbers?|my pin|pin (?:number|code)|card numbers?|iban|\d\d-\d\d-\d\d|\d{8}|(?:\d[ -]?){12,18}\d|[a-z]{2}\d\d(?: ?[a-z0-9]{4}){3,7}(?: ?[a-z0-9]{1,3})?)\b/i;
+// Credentials never go, in words or in digits: a sort code (12-34-56, but not a date: "on 07-11-26"), an 8-digit account number, a 13 to 19 digit card, an IBAN.
+const CREDENTIALS = /\b(sort code|account numbers?|my pin|pin (?:number|code)|card numbers?|iban|(?<!\b(?:on|date|dated|the)\s+)\d\d-\d\d-\d\d|\d{8}|(?:\d[ -]?){12,18}\d|[a-z]{2}\d\d(?: ?[a-z0-9]{4}){3,7}(?: ?[a-z0-9]{1,3})?)\b/i;
 // Money with a money verb is real money unless the phone's own Bank plans it ("Pay Sam 20 pounds"); a message may say it.
-const MONEY = /\b(?:wire|transfer|send|pay|give)\b.*(?:[£€$]\s*\d|\b(?:pounds?|quid|euros?|dollars?|pence)\b)/i;
+const MONEY = /\b(?:wire|transfer|send|pay|give|move)\b.*(?:[£€$]\s*\d|\b(?:pounds?|quid|euros?|dollars?|pence)\b)/i;
 // Never stored: a symptom or a diagnosis goes nowhere but a message the person sends.
-const HEALTH = /\b(diabet\w*|asthma|cancer|symptoms?|blood pressure|depress(?:ion|ed)|anxiety|migraines?|pains?|fever|infection|tumou?rs?|dementia|epilep\w*|heart (?:attack|condition|disease)|surgery|hospital|pills?|insulin|allerg\w*|covid|flu|cough|rash|hiv|adhd|illness|sick)\b/i;
+// Clinical words only, so an idiom ("a pain in the neck", "sick of the rain") is still a note.
+const HEALTH = /\b(diagnos\w*|symptoms?|medications?|my condition|\d+ ?mg|diabet\w*|asthma|cancer|tumou?rs?|dementia|epilep\w*|insulin|blood pressure|heart (?:condition|disease)|hiv|hospital appointment)\b/i;
 // A second request behind a message: it starts with a verb of its own ("..., then check my Barclays balance").
 const REQUEST = /^(?:(?:and|then|also|after that|please)\s+)*(?:check|move|transfer|wire|pay|send|give|log|sign|open|show|tell me|what|how|read|get|book|renew|order|apply|cancel|freeze|close|remember|note|write|save)\b/i;
 const REFUSE = { kind: 'refuse', plan: [], say: "I don't do banking, health or government. Those stay with you." };
@@ -78,9 +79,10 @@ export function refusal(utterance, apps, context = {}) {
   const bank = apps.some((a) => a.id === 'bank');
   if (!NO_GO.test(raw) && !CREDENTIALS.test(raw) && !MONEY.test(raw) && !HEALTH.test(raw) && !(BANK_WORDS.test(raw) && !bank)) return null;
   // The words of a message are content, not the request: "Tell Sam: I switched from Monzo" sends. Credentials never go.
-  // ... unless a second request rides behind it, across "then", "and", a colon or a full stop:
-  // "Text Sam then check my Barclays balance", "Tell Sam: hi. Then check my Barclays balance".
-  const later = raw.split(/[:.!?]\s+|,?\s+(?:and then|then|after that|and also|also|and)\s+/i).slice(1)
+  // ... unless a second request rides behind it, after a later sentence or "then", "and", "also":
+  // "Text Sam then check my Barclays balance", "Tell Sam: hi. Then check my Barclays balance". The body a colon opens
+  // is the message ("Tell Sam: Pay £20 tomorrow."), never a request of its own.
+  const later = raw.split(/[.!?]\s+|,?\s+(?:and then|then|after that|and also|also|and)\s+/i).slice(1)
     .some((x) => REQUEST.test(x.trim()) && (NO_GO.test(x) || MONEY.test(x) || HEALTH.test(x)));
   const p = CREDENTIALS.test(raw) || later ? null : plan(raw, apps, context, false);
   if (p?.kind !== 'task') return REFUSE;
