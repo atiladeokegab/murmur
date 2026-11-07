@@ -8,15 +8,18 @@
         "messages": [
           {
             "from": "them",
-            "text": "Did you get home all right?"
+            "text": "Did you get home all right?",
+            "ago": 1500
           },
           {
             "from": "me",
-            "text": "Yes, all fine. Love you."
+            "text": "Yes, all fine. Love you.",
+            "ago": 1490
           },
           {
             "from": "them",
-            "text": "Lunch on Tuesday?"
+            "text": "Lunch on Tuesday?",
+            "ago": 2
           }
         ]
       },
@@ -81,15 +84,18 @@
           "messages": [
             {
               "from": "them",
-              "text": "Did you get home all right?"
+              "text": "Did you get home all right?",
+              "ago": 1500
             },
             {
               "from": "me",
-              "text": "Yes, all fine. Love you."
+              "text": "Yes, all fine. Love you.",
+              "ago": 1490
             },
             {
               "from": "them",
-              "text": "Lunch on Tuesday?"
+              "text": "Lunch on Tuesday?",
+              "ago": 2
             }
           ]
         },

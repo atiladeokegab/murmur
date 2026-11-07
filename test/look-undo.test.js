@@ -31,7 +31,7 @@ test('every changing Your look action undoes to the value before it ran, through
 
   for (const [key, name, params, row, was] of [
     ['voiceSlower', 'look__voiceSlower', {}, 'rate', 1.15],
-    ['colours', 'look__colours', { colours: 'yellow' }, 'theme', 'dark'],
+    ['colours', 'look__colours', { colours: 'yellow' }, 'theme', 'auto'],
     ['whoSpeaks', 'look__whoSpeaks', { who: 'reader' }, 'speaker', 'murmur'],
     ['howMuch', 'look__howMuch', { mode: 'teach' }, 'agency', 'ask'],
     ['learning', 'look__learning', { on: false }, 'learning', true],

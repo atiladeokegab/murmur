@@ -150,6 +150,8 @@ function plan(said, apps, context, dry) {
     if (/^(?:you speak|murmur speaks?|speak (?:to me )?again|talk to me again)$/i.test(t)) return look(['whoSpeaks'], { who: 'murmur' });
     if (/^(?:just do it|do things? (?:for me|without asking)|stop asking)(?: from now on)?$/i.test(t)) return look(['howMuch'], { mode: 'just' });
     if (/^(?:ask me(?: first)?(?: before you do things)?|always ask)$/i.test(t)) return look(['howMuch'], { mode: 'ask' });
+    if (/^(?:give me |i want |use )?(?:longer|detailed|more detailed|long) answers$|^(?:tell me|say) more (?:every time|from now on)$/i.test(t)) return look(['answers'], { length: 'detailed' });
+    if (/^(?:keep it short|(?:give me |i want |use )?(?:short|shorter|brief) answers|be brief)$/i.test(t)) return look(['answers'], { length: 'short' });
     if (/^teach me(?: (?:from now on|how to do things|instead))?$/i.test(t)) return look(['howMuch'], { mode: 'teach' });
     if (/^(?:stop|pause|turn off) learning$|^don'?t learn\b/i.test(t)) return look(['learning'], { on: false });
     if (/^(?:start|resume|turn on) learning(?: again)?$/i.test(t)) return look(['learning'], { on: true });
