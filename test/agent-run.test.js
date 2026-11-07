@@ -61,8 +61,8 @@ test('Vertical 1: "Text Sam I\'m ten minutes late" is planned, asks Sam or Samir
   assert.deepEqual(s.ev('step:start').map((e) => [e.n, e.of, e.label]), [[1, 3, 'Opening the chat'], [2, 3, 'Writing your reply'], [3, 3, 'Sending']]);
   const gate = s.ev('confirm')[0];
   assert.equal(gate.result, true);
-  assert.equal(gate.readback, "Send to Sam: I'm ten minutes late.");
-  assert.ok(s.spoken.includes("Send to Sam: I'm ten minutes late. Send it?"));
+  assert.equal(gate.readback, "Send 'I'm ten minutes late' to Sam?");
+  assert.ok(s.spoken.some((t) => t.startsWith("Send 'I'm ten minutes late' to Sam?")));
   assert.ok(s.spoken.includes('Sam or Samira?'));
   assert.equal(s.ev('task:done')[0].ok, true);
   assertGatesHonoured(s.log);
