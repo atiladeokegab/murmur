@@ -14,12 +14,12 @@ test('the app object has the §3.3 shape', () => {
   assert.equal(Object.values(A).filter((a) => a.gate).length, 1, 'only send is gated');
 });
 
-test('seed: Mum asks about Tuesday, three chats', () => {
+test('seed: Mum asks about Tuesday, a chat for everyone in Contacts', () => {
   app.seed();
   const s = app.state();
   assert.equal(M.chatOf(s, 'mum').messages.at(-1).text, 'Lunch on Tuesday?');
-  assert.equal(app.read(), '3 chats. Mum wrote: Lunch on Tuesday? Sam wrote: Are you still coming to the quiz tonight? We start at seven.');
-  assert.deepEqual(app.place(), { where: 'Messages', item: 'your chats', n: 0, of: 3, next: 'openChat' });
+  assert.equal(app.read(), '24 chats. Mum wrote: Lunch on Tuesday? Sam wrote: Are you still coming to the quiz tonight? We start at seven.');
+  assert.deepEqual(app.place(), { where: 'Messages', item: 'your chats', n: 0, of: 24, next: 'openChat' });
   assert.equal(app.now().why, "Read Mum's message.", 'the Now tile leads with the first unread chat');
 });
 
@@ -97,5 +97,5 @@ test('seed and reset bring the demo data back', () => {
   app.seed();
   app.reset();
   assert.equal(app.state().currentChat, null);
-  assert.equal(app.state().chats.length, 3);
+  assert.equal(app.state().chats.length, 24, 'Mum, Sam, Samira and everyone else in Contacts');
 });

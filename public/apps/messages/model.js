@@ -1,6 +1,7 @@
 // Messages: the pure state. No DOM; the same code runs in the browser and in test/apps-messages.test.js.
 // Invented people only (event rule). "Sam" is ambiguous on purpose: Sam and Samira.
 import { sentences } from '../../lib/notes.js';
+import { CONTACTS } from '../../lib/tiles.js';
 
 export const seedChats = () => [
   { id: 'mum', name: 'Mum', unread: 1, messages: [
@@ -15,6 +16,8 @@ export const seedChats = () => [
     { from: 'me', text: 'Thanks for the lift.' },
     { from: 'them', text: 'Any time. See you at choir.' },
   ] },
+  // everyone else in Contacts has a chat with nothing new, so "text Zara" works
+  ...Object.entries(CONTACTS).filter(([id]) => !['mum', 'sam', 'samira'].includes(id)).map(([id, c]) => ({ id, name: c.name, unread: 0, messages: [{ from: 'them', text: 'Speak soon!', ago: 4320 }] })),
 ];
 
 export const fresh = () => ({ chats: seedChats(), currentChat: null, draft: '', changed: null, reading: null, lastSent: null });

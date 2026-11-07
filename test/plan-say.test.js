@@ -140,7 +140,7 @@ test('"Call Mum" opens her chat on the real phone, whose Phone app is settings; 
   const real = describeRegistry([...apps, phoneApp]);
   const p = demoPlan('Call Mum', real, { app: null, workflows: [] });
   assert.deepEqual(p.plan.map((s) => s.tool), ['messages__openChat', 'say'], JSON.stringify(p));
-  assert.equal(p.plan[1].params.text, "I can't call yet. I've opened Mum's chat.");
+  assert.equal(p.plan[1].params.text, "I've opened Mum's chat, so you can reach Mum there.");
   // the Calls app's shape (calls branch d8623fc): call {who} and callBack, beside the Phone settings app
   const act = (describe, properties = {}, required) => ({ describe, doing: describe, hint: describe, params: { type: 'object', properties, ...(required ? { required } : {}) }, async run() {}, verify: () => true });
   const calls = { id: 'calls', name: 'Calls', async mount() {}, read: () => '', place: () => ({}), state: () => ({}), async seed() {}, async reset() {}, actions: { call: act('Call a person', { who: { type: 'string' } }, ['who']), missed: act('Read missed calls'), hangUp: act('Hang up'), callBack: act('Call back', { who: { type: 'string' } }) } };

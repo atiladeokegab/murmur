@@ -9,7 +9,7 @@ import { createWorkflows, lastChain } from './workflows.js';
 import { attachMemory } from './memory.js';
 import { placeLine } from './narrate.js';
 import { offerLine } from './offer.js';
-import { EVERYTHING } from './demo-plan.js';
+import { EVERYTHING, CANT, fakeLine } from './demo-plan.js';
 import { phoneApp } from './phone-apps.js';
 import { installToken } from './token.js';
 import { meContext } from '../lib/profile.js';
@@ -270,9 +270,9 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     const lost = p.dropped.find((d) => d.reason === 'unknown app' && d.say);
     const coming = /bring it over from your phone/.test(p.say || lost?.say || '') && (p.say?.match(/^I don't have (.+?) yet\./)?.[1] || lost?.tool?.split('__')[0]);
     if (coming) bus.emit('app:import', { name: coming }); // Inside shows it coming over
-    if (!p.steps.length) { await say(p.say || p.dropped.find((d) => d.say)?.say || "I can't do that one yet."); return { status: p.kind === 'refuse' ? 'refused' : 'unknown', say: p.say }; }
+    if (!p.steps.length) { const s = p.say || p.dropped.find((d) => d.say)?.say || ''; await say(p.kind === 'refuse' ? s : !s || CANT.test(s) ? fakeLine(rest) : s); return { status: p.kind === 'refuse' ? 'refused' : 'unknown', say: p.say }; }
     const unsaid = p.dropped.find((d) => d.say);
-    if (unsaid) say(unsaid.say);
+    if (unsaid && !CANT.test(unsaid.say)) say(unsaid.say); // never "I can't": the steps that fit still run
 
     if (p.kind === 'teach') {
       const lines = p.steps.map((s) => { const x = s.app && app(s.app)?.actions?.[s.action]; return x ? x.describe : s.tool; }); // never where a button is: the person can't see it (the lead, 7 Nov)
