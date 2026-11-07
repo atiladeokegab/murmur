@@ -9,7 +9,7 @@ import { createToolkit } from '../vendor/toolkit/index.js';
 import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
 import * as passkey from '../passkey.js';
-import { byHand } from './gate.js';
+import { byHand, checkFingerprint } from './gate.js';
 import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
 import { installToken } from '../agent/token.js';
 import { play, buzz, mute, unmute, isMuted } from '../sound/index.js';
@@ -140,11 +140,9 @@ const take = () => { const g = granted; granted = false; return g; };
 const osFor = (app, kv) => ({
     kv, bus, registry,
     say: (t) => speak(t, personal.signal),
-    // A person's own tap on a gated control is their yes (Pay still checks the fingerprint); when the agent
-    // pressed it, the runner already asked.
-    confirm: ({ gate, readback }) => (take() ? Promise.resolve(true) : byHand({ app: app.id, gate, readback, bus,
-      passkey: { usable: fingerprintUsable, confirm: () => passkey.confirm() },
-      sheet: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true) })),
+    // A person's own tap on a gated control still gets the readback sheet (no grace), and pay the fingerprint;
+    // when the agent pressed it, the runner already asked.
+    confirm: ({ gate, readback }) => (take() ? Promise.resolve(true) : byHand({ app: app.id, gate, readback, bus, sheet: sheetConfirm })),
     get workflows() { return agent?.workflows; },
     get agent() { return agent; }, // Mine runs a workflow with os.agent.runWorkflow(name)
     hear: (text) => hear(text, 'typed'),
@@ -342,20 +340,16 @@ function showSheet(kind, q, answer) {
 }
 function hideSheet(kind) { if (pending?.kind === kind) { pending = null; closeSheet(); } }
 
-// The sheet: every gate the runner asks through ctx.confirm, and a hand-tapped Pay with no fingerprint to check.
+// The sheet: every gate the runner asks through ctx.confirm, and every gated control a person taps (no grace then).
 // The shell keeps the grace, the fingerprint and the voice, and resolves { result, fingerprint } for pay.
-function sheetConfirm({ gate, readback }) {
+function sheetConfirm({ gate, readback, grace = true }) {
   return new Promise((resolve) => {
     showSheet('confirm', { gate, readback }, (v) => {
-      if (v === true && performance.now() - pending.at < GRACE_MS) return false;
+      if (v === true && grace && performance.now() - pending.at < GRACE_MS) return false;
       pending = null;
       if (v === true && gate === 'pay') { // pay always needs the fingerprint (spec §3.7)
-        fingerprintUsable().then((usable) => {
-          // shortcut: no platform authenticator means the sheet's yes stands alone (fingerprint:false)
-          if (!usable) { closeSheet(); resolve({ result: true, fingerprint: false }); return; }
-          show('Check your fingerprint.');
-          passkey.confirm().then((ok) => ok === true, () => false).then((ok) => { closeSheet(); resolve({ result: ok, fingerprint: true }); });
-        });
+        show('Check your fingerprint.');
+        fingerprint().then((ok) => { closeSheet(); resolve({ result: ok, fingerprint: ok }); });
         return true;
       }
       closeSheet(); resolve(v === true);
@@ -364,7 +358,8 @@ function sheetConfirm({ gate, readback }) {
     speak(`${String(readback || '').replace(/[.!?\s]+$/, '')}. ${VERB[gate] || 'Yes'}?`, personal.signal);
   });
 }
-async function fingerprintUsable() { return passkey.hasPasskey() || await passkey.available(); }
+// Every pay, hand or agent: the fingerprint or no pay (gate.js). The spoken or tapped yes never stands alone.
+const fingerprint = () => checkFingerprint({ passkey: { has: passkey.hasPasskey, available: passkey.available, confirm: passkey.confirm }, say: (t) => speak(t, personal.signal) });
 function sheetChoose({ question, choices }) {
   return new Promise((resolve) => {
     showSheet('choose', { question, choices }, (v) => { pending = null; closeSheet(); resolve(Number.isInteger(v) ? v : null); });
@@ -509,7 +504,7 @@ try {
   agent = await createAgent({
     registry, bus, ctxFor, speak, librarian,
     os: { open: (id) => open(id), current: () => current, install },
-    fingerprint: () => passkey.confirm(),
+    fingerprint,
     agency: () => look.agency,
     onGate: agentGate, onChoose: agentChoose,
   });

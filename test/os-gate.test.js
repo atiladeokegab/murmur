@@ -1,40 +1,58 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { byHand } from '../public/os/gate.js';
+import { byHand, checkFingerprint } from '../public/os/gate.js';
 import { createBus, createCtx } from '../public/sdk/index.js';
 
 const rec = () => { const bus = createBus(); const seen = []; bus.on('confirm', (e) => seen.push(e)); return { bus, seen }; };
-const never = async () => { throw new Error('no sheet on a hand tap'); };
 
-test('a hand tap on Send is the yes: no sheet, no fingerprint, recorded byHand', async () => {
-  const { bus, seen } = rec();
-  const pk = { usable: async () => { throw new Error('not for send'); }, confirm: never };
-  assert.equal(await byHand({ app: 'messages', gate: 'send', readback: 'Send to Sam', bus, passkey: pk, sheet: never }), true);
-  assert.equal(seen.length, 1);
-  assert.equal(seen[0].result, true); assert.equal(seen[0].byHand, true); assert.equal('fingerprint' in seen[0], false);
+test('a hand tap on send, call or delete still shows the readback sheet, without the grace', async () => {
+  for (const gate of ['send', 'call', 'delete']) for (const yes of [true, false]) {
+    const { bus, seen } = rec();
+    let asked = null;
+    const sheet = async (q) => { asked = q; return yes; };
+    assert.equal(await byHand({ app: 'messages', gate, readback: 'Send to Sam', bus, sheet }), yes);
+    assert.deepEqual(asked, { gate, readback: 'Send to Sam', grace: false });
+    assert.equal(seen[0].result, yes); assert.equal(seen[0].byHand, true);
+  }
 });
 
-test('a hand tap on Pay checks the fingerprint before it pays', async () => {
+test('a hand tap on Pay: the sheet carries the fingerprint result onto the bus', async () => {
   for (const ok of [true, false]) {
     const { bus, seen } = rec();
-    let asked = 0;
-    const pk = { usable: async () => true, confirm: async () => { asked++; return ok; } };
-    assert.equal(await byHand({ app: 'shop', gate: 'pay', readback: 'Pay £4', bus, passkey: pk, sheet: never }), ok);
-    assert.equal(asked, 1);
-    assert.equal(seen[0].fingerprint, true); assert.equal(seen[0].result, ok);
+    assert.equal(await byHand({ app: 'shop', gate: 'pay', readback: 'Pay £4', bus, sheet: async () => ({ result: ok, fingerprint: ok }) }), ok);
+    assert.equal(seen[0].fingerprint, ok); assert.equal(seen[0].result, ok);
   }
-  const { bus } = rec();
-  const throws = { usable: async () => true, confirm: async () => { throw new Error('NotAllowedError'); } };
-  assert.equal(await byHand({ app: 'shop', gate: 'pay', readback: 'Pay', bus, passkey: throws, sheet: never }), false, 'a cancelled fingerprint pays nothing');
 });
 
-test('Pay with no authenticator falls back to the readback sheet, recorded fingerprint:false', async () => {
-  for (const yes of [true, false]) {
-    const { bus, seen } = rec();
-    const pk = { usable: async () => false, confirm: never };
-    assert.equal(await byHand({ app: 'shop', gate: 'pay', readback: 'Pay', bus, passkey: pk, sheet: async () => yes }), yes);
-    assert.equal(seen[0].fingerprint, false);
+const fp = (over = {}) => {
+  const said = [], calls = { confirm: 0 };
+  const passkey = { has: () => false, available: async () => true, confirm: async () => { calls.confirm++; return true; }, ...over };
+  return { said, calls, run: (o = {}) => checkFingerprint({ passkey, say: (t) => said.push(t), ...o }) };
+};
+
+test('pay fails closed: no authenticator pays nothing and asks for no credential', async () => {
+  const f = fp({ available: async () => false });
+  assert.equal(await f.run(), false);
+  assert.equal(f.calls.confirm, 0);
+  assert.deepEqual(f.said, ["This phone can't check a fingerprint, so I can't pay."]);
+  const g = fp({ available: async () => { throw new Error('no WebAuthn'); } });
+  assert.equal(await g.run(), false, 'a throwing check is a no');
+});
+
+test('pay with no passkey yet: making one is the fingerprint ask, and it must succeed', async () => {
+  for (const [res, want] of [[true, true], [false, false]]) {
+    const f = fp({ confirm: async () => { f.calls.confirm++; return res; } });
+    assert.equal(await f.run(), want); assert.equal(f.calls.confirm, 1);
   }
+  const c = fp({ confirm: async () => { throw new Error('NotAllowedError'); } });
+  assert.equal(await c.run(), false, 'a cancelled fingerprint pays nothing');
+  assert.deepEqual(c.said, ['No fingerprint, so nothing was paid.']);
+});
+
+test('pay with a fingerprint that never answers times out and frees the agent', async () => {
+  const f = fp({ has: () => true, confirm: () => new Promise(() => {}) });
+  assert.equal(await f.run({ wait: async () => {} }), false);
+  assert.deepEqual(f.said, ['No fingerprint, so nothing was paid.']);
 });
 
 test('ctx.confirm records the fingerprint the host checked, and {result:false} is a no', async () => {
