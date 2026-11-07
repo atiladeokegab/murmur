@@ -204,15 +204,18 @@ function tilesNow() {
 function renderBoard() {
   $('#day').textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long' });
   $('#board').replaceChildren(...tilesNow().map(({ app, now, line }, i) => {
-    const why = line.why || '';
+    const title = line.title || app.name;
+    // read() opens with the app's own name ("Messages, 3 chats."): the tile says it once
+    const rest = (line.why || '').startsWith(title) ? line.why.slice(title.length) : null;
+    const why = (rest !== null && /^([.,:]|$)/.test(rest) ? rest.replace(/^[.,:]\s*/, '') : line.why || '').replace(/^./, (c) => c.toUpperCase());
     const btn = el('button', { className: 'tile', type: 'button' },
       now ? el('span', { className: 'head' }, el('span', { className: 'badge', textContent: 'Now' }), flap(nowTime()))
         : el('span', { className: 'when' }),
-      el('span', { className: 'what' }, el('span', { className: 'title', textContent: line.title || app.name }),
+      el('span', { className: 'what' }, el('span', { className: 'title', textContent: title }),
         el('span', { className: 'why', textContent: why })),
       el('span', { className: 'key', textContent: String(i + 1) }));
     btn.dataset.app = app.id;
-    btn.setAttribute('aria-label', `${now ? 'Now: ' : ''}${line.title || app.name}. ${why}`);
+    btn.setAttribute('aria-label', `${now ? 'Now: ' : ''}${title}.${why ? ' ' + why : ''}`);
     [...btn.children].forEach((c) => c.setAttribute('aria-hidden', 'true'));
     btn.addEventListener('click', () => { open(app.id); if (line.say) speak(line.say, personal.signal); });
     return el('li', { className: now ? 'now' : '' }, btn);
@@ -272,7 +275,7 @@ bus.on('*', (name, e) => {
   if (name === 'task:done') {
     drop('task');
     ding(e.ok ? 'done' : 'stopped');
-    cursor.hide();
+    setTimeout(() => { if (!panel.on) cursor.hide(); }, 400); // the ring rests on the last press a moment
     if (panel.done?.line) show(panel.done.line); // the strip says where it ended, not the last question
     renderPanel();
     clearTimeout(undoTimer);
@@ -294,6 +297,8 @@ const dialog = $('#sheet');
 const sheetBody = $('#sheet-body');
 let pending = null; // what the sheet is asking: { kind: 'confirm'|'choose', gate?, readback?, question?, choices?, at, answer(v) }
 const VERB = { send: 'Send', pay: 'Pay', call: 'Call', delete: 'Delete' };
+// A travel hold is a pay gate (nothing is charged), but its button and question say Hold.
+const verbOf = ({ gate, readback }) => (gate === 'pay' && /\b(hold|held)\b/i.test(readback || '') ? 'Hold' : VERB[gate] || 'Yes');
 const GRACE_MS = 500; // a yes this soon could not have heard the readback
 let opener = null;
 function openSheet(kids, focusEl) {
@@ -320,13 +325,13 @@ function showSheet(kind, q, answer) {
   pending = { kind, ...q, at: performance.now(), answer };
   ding('gate');
   if (kind === 'confirm') {
-    const verb = VERB[q.gate] || 'Yes';
+    const verb = verbOf(q);
     const read = el('p', { id: 'sheet-readback', tabIndex: -1, textContent: q.readback || '' });
     const yes = el('button', { className: 'choice yes', type: 'button', id: 'sheet-yes', textContent: verb });
     const no = el('button', { className: 'choice', type: 'button', id: 'sheet-no', textContent: 'No' });
     yes.addEventListener('click', () => answerSheet(true));
     no.addEventListener('click', () => answerSheet(false));
-    openSheet([el('h2', { id: 'sheet-title', textContent: q.question || `${verb}?` }), read, el('div', { className: 'row' }, yes, no)], read);
+    openSheet([el('h2', { id: 'sheet-title', textContent: verb === 'Hold' || !q.question ? `${verb}?` : q.question }), read, el('div', { className: 'row' }, yes, no)], read);
   } else {
     const h = el('h2', { id: 'sheet-title', tabIndex: -1, textContent: q.question });
     const btns = q.choices.map((c, i) => {
@@ -356,7 +361,8 @@ function sheetConfirm({ gate, readback, grace = true }) {
       closeSheet(); resolve(v === true);
       return true;
     });
-    speak(`${String(readback || '').replace(/[.!?\s]+$/, '')}. ${VERB[gate] || 'Yes'}?`, personal.signal);
+    const r = String(readback || '').trim(); // a readback that already asks ("… Pay?") is said as it is
+    speak(/\?$/.test(r) ? r : `${r.replace(/[.!\s]+$/, '')}. ${verbOf({ gate, readback })}?`, personal.signal);
   });
 }
 // Every pay, hand or agent: the fingerprint or no pay (gate.js). The spoken or tapped yes never stands alone.
@@ -436,11 +442,12 @@ function stopAll() {
   agent?.stop?.();
   if (!panel.on) ding('stopped');
 }
+const oneStop = (t) => (/[.!?]$/.test(String(t).trim()) ? String(t).trim() : `${String(t).trim()}.`); // one stop, never "one.."
 function where() {
   const app = current && registry.get(current);
-  if (!app) { const t = tilesNow()[0]; return speak(`The board. Now: ${t.line.title || t.app.name}.`, personal.signal); }
+  if (!app) { const t = tilesNow()[0]; return speak(`The board. Now: ${oneStop(t.line.title || t.app.name)}`, personal.signal); }
   const p = app.place();
-  return speak(`${[p.where, p.item, p.n && p.of ? `${p.n} of ${p.of}` : ''].filter(Boolean).join(', ')}.${p.next ? ` Next: ${p.next}.` : ''}`, personal.signal);
+  return speak(`${oneStop([p.where, p.item, p.n && p.of ? `${p.n} of ${p.of}` : ''].filter(Boolean).join(', '))}${p.next ? ` Next: ${oneStop(p.next)}` : ''}`, personal.signal);
 }
 const again = () => speak(lastLine, personal.signal);
 function takeOver() {

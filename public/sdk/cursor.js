@@ -31,9 +31,13 @@ export function createCursor(doc = document) {
       target = el;
       ring.dataset.name = name;
       if (still() && !appearing) { ring.style.opacity = '0'; await wait(120); }
-      if (appearing) ring.style.transition = 'none'; // the first ring appears on its control, it does not fly in from a corner
+      if (appearing) { // the first ring appears on its control, not where the panel was a frame ago, and does not fly in
+        ring.style.transition = 'none';
+        await new Promise((res) => win.requestAnimationFrame(() => win.requestAnimationFrame(res)));
+        if (target !== el) return; // hidden or moved on while we waited
+      }
+      ring.hidden = false; // before place(): place() skips a hidden ring, which left the first one at 0,0
       place();
-      ring.hidden = false;
       ring.style.opacity = '1';
       if (appearing) { ring.getBoundingClientRect(); ring.style.transition = ''; }
       await wait(still() ? 120 : 280); // let the glide land before the press
