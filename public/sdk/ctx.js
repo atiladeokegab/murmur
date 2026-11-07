@@ -11,6 +11,8 @@ export function controlName(el) {
   return named.replace(/\s+/g, ' ').trim();
 }
 
+// Native :disabled covers a control inside <fieldset disabled>, where el.disabled is still false.
+const off = (el) => el.disabled || el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true';
 const stopped = () => Object.assign(new Error('Stopped'), { name: 'AbortError' });
 
 /**
@@ -36,7 +38,7 @@ export function createCtx({ app, root, bus, kv, cursor, ask, choose = async () =
       live(); own(el, 'control');
       if (!el.matches(CONTROL)) throw new Error(`${app.name}: that isn't a control a person could press.`);
       const control = name || controlName(el);
-      if (el.disabled || el.getAttribute('aria-disabled') === 'true') throw new Error(`${app.name}: ${control} isn't available right now.`);
+      if (off(el)) throw new Error(`${app.name}: ${control} isn't available right now.`);
       bus.emit('tap', { app: app.id, control });
       await cursor.moveTo(el, control);
       live();
@@ -45,7 +47,7 @@ export function createCtx({ app, root, bus, kv, cursor, ask, choose = async () =
     async type(el, text) {
       live(); own(el, 'text box');
       if (!('value' in el)) throw new Error(`${app.name}: that isn't a text box.`);
-      if (el.disabled || el.readOnly || el.getAttribute('aria-disabled') === 'true' || el.getAttribute('aria-readonly') === 'true') {
+      if (off(el) || el.readOnly || el.getAttribute('aria-readonly') === 'true') {
         throw new Error(`${app.name}: ${controlName(el) || 'that box'} can't be changed right now.`);
       }
       if (el.focus) el.focus({ preventScroll: true });

@@ -187,6 +187,12 @@ test('review fixes: no typing into a read-only box, no prototype keys through va
   await assert.rejects(ctxFor(registry.get('hello')).type(box, 'sneaky'), /can't be changed/);
   assert.equal(box.value, '');
   box.readOnly = false;
+  const fs = roots.hello.ownerDocument.createElement('fieldset'); fs.disabled = true;
+  const inner = roots.hello.ownerDocument.createElement('textarea'); fs.append(inner); roots.hello.append(fs);
+  await assert.rejects(ctxFor(registry.get('hello')).type(inner, 'sneaky'), /can't be changed/);
+  const innerBtn = roots.hello.ownerDocument.createElement('button'); fs.append(innerBtn);
+  await assert.rejects(ctxFor(registry.get('hello')).tap(innerBtn, 'Send'), /isn't available/);
+  assert.equal(inner.value, '');
 
   const s = { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] };
   const v = validate(s, JSON.parse('{"constructor": 1, "__proto__": {"admin": true}, "toString": 2}'));
