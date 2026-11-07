@@ -78,7 +78,8 @@ const app = {
       more: (st) => { // "tell me more": who, what came before, which other chats wait, and what to say next
         const c = M.chatOf(st), ms = c?.messages || [], i = ms.findLastIndex((m) => m.from === 'them'), prev = ms[i - 1];
         const waiting = st.chats.filter((x) => x.id !== c?.id && x.unread).map((x) => x.name);
-        return c ? [`From ${c.name}, message ${i + 1} of ${ms.length} in the chat.`,
+        const when = M.agoWords(ms[i]?.ago);
+        return c ? [`From ${c.name}${when ? `, ${when}` : ''}, message ${i + 1} of ${ms.length} in the chat.`,
           prev ? `Before it, ${prev.from === 'me' ? 'you' : c.name} said: ${prev.text}` : '',
           waiting.length ? `New messages also from ${waiting.join(' and ')}.` : 'No other new messages.',
           `Say "reply" and your words to answer${waiting.length ? `, or "read ${M.possessive(waiting[0])} messages"` : ''}.`].filter(Boolean).join(' ') : '';
