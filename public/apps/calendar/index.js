@@ -205,9 +205,9 @@ const app = {
     root = r; kv = os.kv; osConfirm = os.confirm || null;
     // Tokens only (os/contract.md §2.1); the buttons reuse the shell's .choice.
     const style = el('style', { textContent: `#app-calendar{padding:0 var(--gutter)}#app-calendar ol{padding:0}
-#app-calendar li{padding:var(--ring) 0}#app-calendar label{display:block;margin-top:var(--ring)}
+#app-calendar li{padding:var(--ring) 0}#app-calendar label,#app-calendar h4{display:block;margin-top:var(--gutter)}
 #app-calendar .choices{margin:var(--ring) 0}#app-calendar li .choice{width:100%;justify-items:start;text-align:start}
-#app-calendar input{box-sizing:border-box;width:100%;min-height:var(--h-link);font:inherit;font-size:var(--fs-sheet);background:var(--c-board);color:var(--c-ink);border:var(--bw-talk) solid var(--c-ink);border-radius:var(--r-btn)}` });
+#app-calendar input{box-sizing:border-box;width:100%;padding:0 var(--gutter);min-height:var(--h-link);font:inherit;font-size:var(--fs-sheet);background:var(--c-board);color:var(--c-ink);border:var(--bw-talk) solid var(--c-ink);border-radius:var(--r-btn)}` });
     root.append(style, el('h2', { id: 'calendar-h', textContent: 'Calendar' }),
       el('p', { id: 'cal-status', role: 'status' }),
       el('div', { className: 'choices' },
