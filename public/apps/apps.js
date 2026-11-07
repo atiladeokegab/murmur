@@ -10,4 +10,5 @@ export default [
   'travel',
   'places',
   'weather',
+  'clock',
 ];
