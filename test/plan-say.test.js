@@ -200,5 +200,28 @@ test('the profile: the planner context carries her name and home, and the server
   const real = globalThis.fetch; globalThis.fetch = fetch;
   try { const { plan } = await import('../lib/agent/planner.js'); await plan({ key: 'k', utterance: 'take me home', apps: [], context: { app: null, me } }); }
   finally { globalThis.fetch = real; }
-  assert.match(body.contents[0].parts[0].text, /Person's name: Joy Adeyemi\.\nPerson's home: 12 Larkspur Mews/);
+  assert.match(body.contents[0].parts[0].text, /Person's name: Joy Adeyemi\.\nPerson's home: 14 Larkspur Row/);
+});
+
+test('the co-designer video: who are you, my location, Westfield, and a message to a new name', async () => {
+  const said = (s) => demoPlan(s, reg, { app: null, workflows: [] }).plan.map((x) => x.params?.text).join(' ');
+  assert.equal(said('Who are you?'), "I'm Murmur. I run this phone for you by voice: messages, calls, music, rides, reminders, anything.");
+  assert.equal(said('What can you do?'), 'Everything. Just tell me what you need.');
+  assert.equal(said('What is my current location?'), "You're in Stratford, near the Westfield end of the High Street.");
+  const far = demoPlan('How long to Westfield shopping centre?', reg, { app: null, workflows: [] }).plan;
+  assert.equal(far[0]?.tool.split('__')[0], 'maps');
+  const planner = (await import('node:fs')).readFileSync(new URL('../lib/agent/planner.js', import.meta.url), 'utf8');
+  assert.match(planner, /a real, correct answer in at most two short sentences; never say you can only help with apps/);
+  // a name not in the contacts becomes a chat, then the send flow carries on
+  const doc = fakeDocument(), bus = createBus(), registry = createRegistry();
+  const messages = apps.find((a) => a.id === 'messages');
+  registry.register(messages);
+  const kv = appKv('messages', browserKV({ storage: fakeStorage(), prefix: 'murmur' }));
+  const root = await mountApp(messages, doc.body, { kv, bus, say: () => {} });
+  await messages.reset?.();
+  const ctx = createCtx({ app: messages, root, bus, kv, cursor: { async moveTo() {}, hide() {} }, ask: async () => true, choose: async () => null, signal: new AbortController().signal });
+  await messages.actions.openChat.run({ who: 'tony' }, ctx);
+  assert.equal(messages.state().currentChat, 'tony');
+  assert.equal(messages.actions.openChat.verify(messages.state(), { who: 'tony' }), true);
+  assert.equal(messages.state().chats.find((c) => c.id === 'tony').name, 'Tony');
 });

@@ -9,6 +9,8 @@ const PLACES = {
     route: ['Head north on Station Approach.', 'Left onto Fennel Street. The market is on your right.'] },
   library: { name: 'Quayside Library', at: '2 Quayside Walk', miles: 'a mile and a half', walk: 'thirty minutes',
     route: ['Head east along the canal path.', 'Cross the footbridge.', 'The library is at the end of Quayside Walk.'] },
+  westfield: { name: 'Westfield shopping centre', at: 'the Westfield end of the High Street', miles: 'about a third of a mile', walk: 'about eight minutes', bus: 'two stops on the bus',
+    route: ['Head south on Station Approach.', 'Cross at the lights onto the High Street.', 'Westfield is ahead, through the glass doors.'] },
   gym: { name: 'the gym', at: 'Orchard Yard', miles: 'a third of a mile', walk: 'seven minutes',
     route: ['Head south on Station Approach.', 'Right into Orchard Yard. The gym is at the back.'] },
 };
@@ -64,7 +66,7 @@ export function createMaps() {
     read() {
       if (s.view !== 'place') return `Maps. You are at Stratford station. ${known()}`;
       const p = PLACES[s.place], name = p.name[0].toUpperCase() + p.name.slice(1);
-      return s.mode === 'route' ? `${name} is ${p.walk} on foot. ${p.route.join(' ')}` : `${name} is ${p.miles} away, ${p.walk} on foot.`;
+      return s.mode === 'route' ? `${name} is ${p.walk} on foot. ${p.route.join(' ')}` : `${name} is ${p.miles} away, ${p.walk} on foot${p.bus ? `, or ${p.bus}` : ''}.`;
     },
     place() {
       if (s.view === 'place') return { where: PLACES[s.place].name, item: s.mode === 'route' ? 'the route' : 'the distance', n: 1, of: 1, next: null };

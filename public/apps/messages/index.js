@@ -52,6 +52,7 @@ const app = {
           if (!pick) throw new Error('No one chosen.');
           r = { id: pick.id };
         }
+        if (r.none && !p.id && /^[a-z][a-z' -]{0,30}$/i.test(String(p.who || '').trim())) r = { id: addContact(p.who) }; // a new name: add them, then carry on
         if (r.none) throw new Error(r.none);
         if (s.currentChat && s.currentChat !== r.id) await ctx.tap(q('#msg-back'));
         if (s.currentChat !== r.id) await ctx.tap(q(`[data-chat="${r.id}"]`));
@@ -153,6 +154,12 @@ const PAD = 'padding-inline: clamp(0.25rem, 4vw, 1rem)';
 const ROW = 'border-top: 0';
 const button = (text, props = {}) => el('button', { type: 'button', className: 'app-btn', style: PAD, ...props }, text);
 
+/** "Send a message to Tony": a name not in the contacts becomes a new, empty chat. */
+function addContact(who) {
+  const name = String(who).trim().replace(/\b[a-z]/g, (c) => c.toUpperCase()), id = name.toLowerCase().replace(/[^a-z]+/g, '-');
+  if (!M.chatOf(s, id)) { s.chats.push({ id, name, unread: 0, messages: [] }); save(); render(); }
+  return id;
+}
 function render(result) {
   if (!body) return;
   const c = M.chatOf(s);
@@ -174,7 +181,7 @@ function keepFocus(paint, result) {
 
 function listView() {
   return el('ul', { className: 'app-list', 'aria-label': 'Your chats' }, s.chats.map((c) => el('li', { style: ROW },
-    button([el('b', { className: 'app-title' }, c.name), el('span', { className: 'sr' }, '.'), el('span', { className: 'app-why' }, ` ${c.unread ? 'New: ' : ''}${c.messages.at(-1).text}`)], { 'data-chat': c.id, onclick: () => { M.open(s, c.id); save(); render('#msg-chat-h'); } }))));
+    button([el('b', { className: 'app-title' }, c.name), el('span', { className: 'sr' }, '.'), el('span', { className: 'app-why' }, ` ${c.unread ? 'New: ' : ''}${c.messages.at(-1)?.text ?? 'New contact'}`)], { 'data-chat': c.id, onclick: () => { M.open(s, c.id); save(); render('#msg-chat-h'); } }))));
 }
 
 function sentenceList(label, all, { changed = null, current = -1, keep = false } = {}) {
