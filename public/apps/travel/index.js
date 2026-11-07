@@ -10,6 +10,17 @@ const ROUTES = {
   ] },
 };
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+export function dateForDay(day, now = new Date(), next = false) {
+  const target = DAYS.indexOf(String(day).toLowerCase());
+  if (target < 0) return null;
+  const today = new Date(now);
+  const from = (today.getUTCDay() + 6) % 7;
+  let offset = (target - from + 7) % 7;
+  if (next && offset === 0) offset = 7;
+  today.setUTCHours(0, 0, 0, 0);
+  today.setUTCDate(today.getUTCDate() + offset);
+  return today.toISOString().slice(0, 10);
+}
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9:]+/g, ' ').trim();
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const SIM = 'Simulated fares for the demo. Nothing is booked or charged.';
@@ -31,8 +42,8 @@ function pickOf(q, flights) {
     || n.includes(f.spoken) || n.includes(norm(f.airline)) || n === norm(f.id));
 }
 
-export function createTravel() {
-  let root = null, body = null, doc = null, ui = null, s = {}, confirm = null, holding = null;
+export function createTravel({ now = () => new Date() } = {}) {
+  let root = null, body = null, doc = null, ui = null, s = {}, confirm = null, holding = null, requestedDate = null, lastSearch = null;
   const fresh = () => ({ view: 'search', query: null, results: [], selected: null, held: null });
   const sel = () => s.results.find((f) => f.id === s.selected);
   // The flight a hold means: the one named ("book the 9:40"), else the one open. Thrown words are spoken.
@@ -58,7 +69,7 @@ export function createTravel() {
   const on = {
     search(key) {
       const [route, day] = key.split('|');
-      s.query = { from: ROUTES[route].from, to: ROUTES[route].to, day };
+      s.query = { from: ROUTES[route].from, to: ROUTES[route].to, day, date: requestedDate || dateForDay(day, now()) };
       s.results = structuredClone(ROUTES[route].flights);
       s.selected = null; s.view = 'results'; render();
     },
@@ -119,9 +130,16 @@ export function createTravel() {
           if (!day || DAYS.indexOf(day) < 4) throw new Error('I have Friday, Saturday and Sunday. Which day?');
           if (s.view === 'flight' || s.view === 'held') await ctx.tap(ui.find('back'));
           if (s.view === 'results') await ctx.tap(ui.find('newSearch'));
-          await ctx.tap(ui.find('search', `london-lisbon|${day}`));
+          requestedDate = dateForDay(day, now(), /\bnext\b/i.test(p.day || ''));
+          lastSearch = { day, date: requestedDate };
+          try { await ctx.tap(ui.find('search', `london-lisbon|${day}`)); }
+          finally { requestedDate = null; }
         },
-        verify(st, p) { return (st.view === 'results' && st.results.length === 3 && norm(p.day || 'friday').includes(st.query.day)) || 'The flights are not showing.'; },
+        verify(st, p) {
+          const day = DAYS.find((d) => norm(p.day || 'friday').includes(d));
+          const date = lastSearch?.day === day ? lastSearch.date : null;
+          return (st.view === 'results' && st.results.length === 3 && st.query.day === day && st.query.date === date) || 'The flights are not showing for that date.';
+        },
       },
       pick: {
         describe: 'Pick one of the flights found', doing: 'Picking the flight',

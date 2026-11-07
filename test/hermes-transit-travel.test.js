@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTransit } from '../public/apps/transit/index.js';
-import { createTravel } from '../public/apps/travel/index.js';
+import { createTravel, dateForDay } from '../public/apps/travel/index.js';
 import { checkContract, phone } from './hermes-fake.js';
 
 async function transitAt(clock) { const app = createTransit({ now: () => clock.t }); return { app, ...(await phone([app])) }; }
@@ -47,6 +47,24 @@ test('Travel: three flights in three sentences, book the 9:40 through the pay ga
   assert.equal(app.read(), 'Held: Tagus Air, Friday at nine forty, for 24 hours. Nothing is charged.');
   assert.ok((await run('travel__pick', { flight: 'second' })).ok, 'pick again goes back to the list');
   assert.ok((await run('travel__findFlights', { to: 'Lisbon', day: 'Saturday' })).ok, 'a new search from a flight');
+});
+
+test('Travel: next Friday resolves to the requested absolute date', async () => {
+  const app = createTravel({ now: () => new Date('2026-11-07T12:00:00Z') });
+  const { run } = await phone([app]);
+  assert.equal(dateForDay('friday', new Date('2026-11-07T12:00:00Z'), true), '2026-11-13');
+  const result = await run('travel__findFlights', { from: 'London', to: 'Lisbon', day: 'next Friday' });
+  assert.equal(result.ok, true, result.reason);
+  assert.deepEqual(app.state().query, { from: 'London', to: 'Lisbon', day: 'friday', date: '2026-11-13' });
+});
+
+test('Travel: verification uses the date resolved when search began, across midnight', async () => {
+  const dates = [new Date('2026-11-12T23:59:59Z'), new Date('2026-11-13T00:00:01Z')];
+  const app = createTravel({ now: () => dates.shift() || new Date('2026-11-13T00:00:01Z') });
+  const { run } = await phone([app]);
+  const result = await run('travel__findFlights', { from: 'London', to: 'Lisbon', day: 'next Friday' });
+  assert.equal(result.ok, true, result.reason);
+  assert.equal(app.state().query.date, '2026-11-13');
 });
 
 test('Travel: a No holds nothing, refusals are in words, reset clears', async () => {
