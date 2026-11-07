@@ -180,3 +180,19 @@ test('remove_app: the agent gate asks, a spoken no keeps it, a tile of the same 
   assert.deepEqual(removed, ['hello']);
   assert.deepEqual(demoPlan('Remove pizza', describeRegistry(s.registry)).plan.map((x) => x.tool).includes('remove_app'), false);
 });
+
+test('Stop while a gated action resolves its person finishes the task: nothing paid, the runner free', async () => {
+  const p = await phone({ patch: { shop: (a) => ({ pay: { ...a.pay, readback: (st, prm) => `Pay ${prm.who} £3.20.`,
+    params: { type: 'object', properties: { who: { type: 'string' } } },
+    async resolve(prm, ctx) { await ctx.choose('Sam or Samira?', [{ label: 'Sam' }, { label: 'Samira' }]); throw Object.assign(new Error('Stopped'), { name: 'AbortError' }); } } }) } });
+  const asked = [];
+  const agent = createAgent({ registry: p.registry, bus: p.bus, ctxFor: p.ctxFor, agency: () => 'just', fingerprint: async () => true,
+    planOpts: { offline: true }, speak: async (t) => { asked.push(t); } });
+  const done = agent.runner.run({ utterance: 'pay', steps: [{ tool: 'shop__pay', app: 'shop', action: 'pay', params: { who: 'Sam' } }] });
+  await until(() => asked.includes('Sam or Samira?'));
+  await agent.hear('stop');
+  const out = await done;
+  assert.equal(out.status, 'stopped');
+  assert.equal(agent.runner.busy, false);
+  assert.equal(agent.gates.current, null);
+});

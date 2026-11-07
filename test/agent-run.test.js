@@ -319,7 +319,7 @@ test("narration and who speaks: Murmur's voice or the status region, never both"
 
   const s = await setup({ agency: () => 'ask' });
   await s.agent.hear("Read Mum's message");
-  assert.deepEqual(s.spoken.slice(0, 4), ['On it.', 'Opening the chat', 'Reading', 'Lunch on Tuesday?']);
+  assert.deepEqual(s.spoken.slice(0, 3), ['On it.', 'Reading', 'Lunch on Tuesday?'], '"Opening the chat" is dropped: its step was done before its turn');
   const quick = await setup(); // Just do it: the step earcons carry the steps; the voice says the result
   await quick.agent.hear("Read Mum's message");
   assert.ok(!quick.spoken.includes('Opening the chat'));
@@ -358,4 +358,31 @@ test('a No to a hold says "Not held.", a No to a payment still says "Not paid."'
   };
   assert.equal(await no('The 9:40 to Lisbon, £120, held for 24 hours. Hold?'), 'Not held.');
   assert.equal(await no('Pay Sam £20. From Murmur Bank. Pay?'), 'Not paid.');
+});
+
+test('a read-only, refused or No\'d task keeps the last change undoable, still 8 s from that change', async () => {
+  const s = await setup();
+  const write = [{ tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Lunch on Tuesday.' } }];
+  await s.agent.runner.run({ utterance: 'write', steps: write });
+  s.clock.t += 2000;
+  await s.agent.hear("Read Mum's message");
+  await s.agent.hear('Check my Barclays balance');
+  s.clock.t += 2000;
+  await s.agent.hear('undo');
+  assert.equal(s.state('hello').draft, '', 'undone after a read and a refusal');
+  await s.agent.runner.run({ utterance: 'write', steps: write });
+  s.clock.t += 6000;
+  await s.agent.hear("Read Mum's message");
+  s.clock.t += 2001;
+  await s.agent.hear('undo');
+  assert.equal(s.state('hello').draft, 'Lunch on Tuesday.', 'the 8 s run from the change, not from the read');
+});
+
+test('Ask me: a step line is never said once its step is done, and "Writing your reply" is left to the readback', async () => {
+  const s = await setup({ agency: () => 'ask' });
+  await gated(s, "Text Sam I'm ten minutes late", async () => { s.clock.t += 600; await s.agent.hear('send'); }, { choose: 'Sam' });
+  assert.ok(!s.spoken.some((t) => /^Writing/.test(t)), s.spoken.join(' | '));
+  const at = s.spoken.length;
+  await s.agent.hear("Read Mum's message");
+  assert.ok(!s.spoken.slice(at).includes('Opening the chat'), 'its step was done before its turn');
 });
