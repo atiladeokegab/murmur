@@ -113,12 +113,15 @@ export function score(raw) {
   const fps = frames.length / ((frames.at(-1)?.t - frames[0]?.t) / 1000 || 1);
   const shifts = M.shifts.filter((s) => s.t >= t0);
   const cls = shifts.reduce((n, s) => n + s.v, 0);
+  // A teleport is a move of over 100 px that lands within 2 frames; an ease-out glide may cover 100+ px in its first frame.
   const jumps = [];
-  for (let i = 1; i < M.cursor.length; i++) {
+  let move = null;
+  for (let i = 1; i <= M.cursor.length; i++) {
     const a = M.cursor[i - 1], b = M.cursor[i];
-    if (a.hidden || b.hidden) continue;
-    const d = Math.hypot(b.x - a.x, b.y - a.y);
-    if (d > 100) jumps.push({ t: rel(b.t), px: Math.round(d) });
+    const d = a && b && !a.hidden && !b.hidden ? Math.hypot(b.x - a.x, b.y - a.y) : 0;
+    if (d > 1) { move ||= { t: rel(b.t), px: 0, frames: 0 }; move.px += d; move.frames++; continue; }
+    if (move && move.px > 100 && move.frames <= 2) jumps.push({ t: move.t, px: Math.round(move.px), frames: move.frames });
+    move = null;
   }
   return {
     firstSound: sounds.length ? Math.min(...sounds.map((s) => s.start)) : null,
@@ -188,7 +191,7 @@ const rows = [
   ['Last word to "Sent"', '< 6 s', m('sent'), (v) => v != null && v < 6000, 's'],
   ['Dropped frames (rAF > 20 ms)', '0', m('dropped'), (v) => v === 0, 'n'],
   ['Layout shift (CLS)', '0', m('cls'), (v) => v === 0, 'n'],
-  ['Cursor teleports (> 100 px/frame)', '0', median(good.map((r) => r.jumps.length)), (v) => v === 0, 'n'],
+  ['Cursor teleports (>100 px in ≤2 fr)', '0', median(good.map((r) => r.jumps.length)), (v) => v === 0, 'n'],
   ['Blank frames', '0', median(good.map((r) => r.blanks.length)), (v) => v === 0, 'n'],
 ];
 console.log(`\nMurmur magic — ${URL_}${DEMO_PLAN ? ' (demo planner)' : ''} — median of ${good.length}/${RUNS} runs\n`);
