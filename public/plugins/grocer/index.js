@@ -58,8 +58,8 @@ const app = {
     orderBtn = el('button', { type: 'button', id: 'grocer-order', className: 'app-btn primary', textContent: 'Order and pay' });
     orderBtn.addEventListener('click', async () => {
       if (!basket.length) return;
-      // The person's own tap asks through the shell; when the agent pressed it, the runner already asked.
-      if (os.confirm && !(await os.confirm({ gate: 'pay', readback: readback() }))) return;
+      // The person's own tap asks through the shell (contract §7); the agent's press was already asked. No confirm, no order.
+      if (!(os?.confirm && await os.confirm({ gate: 'pay', readback: readback() }))) return;
       order = { items: basket.slice(), total: total(), n: (order?.n || 0) + 1 };
       note = `Ordered. ${money(order.total)}, delivered by 6 pm.`;
       await save(); render();

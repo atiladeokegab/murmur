@@ -28,8 +28,10 @@ function checkGates(app) {
 /**
  * Install one plug-in.
  * @param {string} url  same-origin module under /plugins/, e.g. '/plugins/taxi/index.js'
- * @param {{registry, host: Element, os?: (app, kv) => object, port?, persist?: boolean}} o
- *   os(app, kv) builds the `os` handed to mount (the shell's own, so confirm and say work the same)
+ * @param {{registry, host: Element, os?: (app, kv) => object, port?, persist?: boolean, confirm?, removed?}} o
+ *   os(app, kv) builds the `os` handed to mount (the shell's own, so confirm and say work the same).
+ *   With confirm({app, gate, readback}) => Promise<boolean>, the app gets a Remove button as its last control;
+ *   removed(result) hears how it went ({ ok, id, say, cancelled? }).
  * @returns {Promise<{id, name, actions: string[], url, root, kv}>}  throws with a reason on any refusal
  */
 export async function installApp(url, o) {
@@ -44,6 +46,13 @@ export async function installApp(url, o) {
     kv = appKv(app.id, port(o));
     root = await mountApp(app, host, os(app, kv));
     await app.seed();
+    if (o.confirm) {
+      const doc = root.ownerDocument, b = doc.createElement('button');
+      b.type = 'button'; b.className = 'app-btn quiet'; b.id = `app-${app.id}-remove`;
+      b.textContent = `Remove ${app.name} from your phone`;
+      b.addEventListener('click', async () => o.removed?.(await removeApp(app.id, o, o.confirm)));
+      root.append(b);
+    }
   } catch (e) {
     registry.unregister(app.id);
     root?.remove?.();
@@ -66,6 +75,16 @@ export async function uninstallApp(id, o) {
   const kv = appKv(id, port(o));   // its data goes with it: a reinstall starts clean
   for (const k of Object.keys(await kv.all())) await kv.set(k, undefined);
   return { id };
+}
+
+/** A person's Remove: asks first with gate delete, then uninstalls. Never throws: { ok, id, say, cancelled? }. */
+export async function removeApp(id, o, confirm = o.confirm) {
+  const app = o.registry.get(id);
+  if (!app) return { ok: false, id, say: "That app isn't on your phone." };
+  if (!(await installed(o)).some((x) => x.id === id)) return { ok: false, id, say: `${app.name} came with the phone, so it stays.` };
+  if (!(await confirm({ app: id, gate: 'delete', readback: `Remove ${app.name} from your phone?` }))) return { ok: false, id, cancelled: true, say: 'Kept it.' };
+  await uninstallApp(id, o);
+  return { ok: true, id, say: `Removed ${app.name}.` };
 }
 
 /** On boot: install everything in the saved list. One broken plug-in is skipped and reported, never fatal. */
