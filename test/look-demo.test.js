@@ -43,7 +43,8 @@ test('first open says one sentence, only once, and reset re-arms it', async () =
 });
 
 test('reset puts every app and the board back, and re-arms first open', async () => {
-  const { demo, run, registry, board, onboard, said } = await phone();
+  const { demo, run, registry, board, onboard, said, bus } = await phone();
+  const resets = []; bus.on('reset', (e) => resets.push(e));
   await run('hello__write', { text: 'late' });
   await run('look__textBigger', {});
   await firstOpen({ kv: onboard.kv, say: async () => {} });
@@ -53,6 +54,7 @@ test('reset puts every app and the board back, and re-arms first open', async ()
   assert.equal(board.day, 1);
   assert.equal(await onboard.kv.get('said'), undefined);
   assert.equal(said.at(-1), 'Reset. Day 1.');
+  assert.equal(resets.length, 1, 'the bus says reset, so /inside clears');
 });
 
 test('next morning moves the board on a day; mode flips who speaks through the look action', async () => {
