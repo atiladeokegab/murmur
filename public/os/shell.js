@@ -11,7 +11,8 @@ import { playPcm, stopAudio, audioOut } from '../live.js';
 import * as passkey from '../passkey.js';
 import { byHand } from './gate.js';
 import { installToken } from '../agent/token.js';
-import { play, buzz } from '../sound/index.js';
+import { play, buzz, mute, unmute, isMuted } from '../sound/index.js';
+import { createPhone } from './phone.js';
 installToken(); // wraps fetch before any /api call
 
 const $ = (s) => document.querySelector(s);
@@ -121,6 +122,9 @@ function onBack(kind) {
 const bus = createBus();
 const registry = createRegistry();
 await loadApps(registry, appIds);
+registry.register(createPhone({ stop: () => stopAll(), where: () => where(), noLook: (on) => setNoLook(on), isNoLook: () => !!look.nolook,
+  sound: (on) => { (on ? unmute : mute)(); store.set('muted', !on); }, isSound: () => !isMuted() }));
+if (store.get('muted', false)) mute();
 const port = browserKV({ prefix: 'murmur' });
 const appsEl = $('#apps');
 const roots = {}, kvs = {};
@@ -180,7 +184,7 @@ const nowTime = () => { const d = new Date(); return `${pad(d.getHours())}:${pad
 const flap = (s) => el('span', { className: 'flap' }, [...s].map((c) => el('i', { className: c === ':' ? 'sep' : '', textContent: c })));
 const firstSentence = (t) => (String(t || '').match(/^[^.!?]*[.!?]?/) || [''])[0];
 function tilesNow() {
-  const apps = registry.list().filter((a) => a.id !== 'look'); // Your look is the link under the board
+  const apps = registry.list().filter((a) => a.id !== 'look' && a.id !== 'phone'); // the links under the board
   const lines = apps.map((a) => { try { return a.now?.({ day }) || null; } catch { return null; } });
   const i = Math.max(0, lines.findIndex(Boolean));
   return apps.map((a, k) => ({ app: a, now: k === i, line: lines[k] || { why: firstSentence(a.read()) } }))
@@ -443,7 +447,7 @@ $('#board-view').addEventListener('click', (e) => { if (!e.target.closest('butto
 
 // ---------- Your look is an app (public/apps/look/); the demo panel and first open come from wire.js ----------
 $('#look-link').addEventListener('click', (e) => { e.preventDefault(); open('look'); });
-$('#nolook-link').addEventListener('click', () => setNoLook(true));
+$('#phone-link').addEventListener('click', (e) => { e.preventDefault(); open('phone'); });
 async function resetAll() {
   stopAll();
   for (const a of registry.list()) await a.reset();
