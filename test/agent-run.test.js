@@ -451,3 +451,11 @@ test('a spoken "hold" answers "Hold?" and still checks the fingerprint; it never
   assert.equal(hear('hold', { gate: pay, now: 1000 }).words[0].kind, 'ignored');
   assert.equal(hear('hold', { gate: { gate: 'send', readback: 'To Sam: late.', openedAt: 0 }, now: 1000 }).words[0].kind, 'ignored');
 });
+
+test('an app the phone does not have: Murmur says it is bringing it over, and Inside hears app:import', async () => {
+  const s = await setup();
+  const seen = []; s.bus.on('app:import', (e) => seen.push(e.name));
+  await s.agent.hear('open the camera'); await until(() => seen.length);
+  assert.deepEqual(seen, ['Camera']);
+  assert.ok(s.spoken.some((l) => /I don't have Camera yet\. I'm starting to bring it over from your phone now\./.test(l)), s.spoken.join(' | '));
+});

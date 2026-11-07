@@ -75,7 +75,7 @@ test('plans are validated: unknown tools and params dropped, and said in the app
   assert.deepEqual(dropped.map((d) => d.reason), ['dropped params colour', 'unknown action', 'unknown app', 'missing text']);
   assert.equal(dropped[1].say, "I can't do that in Messages. I can open the chat with a person, read the new message in the open chat, or write a reply in the open chat.");
   assert.equal(cantLine(apps[0]), dropped[1].say);
-  assert.equal(dropped[2].say, "That app isn't on this phone.");
+  assert.equal(dropped[2].say, "That app isn't here yet. I'm starting to bring it over from your phone now.");
 });
 
 const run = (t, ctx) => { const p = demoPlan(t, apps, ctx); return { ...p, ...validatePlan(p.plan, apps, { dryRun: p.kind === 'teach' }) }; };
@@ -124,7 +124,7 @@ test('demo provider: refusals and the unknown are said, never planned', () => {
   assert.ok(u.say.length > 5);
   assert.equal(run('').say, 'Sorry, again?');
   assert.match(run('open the bank').say, /^I don't do banking/);
-  assert.equal(run('open the camera').say, "I don't have Camera on this phone.");
+  assert.equal(run('open the camera').say, "I don't have Camera yet. I'm starting to bring it over from your phone now.");
   // An app missing from this phone is dropped by the validator, in words.
-  assert.equal(run('next bus').dropped[0].say, "That app isn't on this phone.");
+  assert.equal(run('next bus').dropped[0].say, "That app isn't here yet. I'm starting to bring it over from your phone now.");
 });

@@ -143,3 +143,8 @@ test('forward() posts every bus event as {events:[{type, ...payload}]} with keep
   assert.deepEqual(events.map(({ t, ...e }) => e), [{ type: 'heard', text: 'hi', path: 'typed' }, { type: 'tap', app: 'shop', control: 'buy' }]);
   assert.ok(events.every((e) => typeof e.t === 'number'));
 });
+
+test('app:import shows in the Plan column as the app coming over', () => {
+  const m = run([['app:import', { name: 'Camera' }]]);
+  assert.equal(m.columns().Plan.at(-1).plan[0].name, 'Bringing Camera over from the phone');
+});

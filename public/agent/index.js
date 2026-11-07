@@ -241,6 +241,8 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     const p = await planFor(rest);
     slotAsk = p.asked || null;
     if (!p.steps.length || p.kind === 'teach') releaseAck();
+    const lost = p.dropped.find((d) => d.reason === 'unknown app' && d.say);
+    if (/bring it over from your phone/.test(p.say || lost?.say || '')) bus.emit('app:import', { name: p.say?.match(/^I don't have (.+?) yet\./)?.[1] || lost.tool.split('__')[0] }); // Inside shows it coming over
     if (!p.steps.length) { await say(p.say || p.dropped.find((d) => d.say)?.say || "I can't do that one yet."); return { status: p.kind === 'refuse' ? 'refused' : 'unknown', say: p.say }; }
     const unsaid = p.dropped.find((d) => d.say);
     if (unsaid) say(unsaid.say);
