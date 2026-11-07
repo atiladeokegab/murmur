@@ -30,7 +30,7 @@ export function createCursor(doc = document) {
       const appearing = ring.hidden;
       target = el;
       ring.dataset.name = name;
-      if (still() && !appearing) { ring.style.opacity = '0'; await wait(120); }
+      if (still() && !appearing) { ring.style.opacity = '0'; await wait(40); }
       if (appearing) { // the first ring appears on its control, not where the panel was a frame ago, and does not fly in
         ring.style.transition = 'none';
         await new Promise((res) => win.requestAnimationFrame(() => win.requestAnimationFrame(res)));
@@ -40,7 +40,7 @@ export function createCursor(doc = document) {
       place();
       ring.style.opacity = '1';
       if (appearing) { ring.getBoundingClientRect(); ring.style.transition = ''; }
-      await wait(still() ? 120 : 280); // let the glide land before the press
+      await wait(still() ? 40 : 150); // let the glide land before the press; 80 ms read as a teleport on a long move
       delete ring.dataset.press; ring.getBoundingClientRect(); ring.dataset.press = '';
     },
     hide() { if (ring) ring.hidden = true; target = null; },

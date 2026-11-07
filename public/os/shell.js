@@ -65,7 +65,7 @@ function speak(text, signal) {
   if (signal?.aborted) return Promise.resolve(false);
   if (QUIET || !text) return Promise.resolve(true);
   if (readerSpeaks()) return wait(Math.min(4000, 600 + text.length * 55), signal); // give TalkBack time to read it
-  const my = ++token;
+  const my = token; // only Stop (hush) moves token: a later line queues behind a started one, never cuts it
   return new Promise((res) => {
     let settled = false;
     const end = (ok) => { if (!settled) { settled = true; signal?.removeEventListener('abort', abort); res(ok); } };
@@ -81,7 +81,7 @@ function speak(text, signal) {
 }
 function browserSpeak(text, done) {
   if (!('speechSynthesis' in window)) return done();
-  speechSynthesis.cancel();
+  // no cancel() here: speechSynthesis queues, so a line that has started always finishes (Stop cancels in hush)
   const u = new SpeechSynthesisUtterance(text);
   const voices = speechSynthesis.getVoices().filter((v) => /^en/i.test(v.lang));
   u.lang = 'en-GB'; u.rate = look.rate; u.voice = voices.find((v) => v.lang === 'en-GB') || voices[0] || null;
