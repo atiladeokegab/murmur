@@ -145,15 +145,28 @@ const PAD = 'padding-inline: clamp(0.25rem, 4vw, 1rem)';
 const ROW = 'border-top: 0';
 const button = (text, props = {}) => el('button', { type: 'button', className: 'app-btn', style: PAD, ...props }, text);
 
-function render() {
+function render(result) {
   if (!body) return;
   const c = M.chatOf(s);
-  body.replaceChildren(c ? chatView(c) : listView());
+  keepFocus(() => body.replaceChildren(c ? chatView(c) : listView()), result);
 }
+// A re-render replaces the controls. Keep keyboard focus in the app: on the result when one is named, else the same control.
+function keyOf(n) {
+  if (n.id) return `#${n.id}`;
+  const a = [...(n.attributes || [])].find((x) => x.name.startsWith('data-'));
+  return a ? `[${a.name}=${JSON.stringify(a.value)}]` : null;
+}
+function keepFocus(paint, result) {
+  const doc = root.ownerDocument, was = doc.activeElement;
+  const had = !!was && was !== doc.body && root.contains(was), key = had && keyOf(was);
+  paint();
+  if (had && !root.contains(doc.activeElement)) ((result && q(result)) || (key && q(key)) || q('h2'))?.focus?.();
+}
+
 
 function listView() {
   return el('ul', { className: 'app-list', 'aria-label': 'Your chats' }, s.chats.map((c) => el('li', { style: ROW },
-    button([el('b', { className: 'app-title' }, c.name), el('span', { className: 'sr' }, '.'), el('span', { className: 'app-why' }, ` ${c.unread ? 'New: ' : ''}${c.messages.at(-1).text}`)], { 'data-chat': c.id, onclick: () => { M.open(s, c.id); save(); render(); } }))));
+    button([el('b', { className: 'app-title' }, c.name), el('span', { className: 'sr' }, '.'), el('span', { className: 'app-why' }, ` ${c.unread ? 'New: ' : ''}${c.messages.at(-1).text}`)], { 'data-chat': c.id, onclick: () => { M.open(s, c.id); save(); render('#msg-chat-h'); } }))));
 }
 
 function sentenceList(label, all, { changed = null, current = -1, keep = false } = {}) {
@@ -179,7 +192,7 @@ function chatView(c) {
   box.value = M.sent(s) ? '' : s.draft;
   box.addEventListener('input', () => { M.setDraft(s, box.value); save(); renderDraft(); });
   return el('div', {},
-    el('h3', { className: 'app-h3' }, `${who} chat`),
+    el('h3', { className: 'app-h3', id: 'msg-chat-h', tabIndex: -1 }, `${who} chat`),
     button(`Read ${who} message`, { id: 'msg-read', onclick: (e) => {
       // A person's tap reads aloud here; the agent's tap only starts it, and its run reads through ctx.say.
       M.startReading(s); save(); render();
@@ -193,7 +206,7 @@ function chatView(c) {
     el('label', { for: 'msg-draft', className: 'sr' }, 'Your reply, edit it here'), // the heading above is the visible label
     box,
     button(M.sent(s) ? 'Sent' : 'Send', { id: 'msg-send', className: 'app-btn primary', onclick: () => { sending = sendAsked(); } }),
-    button('Back to your chats', { id: 'msg-back', style: `${PAD}; border-color: var(--c-quiet)`, onclick: () => { s.currentChat = null; save(); render(); } }),
+    button('Back to your chats', { id: 'msg-back', style: `${PAD}; border-color: var(--c-quiet)`, onclick: () => { const was = s.currentChat; s.currentChat = null; save(); render(`[data-chat="${was}"]`); } }),
     // Last on the screen: it grows while you type, and nothing under it may move (layout shift).
     el('h4', { className: 'app-h3' }, 'Your reply, sentence by sentence'),
     el('div', { id: 'msg-reply' }, draftView()),
