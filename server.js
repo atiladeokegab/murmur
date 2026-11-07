@@ -122,7 +122,7 @@ export const server = http.createServer(async (req, res) => {
     if (handler) return send(res, 200, await handler(await readJson(req)));
     if (url.pathname.startsWith('/api/')) return send(res, 404, { error: 'not found' });
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'method' });
-    const rel = PAGES[url.pathname] || decodeURIComponent(url.pathname).replace(/^\/+/, '');
+    const rel = PAGES[url.pathname] || decodeURIComponent(url.pathname).replace(/^\/+/, '') + (url.pathname.endsWith('/') ? 'index.html' : ''); // a folder serves its index.html (/os/demo/)
     const file = path.join(ROOT, rel);
     if (!file.startsWith(ROOT + path.sep)) return send(res, 403, 'no', 'text/plain');
     const data = await readFile(file).catch(() => null);
