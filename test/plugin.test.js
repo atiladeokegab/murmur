@@ -70,7 +70,7 @@ test('install refuses a second app with the same id', async () => {
   p.add(await installApp(TAXI, p.plug));
   await assert.rejects(installApp(TAXI, p.plug), /already registered/);
   await assert.rejects(installApp(bad('hello', `{ go: { describe: 'Go', doing: 'Going', run() {}, verify: () => true } }`), p.plug),
-    /already registered/, 'a plug-in cannot replace a built-in app');
+    /comes with the phone/, 'a plug-in cannot replace a built-in app');
 });
 
 test('a bad gate is refused, and money or message actions may not skip the ask', async () => {
@@ -354,4 +354,70 @@ test("one voice: no live region of their own; a person's tap says the result thr
   t.root.querySelector('#taxi-book').dispatchEvent(person);
   await new Promise((r) => setTimeout(r, 10));
   assert.match(said.at(-1), /^Your taxi to Home is booked, arriving in \d+ minutes\.$/);
+});
+
+test('review: removability is the built-in list, never the saved claim; a claimed Hello stays, and so does its data', async () => {
+  const storage = fakeStorage();
+  storage.setItem('murmur:os.plugins:installed', JSON.stringify([{ id: 'hello', path: 'taxi/index.js' }]));
+  const p = await phone({ storage });
+  await p.plug.port.set('app.hello', 'sent', ['keep me']);
+  let asked = 0;
+  const yes = async () => { asked++; return true; };
+  assert.equal((await removeApp('hello', p.plug, yes)).say, 'Hello came with the phone, so it stays.');
+  assert.equal((await removeByName('hello', p.plug, yes)).say, 'Hello came with the phone, so it stays.');
+  await assert.rejects(uninstallApp('hello', p.plug), /not an added app/);
+  assert.equal(asked, 0, 'never asked');
+  assert.ok(p.names().includes('hello__send') && p.doc.body.querySelector('#app-hello'));
+  assert.deepEqual(await p.plug.port.get('app.hello', 'sent'), ['keep me']);
+  await assert.rejects(installApp(bad('shop', `{ go: { describe: 'Go', doing: 'Going', run() {}, verify: () => true } }`), p.plug),
+    /comes with the phone/, 'a built-in name not on this phone yet is still not a plug-in name');
+});
+
+test('review: a mount that throws leaves no section; a data wipe that fails still cleans the phone, then says so', async () => {
+  const p = await phone();
+  const dir = new URL('throwy/', tmp);
+  mkdirSync(fileURLToPath(dir), { recursive: true });
+  writeFileSync(fileURLToPath(new URL('index.js', dir)), `const f = () => {}; export default { id: 'throwy', name: 'Throwy',
+    mount() { throw new Error('broken mount'); }, read: () => '', place: () => ({}), state: () => ({}), seed: f, reset: f,
+    actions: { go: { describe: 'Go', doing: 'Going', run() {}, verify: () => true } } };`);
+  await assert.rejects(installApp(new URL('index.js', dir).href, p.plug), /broken mount/);
+  assert.equal(p.doc.body.querySelector('#app-throwy'), null, 'no orphan section');
+  assert.equal(p.registry.get('throwy'), undefined);
+  p.add(await installApp(TAXI, p.plug));
+  const real = p.plug.port;
+  await real.set('app.taxi', 'booking', { to: 'Home' });
+  const broken = { ...real, set: async (area, k, v) => { if (area === 'app.taxi' && v === undefined) throw new Error('disk gone'); return real.set(area, k, v); } };
+  const x = await removeApp('taxi', { ...p.plug, port: broken }, async () => true);
+  assert.deepEqual([x.ok, x.say], [true, 'Removed Northline Taxis, but some of its data could not be cleared.']);
+  assert.ok(!p.names().includes('taxi__book') && !p.doc.body.querySelector('#app-taxi'), 'tools and section gone first');
+  assert.ok(!(await phone({ storage: p.storage })).names().includes('taxi__book'), 'and off the saved list');
+  const y = await removeApp('grocer', p.plug, async () => true);
+  assert.equal(y.say, "That app isn't on your phone.");
+});
+
+test('Hello: Send always asks, even on a hand tap; a No, or no confirm on the mount, sends nothing', async () => {
+  const hello = (await import('../public/apps/hello/index.js')).default;
+  const port = browserKV({ storage: fakeStorage(), prefix: 'murmur' });
+  const mount = async (confirm) => {
+    const root = await mountApp(hello, fakeDocument().body, { kv: appKv('hello', port), say() {}, ...(confirm && { confirm }) });
+    await hello.seed();
+    return root;
+  };
+  const tap = async (root, text) => {
+    const box = root.querySelector('#hello-box');
+    box.value = text; box.dispatchEvent(new Event('input'));
+    root.querySelector('#hello-send').click();
+    await new Promise((r) => setTimeout(r, 10));
+  };
+  await tap(await mount(), 'hi');
+  assert.deepEqual(hello.state().sent, [], 'no confirm, no send');
+  const asked = [];
+  let yes = false;
+  const r = await mount(async (q) => { asked.push(q); return yes; });
+  await tap(r, 'On my way');
+  assert.deepEqual(hello.state().sent, [], 'a No sends nothing');
+  assert.deepEqual(asked, [{ gate: 'send', readback: 'Send to Sam: On my way' }], 'the same readback as the agent hears');
+  yes = true;
+  await tap(r, 'On my way');
+  assert.deepEqual(hello.state().sent, ['On my way']);
 });

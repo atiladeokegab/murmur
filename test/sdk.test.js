@@ -19,7 +19,7 @@ async function phone({ answers = [] } = {}) {
   const ask = async (q) => { asked.push(q); return answers.shift() ?? false; };
   for (const app of registry.list()) {
     const kv = appKv(app.id, port);
-    roots[app.id] = await mountApp(app, doc.body, { kv, bus, say: (text) => bus.emit('say', { text }) });
+    roots[app.id] = await mountApp(app, doc.body, { kv, bus, say: (text) => bus.emit('say', { text }), confirm: async () => true });
     await app.seed();
   }
   const controller = new AbortController();
