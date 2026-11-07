@@ -76,8 +76,10 @@ export function createCtx({ app, root, bus, kv, cursor, ask, choose = async () =
     /** The ask-first sheet. The runner uses this for every gate; an app may use it for its own choices. */
     async confirm(gate, readback) {
       live();
-      const result = !!(await ask({ app: app.id, gate, readback }));
-      bus.emit('confirm', { app: app.id, gate, readback, result });
+      // ask resolves a boolean, or { result, fingerprint } when the host checked a fingerprint (pay)
+      const a = await ask({ app: app.id, gate, readback });
+      const result = a === true || a?.result === true;
+      bus.emit('confirm', { app: app.id, gate, readback, result, ...(typeof a?.fingerprint === 'boolean' && { fingerprint: a.fingerprint }) });
       live();
       return result;
     },

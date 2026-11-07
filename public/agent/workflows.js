@@ -48,6 +48,8 @@ export function createWorkflows({ librarian, describe = (s) => s.tool }) {
   return {
     all,
     find,
+    /** Mine's Delete (behind its delete gate): true when there was one to remove. */
+    async remove(name) { const w = await find(name); if (!w) return false; await librarian.deleteSkill(w.name); return true; },
     explainSteps,
     /** Save steps under a name. With slot, the first person in it becomes "Who?" at run time. */
     async save(name, steps, { slot = false } = {}) {

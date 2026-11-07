@@ -77,6 +77,7 @@ export function createRegistry() {
       apps.set(app.id, app);
       return app;
     },
+    unregister: (id) => apps.delete(id),   // plug-ins only (sdk/plugin.js uninstallApp)
     get: (id) => apps.get(id),
     list: () => [...apps.values()],
     /** Function declarations (JSON schema) for the planner: the OS tools, then `<app>__<action>` for every action. */
