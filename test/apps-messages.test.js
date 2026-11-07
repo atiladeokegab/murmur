@@ -60,7 +60,7 @@ test('the race: open Mum, read, reply, change Tuesday to Wednesday, send', () =>
   assert.ok(M.send(s));
   assert.equal(A.send.verify(s), true);
   assert.equal(M.chatOf(s).messages.at(-1).text, "Wednesday's fine.");
-  assert.equal(M.read(s), `Mum's chat, 4 messages, the last from you "Wednesday's fine.". Sent.`);
+  assert.equal(M.read(s), `Mum's chat, 4 messages, the last from you "Wednesday's fine". Sent.`, 'one full stop, not two');
 });
 
 test('Vertical 1: text Sam I am ten minutes late', () => {

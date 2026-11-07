@@ -124,7 +124,11 @@ function el(tag, props = {}, ...kids) {
   for (const k of kids.flat()) if (k != null && k !== false) n.append(typeof k === 'number' ? String(k) : k);
   return n;
 }
-const button = (text, props = {}) => el('button', { type: 'button', className: 'app-btn', ...props }, text);
+// Inline styles here, not app.css (build-murmur's): .app-btn's 1rem side padding is 64 px at 400%, and the board's
+// `li + li` top rule would put a line on every row but the first.
+const PAD = 'padding-inline: clamp(0.25rem, 4vw, 1rem)';
+const ROW = 'border-top: 0';
+const button = (text, props = {}) => el('button', { type: 'button', className: 'app-btn', style: PAD, ...props }, text);
 
 function render() {
   if (!body) return;
@@ -133,13 +137,13 @@ function render() {
 }
 
 function listView() {
-  return el('ul', { className: 'app-list', 'aria-label': 'Your chats' }, s.chats.map((c) => el('li', {},
+  return el('ul', { className: 'app-list', 'aria-label': 'Your chats' }, s.chats.map((c) => el('li', { style: ROW },
     button(`${c.name}. ${c.unread ? 'New: ' : ''}${c.messages.at(-1).text}`, { 'data-chat': c.id, onclick: () => { M.open(s, c.id); save(); render(); } }))));
 }
 
 function sentenceList(label, all, { changed = null, current = -1, keep = false } = {}) {
   const lis = all.map((t, i) => {
-    const li = el('li', { tabIndex: 0, className: i === current ? 'is-current' : '' });
+    const li = el('li', { tabIndex: 0, className: i === current ? 'is-current' : '', style: ROW });
     const isChanged = changed && changed.sentence === i;
     li.append(el('span', { className: 'sr' }, `Sentence ${i + 1} of ${all.length}${isChanged ? ', changed' : ''}: `));
     if (isChanged) {
@@ -166,15 +170,15 @@ function chatView(c) {
       M.startReading(s); save(); render();
       if (e.isTrusted) speakItems(async (t) => { if ((await os.say?.(t)) === false) throw new Error("Stopped."); }).catch(() => {});
     } }),
-    el('ol', { className: 'app-chat', 'aria-label': 'The chat' }, c.messages.map((m) => el('li', { className: m.from === 'me' ? 'me' : 'them' },
+    el('ol', { className: 'app-chat', 'aria-label': 'The chat' }, c.messages.map((m) => el('li', { className: m.from === 'me' ? 'me' : 'them', style: m.from === 'me' ? null : ROW },
       el('span', { className: 'app-who' }, m.from === 'me' ? 'You: ' : `${c.name}: `), m.text))),
     text.length ? el('h4', { className: 'app-h3' }, `${who} message, sentence by sentence`) : null,
     text.length ? sentenceList(`${who} message`, text, { current: at, keep: true }) : null,
     el('h4', { className: 'app-h3' }, 'Your reply'),
-    el('label', { for: 'msg-draft', className: 'app-label' }, 'Your reply, edit it here'),
+    el('label', { for: 'msg-draft', className: 'app-label', style: 'display: block; margin-block: 0.25rem 0.375rem' }, 'Your reply, edit it here'),
     box,
     button(M.sent(s) ? 'Sent' : 'Send', { id: 'msg-send', className: 'app-btn primary', onclick: () => { sending = sendAsked(); } }),
-    button('Back to your chats', { id: 'msg-back', onclick: () => { s.currentChat = null; save(); render(); } }),
+    button('Back to your chats', { id: 'msg-back', style: `${PAD}; border-color: var(--c-quiet)`, onclick: () => { s.currentChat = null; save(); render(); } }),
     // Last on the screen: it grows while you type, and nothing under it may move (layout shift).
     el('h4', { className: 'app-h3' }, 'Your reply, sentence by sentence'),
     el('div', { id: 'msg-reply' }, draftView()),
