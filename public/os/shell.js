@@ -437,7 +437,7 @@ function summon(o) {
   rec.onresult = (e) => {
     heard = [...e.results].map((r) => r[0].transcript).join(' ');
     talkLabel.textContent = heard;
-    clearTimeout(silence); silence = setTimeout(endTalk, 600);
+    clearTimeout(silence); silence = setTimeout(endTalk, 1300); // a mid-sentence pause no longer cuts them off
     clearTimeout(still); still = setTimeout(() => agent?.prefetch?.(heard.trim()), 400); // plan while they finish
   };
   rec.onerror = (e) => {
@@ -447,7 +447,7 @@ function summon(o) {
   };
   rec.onend = () => {
     clearTimeout(silence);
-    if (!heard.trim() && ++quietRuns > 3) handsFree = false; // three silent re-listens in a row: stop quietly, a tap starts again
+    if (!heard.trim()) ++quietRuns; // ambient listening (the co-designer, 7 Nov): silence never ends hands-free; "stop" or a mic error does
     setListening(false);
     if (why) talkLabel.textContent = why; // keep the reason, setListening just overwrote it
     else if (heard.trim()) { quietRuns = 0; hear(heard.trim(), 'voice'); } else rearm(300, true); // silence: listen again, no ding
