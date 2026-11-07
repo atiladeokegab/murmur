@@ -126,6 +126,7 @@ export function read(s) {
     return `${s.chats.length} chats.${lead ? ' ' + lead : ''}`; // no app name: the board shows it under the title
   }
   const last = c.messages.at(-1);
+  if (!last) return `${possessive(c.name)} chat, no messages yet.${sent(s) ? ' Sent.' : ''}`; // a contact added on the fly
   const said = last.text.trim().replace(/[.!]+$/, ''); // the quote keeps a ? but not a closing full stop, so no ".".
   const stop = said.endsWith('?') ? ' ' : '. ';
   let line = `${possessive(c.name)} chat, ${c.messages.length} messages, the last ${last.from === 'me' ? 'from you' : 'says'} "${said}"`;

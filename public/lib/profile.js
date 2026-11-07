@@ -3,12 +3,12 @@
 // Health: the sight line only, never a symptom or diagnosis.
 export const PROFILE = {
   name: 'Joy Adeyemi', first: 'Joy',
-  area: 'Stratford, London', sight: 'partly sighted',
+  area: 'Stratford, London', near: 'near the Westfield end of the High Street', sight: 'partly sighted',
   people: ['Mum', 'Sam', 'Priya'],
   likes: ['audiobooks', 'the Thursday book club', 'her usual from Pasta Corner'],
   usual: 'her usual from Pasta Corner',
   morning: ["hear what's on today", "read Mum's message", 'carry on her audiobook'],
-  home: '12 Larkspur Mews, Stratford, London E15',
+  home: '14 Larkspur Row, Stratford, London E15', // the same home as Maps
   work: 'Unit 4, Harbour Yard, Canning Town, London E16',
 };
 
@@ -21,3 +21,6 @@ export const whoAmI = (p = PROFILE) =>
 
 /** What the planner may know: a name and two places, nothing else. */
 export const meContext = (p = PROFILE) => ({ name: p.name, home: p.home, work: p.work, usual: p.usual.replace(/\bher\b/, 'your') });
+
+/** "What is my current location?": the invented place, never a real fix. */
+export const hereLine = (p = PROFILE) => `You're in ${p.area.split(',')[0]}, ${p.near}.`;
