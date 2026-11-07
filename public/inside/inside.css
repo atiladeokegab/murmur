@@ -88,15 +88,20 @@ body.inside[data-link="on"] #link::before { background: var(--c-ink); }
   @keyframes flip { 0% { transform: perspective(300px) rotateX(-88deg); opacity: .2 } 70% { transform: perspective(300px) rotateX(8deg) } 100% { transform: none; opacity: 1 } }
 }
 
-/* /inside?big (or ?stage): the projector view, read from the back of the room. One column, the live task only,
-   and the root at 25px so the smallest type (.8rem) is 20px. */
+/* /inside?big (or ?stage): the projector view, read from the back of the room. The root at 25px puts the smallest
+   type (.8rem) at 20px. No heading, no footer, three counters on one row; the live task gets the rest of the height. */
 html.big { font-size: 25px; }
-html.big body.inside { height: auto; overflow: visible; padding: 1rem 1.25rem; }
-html.big .inside header { grid-template-columns: minmax(0, 1fr); }
-html.big .inside #tally { grid-column: 1; grid-row: auto; justify-self: stretch; flex-wrap: wrap; }
-html.big .inside #tally div { min-width: 0; flex: 1 1 6rem; }
-html.big .inside #tally dt { white-space: normal; text-align: center; }
-html.big .inside main { grid-template-columns: minmax(0, 1fr); }
-html.big .inside section { max-height: none; }
-html.big .inside section > ol { overflow: visible; }
+html.big body.inside { height: 100svh; overflow: hidden; padding: .6rem .8rem; gap: .6rem; grid-template-rows: auto minmax(0, 1fr); }
+html.big .inside h1, html.big .inside #link, html.big .inside footer { display: none; }
+html.big .inside header { display: block; }
+html.big .inside #tally { display: flex; flex-wrap: nowrap; gap: 6px; }
+html.big .inside #tally div { flex: 1 1 0; min-width: 0; flex-direction: row-reverse; justify-content: center; gap: .4rem; padding: .3rem .4rem; }
+html.big .inside #tally dd { font-size: 1.25rem; padding: .1rem .35rem; min-width: 0; }
+html.big .inside #tally dt { white-space: normal; line-height: 1.1; }
+html.big .inside #tally :is(.t-tasks, .t-failed, .t-modelCalls) { display: none; } /* the room needs verified, asked, bypassed */
+/* one column that scrolls as a whole and follows the newest row; each section is as tall as its rows */
+html.big .inside main { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 0; }
+html.big .inside section { flex: none; max-height: none; }
+html.big .inside section > ol { overflow: visible; flex: none; }
+html.big .inside h2 { padding: .3rem .6rem; }
 html.big .inside li.old { display: none; } /* history lives on the laptop view; the room sees what is happening now */
