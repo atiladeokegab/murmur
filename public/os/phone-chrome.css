@@ -1,0 +1,78 @@
+/* Phone chrome: the status bar, the app icons and the open/close zoom. Loaded after app.css; colours are app.css tokens only. */
+:root {
+  --h-status: 32px;          /* reserved from first paint, so nothing below it ever moves */
+  --fs-status: min(0.9375rem, 16px); /* decorative: it stays phone-sized at 400% text; "what time is it" is the real clock */
+  --s-icon: 3rem;
+  --r-icon: 14px;
+}
+
+/* ---------- status bar: purely visual, aria-hidden in the markup ---------- */
+.statusbar {
+  order: -1; position: sticky; top: 0; z-index: 3; flex: none; height: var(--h-status); overflow: hidden;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  width: min(100%, var(--w-column)); margin-inline: auto; padding: 0 var(--gutter);
+  background: var(--c-page); color: var(--c-ink); font: 700 var(--fs-status)/1 var(--f-read); font-variant-numeric: tabular-nums;
+}
+.statusbar .sb-right { display: flex; align-items: center; gap: 6px; }
+.statusbar svg { height: 12px; width: auto; display: block; }
+.statusbar .sb-pct { font-weight: 600; }
+
+/* Boot without a jump: the weekday line keeps its height before the shell fills it, and the links under the
+   board stay invisible (an invisible box never counts as a shift) until the board has its tiles. */
+h1 .day:empty::before { content: "\a0"; }
+#board:empty ~ .look { visibility: hidden; }
+
+/* ---------- app icons: a honey square with the glyph cut through it ---------- */
+.tile .what { display: grid; grid-template-columns: var(--s-icon) minmax(0, 1fr); column-gap: 0.875rem; row-gap: 0.2rem; align-items: center; }
+.tile .what > * { grid-column: 2; }
+.tile .what::before, .look::before {
+  content: ""; grid-column: 1; grid-row: 1 / span 2; align-self: center; width: var(--s-icon); height: var(--s-icon); flex: none;
+  border-radius: var(--r-icon); background: var(--c-accent);
+  -webkit-mask: var(--glyph) center / 62% no-repeat, linear-gradient(var(--c-ink) 0 0);
+  -webkit-mask-composite: xor;
+  mask: var(--glyph) center / 62% no-repeat exclude, linear-gradient(var(--c-ink) 0 0);
+}
+.look::before { --s-icon: 2.25rem; --r-icon: 10px; margin-right: 0.875rem; }
+/* Calendar shows today's date, set by statusbar.js as --today */
+.tile[data-app="calendar"] .what::before {
+  content: var(--today, ""); -webkit-mask: none; mask: none; display: grid; place-items: center;
+  color: var(--c-on-accent); font: 700 1.375rem/1 var(--f-read); font-variant-numeric: tabular-nums;
+}
+@container board (max-width: 15em) { /* big text: the words get the room; icons are decoration */
+  .tile .what { display: flex; }
+  .tile .what::before, .look::before { display: none; }
+}
+
+/* glyphs: original line drawings, used as masks (their stroke colour is only alpha) */
+:root {
+  --g-default: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='6' y='6' width='5' height='5' rx='1'/%3E%3Crect x='13' y='6' width='5' height='5' rx='1'/%3E%3Crect x='6' y='13' width='5' height='5' rx='1'/%3E%3Crect x='13' y='13' width='5' height='5' rx='1'/%3E%3C/svg%3E");
+  --g-add: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E");
+  --g-messages: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 5h16v11H10l-5 4v-4H4z'/%3E%3C/svg%3E");
+  --g-writer: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20l1-4L16 5l3 3L8 19z'/%3E%3Cpath d='M14 7l3 3'/%3E%3C/svg%3E");
+  --g-look: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+  --g-mine: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12v18l-6-4-6 4z'/%3E%3C/svg%3E");
+  --g-bank: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 9l9-5 9 5'/%3E%3Cpath d='M5 10v8M9.7 10v8M14.3 10v8M19 10v8M3 20h18'/%3E%3C/svg%3E");
+  --g-shop: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 8h14l-1 12H6z'/%3E%3Cpath d='M9 8a3 3 0 0 1 6 0'/%3E%3C/svg%3E");
+  --g-transit: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='3' width='14' height='14' rx='3'/%3E%3Cpath d='M5 11h14M8 17v3M16 17v3M8.5 14h.01M15.5 14h.01'/%3E%3C/svg%3E");
+  --g-travel: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='7' width='18' height='13' rx='2'/%3E%3Cpath d='M9 7V4h6v3M3 13h18'/%3E%3C/svg%3E");
+  --g-taxi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 16v-4l2.5-5h13l2.5 5v4z'/%3E%3Cpath d='M10 4h4M3 12h18'/%3E%3Ccircle cx='7.5' cy='17.5' r='1.5'/%3E%3Ccircle cx='16.5' cy='17.5' r='1.5'/%3E%3C/svg%3E");
+  --g-grocer: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10h18l-2 10H5z'/%3E%3Cpath d='M8 10l3-6M16 10l-3-6M9 14v3M15 14v3'/%3E%3C/svg%3E");
+  --g-hello: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M8 14.5s1.5 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01'/%3E%3C/svg%3E");
+  --g-phone: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h4l1.5 5-2.5 1.5a11 11 0 0 0 5.5 5.5l1.5-2.5 5 1.5v4a2 2 0 0 1-2 2A17 17 0 0 1 4 5a2 2 0 0 1 2-2z'/%3E%3C/svg%3E");
+}
+.tile .what::before { --glyph: var(--g-default); }
+.tile:not([data-app]) .what::before { --glyph: var(--g-add); }
+.tile[data-app="messages"] .what::before { --glyph: var(--g-messages); }
+.tile[data-app="writer"] .what::before { --glyph: var(--g-writer); }
+.tile[data-app="look"] .what::before { --glyph: var(--g-look); }
+.tile[data-app="mine"] .what::before { --glyph: var(--g-mine); }
+.tile[data-app="bank"] .what::before { --glyph: var(--g-bank); }
+.tile[data-app="shop"] .what::before { --glyph: var(--g-shop); }
+.tile[data-app="transit"] .what::before { --glyph: var(--g-transit); }
+.tile[data-app="travel"] .what::before { --glyph: var(--g-travel); }
+.tile[data-app="taxi"] .what::before { --glyph: var(--g-taxi); }
+.tile[data-app="grocer"] .what::before { --glyph: var(--g-grocer); }
+.tile[data-app="hello"] .what::before { --glyph: var(--g-hello); }
+.tile[data-app="phone"] .what::before { --glyph: var(--g-phone); }
+#look-link::before { --glyph: var(--g-look); }
+#phone-link::before { --glyph: var(--g-phone); }

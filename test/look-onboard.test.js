@@ -35,12 +35,15 @@ test('step 1 with no speech recognition says plainly to use Chrome or type', asy
 test('step 1 waits for the first tap when the browser will not speak before one; that tap does nothing else', async () => {
   const listeners = {};
   const win = { addEventListener: (t, f) => ((listeners[t] ||= []).push(f)), removeEventListener: (t, f) => { listeners[t] = (listeners[t] || []).filter((g) => g !== f); } };
-  const fire = (type, extra = {}) => { const e = { type, stopped: false, prevented: false, stopImmediatePropagation() { this.stopped = true; }, stopPropagation() { this.stopped = true; }, preventDefault() { this.prevented = true; }, ...extra }; (listeners[type] || []).forEach((f) => f(e)); return e; };
+  const fire = (type, extra = {}) => { const e = { type, stopped: false, prevented: false, stopImmediatePropagation() { this.stopped = true; }, stopPropagation() { this.stopped = true; }, preventDefault() { this.prevented = true; }, isTrusted: true, ...extra }; (listeners[type] || []).forEach((f) => f(e)); return e; };
   const p = phone({ waitTap: true, win });
   await p.open();
   assert.deepEqual(p.said, [], 'nothing said into a blocked voice');
   assert.deepEqual(p.shown, [FIRST_WORDS], 'the caption is up at once');
   assert.equal(fire('keydown', { key: 'Tab' }).stopped, false, 'Tab still moves about');
+  const agentClick = fire('click', { isTrusted: false });
+  assert.equal(agentClick.stopped || agentClick.prevented, false, "the agent's own synthetic click goes through");
+  assert.deepEqual(p.said, [], 'and is not taken as the first tap');
   assert.equal(fire('pointerdown').stopped, true, 'the tap does not start listening');
   fire('pointerup');
   const c = fire('click');
@@ -117,4 +120,15 @@ test('the caption is quiet: hidden from screen readers, shown only while there i
   assert.equal(p.textContent, FIRST_WORDS); assert.equal(p.hidden, false);
   show(null);
   assert.equal(p.hidden, true);
+});
+
+test('step 1 is hushed the moment anything is heard, so "On it." never waits behind it', async () => {
+  let signal;
+  const p = phone({ say: (t, s) => { signal = s; return new Promise((r) => s.addEventListener('abort', () => r(false))); } });
+  const open = p.open();
+  await tick();
+  assert.equal(signal?.aborted, false, 'the welcome is being said');
+  p.bus.emit('heard', { text: 'read Mum\'s message', path: 'typed' });
+  assert.equal(signal.aborted, true, 'hushed by the first words heard');
+  assert.equal(await open, true);
 });
