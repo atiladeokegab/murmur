@@ -10,7 +10,8 @@ export const EARCON_NAMES = Object.freeze([
   'gate',
   'done',
   'stopped',
-  'undo'
+  'undo',
+  'thinking'
 ]);
 
 // Step counter state for ascending semitone ticks per verified step
@@ -310,6 +311,47 @@ export const EARCON_DEFS = Object.freeze({
       playNote(783.99, t, 0.08, vol * 0.24);
       playNote(523.25, t + 0.10, 0.08, vol * 0.22);
     }
+  }),
+
+  thinking: Object.freeze({
+    name: 'thinking',
+    description: 'Very soft pulse every 600 ms while a plan is pending (no vibration)',
+    durationMs: 60,
+    vibratePattern: Object.freeze([]),
+    synth: (ctx, t, masterGain, vol) => {
+      const duration = 0.06;
+      const osc = ctx.createOscillator();
+      const overtone = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const otGain = ctx.createGain();
+
+      // Soft warm pitch: 659.25 Hz (E5)
+      const freq = 659.25;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+
+      overtone.type = 'sine';
+      overtone.frequency.setValueAtTime(freq * 3.99, t);
+
+      // Very soft volume (vol * 0.10) with gentle 6 ms attack and clean exponential decay
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(vol * 0.10, t + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+      otGain.gain.setValueAtTime(0.0001, t);
+      otGain.gain.linearRampToValueAtTime(vol * 0.03, t + 0.004);
+      otGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+
+      osc.connect(gain);
+      overtone.connect(otGain);
+      otGain.connect(gain);
+      gain.connect(masterGain);
+
+      osc.start(t);
+      overtone.start(t);
+      osc.stop(t + duration + 0.01);
+      overtone.stop(t + duration + 0.01);
+    }
   })
 });
 
@@ -490,7 +532,7 @@ export function play(name, options = {}) {
     }
     def.synth(ctx, t, masterGain, masterVolume, stepOffset);
   } else {
-    // Other earcons reset step progression
+    // Other earcons reset step progression (except thinking pulses while waiting)
     if (name === 'done' || name === 'stopped' || name === 'summon' || name === 'undo') {
       currentStepCount = 0;
     }
@@ -509,6 +551,10 @@ export function buzz(name) {
   }
 
   const pattern = EARCON_DEFS[name].vibratePattern;
+  if (!pattern || pattern.length === 0) {
+    return false;
+  }
+
   const nav = typeof navigator !== 'undefined' ? navigator : (typeof globalThis !== 'undefined' ? globalThis.navigator : null);
 
   if (nav && typeof nav.vibrate === 'function') {

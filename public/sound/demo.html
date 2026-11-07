@@ -235,13 +235,14 @@
       card.className = 'card';
       card.id = `card-${name}`;
       const badgeHtml = name === 'step' ? `<span id="step-counter-badge" class="step-badge">step 0 (+0 st)</span>` : '';
+      const hapticsDesc = def.vibratePattern.length ? `[${def.vibratePattern.join(', ')}]ms` : 'none';
       card.innerHTML = `
         <div>
           <h2>${name} ${badgeHtml}</h2>
           <p class="desc">${def.description}</p>
         </div>
         <div>
-          <p class="meta">⏱ ${def.durationMs}ms &bull; 📳 [${def.vibratePattern.join(', ')}]ms</p>
+          <p class="meta">⏱ ${def.durationMs}ms &bull; 📳 ${hapticsDesc}</p>
           <button class="play-btn" style="margin-top: 0.5rem; width: 100%;" data-name="${name}" data-earcon="${name}">
             <span>▶</span> Play &amp; Buzz
           </button>

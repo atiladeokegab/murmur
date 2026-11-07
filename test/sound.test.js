@@ -98,8 +98,8 @@ function createMockAudioContext() {
 }
 
 test('earcon names are complete and match the spec exactly', () => {
-  const expected = ['summon', 'heard', 'step', 'gate', 'done', 'stopped', 'undo'];
-  assert.equal(EARCON_NAMES.length, 7);
+  const expected = ['summon', 'heard', 'step', 'gate', 'done', 'stopped', 'undo', 'thinking'];
+  assert.equal(EARCON_NAMES.length, 8);
   assert.deepEqual([...EARCON_NAMES], expected);
 
   for (const name of expected) {
@@ -138,21 +138,25 @@ test('unknown earcon names throw descriptive errors', () => {
   }
 });
 
-test('every earcon duration is strictly within 80 ms to 200 ms and under 250 ms', () => {
+test('every earcon duration is strictly within bounds and under 250 ms', () => {
   for (const name of EARCON_NAMES) {
     const dur = getDuration(name);
     assert.ok(
       typeof dur === 'number' && Number.isFinite(dur),
       `Duration for ${name} must be a valid number`
     );
-    assert.ok(
-      dur >= 80,
-      `Duration for ${name} (${dur}ms) is less than the 80ms minimum requirement`
-    );
-    assert.ok(
-      dur <= 200,
-      `Duration for ${name} (${dur}ms) exceeds the 200ms maximum requirement`
-    );
+    if (name === 'thinking') {
+      assert.equal(dur, 60, 'thinking earcon duration should be exactly 60 ms');
+    } else {
+      assert.ok(
+        dur >= 80,
+        `Duration for ${name} (${dur}ms) is less than the 80ms minimum requirement`
+      );
+      assert.ok(
+        dur <= 200,
+        `Duration for ${name} (${dur}ms) exceeds the 200ms maximum requirement`
+      );
+    }
     assert.ok(
       dur < 250,
       `Duration for ${name} (${dur}ms) must remain strictly under 250 ms`
@@ -166,25 +170,32 @@ test('vibrate patterns mirror earcon durations and structures', () => {
     const dur = getDuration(name);
 
     assert.ok(Array.isArray(pattern), `Pattern for ${name} must be an array`);
-    assert.ok(pattern.length >= 1, `Pattern for ${name} must have at least one element`);
 
-    // Every segment must be a positive integer
-    for (const segment of pattern) {
-      assert.ok(Number.isInteger(segment) && segment > 0, `Segment ${segment} in ${name} must be > 0`);
+    if (name === 'thinking') {
+      // thinking earcon has no vibration
+      assert.equal(pattern.length, 0, 'thinking earcon must have an empty vibrate pattern');
+    } else {
+      assert.ok(pattern.length >= 1, `Pattern for ${name} must have at least one element`);
+
+      // Every segment must be a positive integer
+      for (const segment of pattern) {
+        assert.ok(Number.isInteger(segment) && segment > 0, `Segment ${segment} in ${name} must be > 0`);
+      }
+
+      // Total duration of vibrate pattern must equal earcon duration
+      const totalPatternMs = pattern.reduce((sum, ms) => sum + ms, 0);
+      assert.equal(
+        totalPatternMs,
+        dur,
+        `Total vibration pattern duration for "${name}" (${totalPatternMs}ms) must equal earcon duration (${dur}ms)`
+      );
     }
-
-    // Total duration of vibrate pattern must equal earcon duration
-    const totalPatternMs = pattern.reduce((sum, ms) => sum + ms, 0);
-    assert.equal(
-      totalPatternMs,
-      dur,
-      `Total vibration pattern duration for "${name}" (${totalPatternMs}ms) must equal earcon duration (${dur}ms)`
-    );
   }
 
   // Done and Undo should both be two-pulse patterns mirroring the two notes
   assert.deepEqual(getVibratePattern('done'), [80, 20, 80]);
   assert.deepEqual(getVibratePattern('undo'), [80, 20, 80]);
+  assert.deepEqual(getVibratePattern('thinking'), []);
 });
 
 test('volume control clamps correctly between 0 and 1', () => {
@@ -250,6 +261,10 @@ test('buzz executes haptics via navigator.vibrate or safely no-ops', () => {
 
     buzz('gate');
     assert.deepEqual(lastPattern, [200]);
+
+    // thinking has no vibration and returns false
+    const thinkingBuzzed = buzz('thinking');
+    assert.equal(thinkingBuzzed, false);
   } finally {
     if (originalVibrate) {
       globalThis.navigator.vibrate = originalVibrate;
