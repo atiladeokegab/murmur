@@ -112,7 +112,8 @@ function planOrWords(said, apps, context, dry) {
   if (!missing && !(r.kind === 'unknown' && r.say?.startsWith(MISS))) return r;
   const t = said.trim().replace(/[.!?]+$/, '');
   // An answer to a slot question ("Where to?" "The station") finishes the ask it answers.
-  return byWords(t, apps, context.app) || (context.asked && byWords(`${context.asked} ${t}`, apps, context.app)) || r;
+  const again = context.asked && planOrWords(`${context.asked} ${t}`, apps, { ...context, asked: null }, dry);
+  return byWords(t, apps, context.app) || (again?.kind === 'task' ? again : null) || r;
 }
 
 const MISS = "I can't do that one yet.";
@@ -200,7 +201,7 @@ function plan(said, apps, context, dry) {
   if (/^(?:what are |list |say )?(?:my |the )?(?:tiles|routines|workflows)$/i.test(t) || /^what (?:tiles|routines) do i have$/i.test(t)) return task([{ tool: 'list_workflows', params: {} }]);
   if ((m = t.match(/^(?:remove|delete|forget)\s+(?:the\s+|my\s+)?(.+?)(?:\s+(?:tile|routine|workflow))?$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'remove_workflow', params: { name: m[1] } }]);
   if ((m = t.match(/^(?:remove|delete|uninstall|get rid of)\s+(?:the\s+|my\s+)?(.+?)(?:\s+app)?$/i)) && apps.some((a) => a.name.toLowerCase() === m[1].toLowerCase() || a.id === m[1].toLowerCase())) return task([{ tool: 'remove_app', params: { name: m[1] } }]);
-  if (/^(?:go )?(?:home|back to (?:the )?(?:board|home))$|^(?:show|open) (?:the )?(?:board|home)$/i.test(t)) return task([{ tool: 'go_home', params: {} }]);
+  if (/^(?:go |take me |get me |bring me )?(?:back )?(?:home|back to (?:the )?(?:board|home))$|^(?:show|open) (?:the )?(?:board|home)$/i.test(t)) return task([{ tool: 'go_home', params: {} }]);
   if ((m = t.match(/^(?:turn |switch )?(?:the )?(?:sounds?|haptics|vibrations?|sounds? and (?:haptics|vibrations?))\s+(on|off)$/i)) ||
       (m = t.match(/^(?:turn|switch)\s+(on|off)\s+(?:the )?(?:sounds?|haptics|vibrations?)/i))) return task([{ tool: 'sound', params: { on: m[1].toLowerCase() === 'on' } }]);
   if (/^(?:mute|be quiet with the sounds|no (?:more )?sounds)$/i.test(t)) return task([{ tool: 'sound', params: { on: false } }]);
@@ -267,6 +268,8 @@ function plan(said, apps, context, dry) {
       (m = t.match(/^read\s+(?:me\s+)?(?:my\s+|the\s+)?(?:latest\s+|last\s+|new\s+)?(?:messages?|texts?)\s+from\s+(\w+)$/i)) || (m = t.match(/^(?:open|show)\s+(\w+)'s\s+chat$/i))) {
     return task([step('messages', ['openChat', 'open'], { who: name(m[1]) }), step('messages', ['read'])]);
   }
+  // "Reply to that message": no words to send yet, so ask, and the answer is the reply (drafted, never sent unasked).
+  if (/^(?:reply|answer|respond)(?:\s+to\s+(?:that|this|the|it|her|him|them)(?:\s+(?:message|text|one))?)?$/i.test(t)) return { ...task([{ tool: 'ask', params: { question: 'What should I say?' } }]), asked: 'reply' };
   if ((m = raw.match(/^(?:reply|answer|respond)(?:\s+with)?[:,]?\s+(.+)$/i))) return task([step('messages', ['reply', 'draft'], { text: body(m[1].replace(/[.!?]+$/, '')) })]);
   if (/^send(?: it| that| the reply)?$/i.test(t)) return task([step(here || 'messages', ['send'])]);
   if ((m = t.match(/^(?:call|ring|phone)\s+(\w+)$/i))) return task([step('messages', ['call'], { who: name(m[1]) })]);
@@ -287,16 +290,23 @@ function plan(said, apps, context, dry) {
       (m = t.match(new RegExp(`^what(?:'?s| does| is) my day look(?:ing)? like(?: ${DAY})?$`, 'i'))) || (m = t.match(/^what'?s in (?:my |the )?(?:calendar|diary)()$/i))) {
     return task([step('calendar', ['whatsOn', 'today', 'list', 'read'], { day: cap(m[1] || 'today') })]);
   }
-  if (/^what'?s next(?: on my calendar)?$/i.test(t)) return task([step('calendar', ['next', 'whatsNext', 'whatsOn'])]);
-  if ((m = t.match(new RegExp(`^(?:add|put)\\s+(.+?)\\s+(?:on|for)\\s+${DAY}$`, 'i')))) {
-    return task([step('calendar', ['add', 'create'], { event: cap(m[1]), day: cap(m[2]) })]);
+  if (/^(?:what'?s|when'?s|what is|when is) (?:my )?next(?: (?:appointment|event|meeting|thing))?(?: on my calendar)?$/i.test(t)) return task([step('calendar', ['next', 'whatsNext', 'whatsOn'])]);
+  if ((m = t.match(new RegExp(`^(?:add|put)\\s+(.+?)\\s+(?:on|for)\\s+${DAY}(?:\\s+at\\s+(.+))?$`, 'i')))) {
+    const at = m[3] && clock(m[3]);
+    return task([step('calendar', ['add', 'create'], { event: cap(m[1].replace(/^an?\s+/i, '')), day: cap(m[2]), ...(at ? { time: at } : {}) })]);
   }
+
+  if (/^read (?:me )?(?:the )?next (?:one|message)$/i.test(t)) return task([step('messages', ['read'], { new: true })]);
+  if (/^read (?:me )?(?:my |the |that )?(?:last )?(?:message )?again$/i.test(t)) return task([step('messages', ['read'])]);
+  // The clock answers itself.
+  if (/^what(?:'?s| is) the time$|^what time is it$/i.test(t)) return task([{ tool: 'say', params: { text: `It's ${new Date().toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}.` } }]);
+  if (/^what day is it(?: today)?$|^what(?:'?s| is) (?:the date|today'?s date|today)$/i.test(t)) return task([{ tool: 'say', params: { text: `It's ${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}.` } }]);
 
   // The Writer
   if ((m = raw.match(/^(?:write|note|take a note|add a note|dictate)(?:\s+in\s+(?:the\s+)?(?:writer|notes))?[:,]?\s+([\s\S]+)$/i))) {
     return task([step('writer', ['dictate', 'write', 'add'], { text: corrected(m[1].trim()) })]);
   }
-  if (/^read (?:me )?(?:my |the )?last page(?: in (?:the )?writer)?$/i.test(t) || /^read (?:me )?(?:my )?(?:book|notes|writing|page)$/i.test(t)) {
+  if (/^read (?:me )?(?:my |the )?last page(?: in (?:the )?writer)?$/i.test(t) || /^read (?:me )?back (?:what i (?:wrote|said|dictated)|my writing)$/i.test(t) || /^read (?:me )?(?:my )?(?:book|notes|writing|page)$/i.test(t)) {
     return task([step('writer', ['readLastPage', 'readLast', 'read'])]);
   }
   if (/^(?:new|start a new) chapter$/i.test(t)) return task([step('writer', ['newChapter', 'chapter'])]);
@@ -359,7 +369,6 @@ function plan(said, apps, context, dry) {
     if (app) return task([{ tool: 'open_app', params: { app: app.id } }]);
     if (/^(?:open|go to)\b/i.test(t)) return { kind: 'unknown', plan: [], say: `I don't have ${cap(m[1])} on this phone.` };
   }
-  if ((m = t.match(/^(?:run|start|do)\s+(.+)$/i))) return task([{ tool: 'run_workflow', params: { name: m[1] } }]);
 
   const names = ['messages', 'calendar', 'look'].map((id) => apps.find((a) => a.id === id)?.name).filter(Boolean);
   return { kind: 'unknown', plan: [], say: `${MISS} Try ${names.join(', ') || 'Messages'}.` };
@@ -374,6 +383,15 @@ export function corrected(text) {
 
 const UNITS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15,
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100, a: 1 };
+/** "three", "3:30", "10am" -> "3pm", "3:30pm", "10am": a bare 1 to 7 is the afternoon (a dentist at three). */
+function clock(s) {
+  const m = String(s).trim().match(/^(\d{1,2}|[a-z]+)(?:[:.](\d\d)|\s+(thirty|fifteen|forty five))?\s*(am|pm|a\.m\.|p\.m\.|o'?clock|in the (?:morning|afternoon|evening))?$/i);
+  const h = m && (/^\d/.test(m[1]) ? Number(m[1]) : UNITS[m[1].toLowerCase()]);
+  if (!h || h > 23) return null;
+  const mm = m[2] || { thirty: '30', fifteen: '15', 'forty five': '45' }[m[3]?.toLowerCase()] || '';
+  const ap = /^a|morning/i.test(m[4] || '') ? 'am' : /^p|afternoon|evening/i.test(m[4] || '') || (h >= 1 && h <= 7) ? 'pm' : h <= 12 ? 'am' : '';
+  return `${h}${mm ? `:${mm}` : ''}${ap}`;
+}
 /** "20", "twenty", "twenty five", "a hundred" -> a number; 0 if it is not money words. */
 function money(s) {
   if (/^\d/.test(s)) return Number(s);

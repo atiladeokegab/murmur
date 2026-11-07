@@ -74,3 +74,28 @@ test('end to end: "get a price", "the station" quotes the taxi', async () => {
   await agent.hear('the station');
   assert.equal(registry.get("taxi").state().quote?.to, "the Station", spoken.join(" | "));
 });
+
+// build-calendar's blind probe: wrong plans pre-empt Gemini, so they go first.
+test('a bare "start" or "do" is not a routine unless one has that name', () => {
+  for (const u of ['start over', 'do I have anything this afternoon']) assert.match(tool(u), /^I can't do that one yet/, u);
+  assert.notEqual(tool('start a new note').split('{')[0], 'run_workflow');
+  assert.equal(tool('run my morning', null, { workflows: ['My morning'] }), 'run_workflow{"name":"my morning"}');
+});
+test('"add a dentist appointment on Friday at three" is a calendar add at 3pm', () => {
+  assert.equal(tool('Add a dentist appointment on Friday at three'), 'calendar__add{"title":"Dentist appointment","day":"Friday","time":"3pm"}');
+  assert.equal(tool('add coffee with Ana on Monday at 10am'), 'calendar__add{"title":"Coffee with Ana","day":"Monday","time":"10am"}');
+});
+test('"take me home" goes home', () => { for (const u of ['Take me home', 'go home', 'take me back home']) assert.equal(tool(u), 'go_home{}', u); });
+test('"reply to that message" asks what to say, and the answer is the reply', () => {
+  assert.equal(tool('Reply to that message'), 'ask{"question":"What should I say?"}');
+  assert.equal(demoPlan('Reply to that message', reg, { app: null, workflows: [] }).asked, 'reply');
+  assert.equal(tool("I'm on my way", 'messages', { asked: 'reply' }), 'messages__reply{"text":"I\'m on my way."}');
+});
+test('cheap hits: next appointment, read back, next one, again, the clock', () => {
+  assert.equal(tool("What's my next appointment"), 'calendar__next{}');
+  assert.equal(tool('read back what I wrote'), 'writer__readLastPage{}');
+  assert.equal(tool('read the next one'), 'messages__read{"new":true}');
+  assert.equal(tool('read my last message again'), 'messages__read{}');
+  assert.match(tool('what time is it'), /^say\{"text":"It's \d{1,2}:\d\d\."\}$/);
+  assert.match(tool('what day is it'), /^say\{"text":"It's (Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day \d{1,2} [A-Z][a-z]+\."\}$/);
+});
