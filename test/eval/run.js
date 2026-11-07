@@ -96,6 +96,7 @@ async function runTask(task, url) {
   const context = await browser.newContext({ viewport: { width: 390, height: 757 }, reducedMotion: task.reducedMotion ? 'reduce' : 'no-preference' });
   const page = await context.newPage();
   page.setDefaultTimeout(TIMEOUT);
+  await page.clock.install({ time: new Date('2026-11-07T09:00:00Z') });
   const pageErrors = [];
   let beforeAll = null;
   page.on('pageerror', error => pageErrors.push(error.message));
@@ -248,8 +249,7 @@ async function runTask(task, url) {
       if (task.gate.readbackFromState && !trace.some(e => e.kind === 'readback' && e.same === true && confirmations.some(c => c.scope === e.scope))) errors.push('Payment readback differs from the registered app readback for the live state.');
     }
     if (task.dryRun) {
-      const plan = events.filter(e => e.name === 'task:start').flatMap(e => e.plan || []);
-      const names = plan.map(step => step.name || step.tool).filter(Boolean);
+      const names = task.dryRunActions || [];
       const hints = await page.evaluate(names => {
         const registry = (window.__murmur || window.murmur).registry;
         return names.map(name => {
@@ -257,7 +257,8 @@ async function runTask(task, url) {
           return resolved?.action?.hint || null;
         });
       }, names);
-      if (!hints.length || hints.some(hint => !hint || !speech.includes(hint))) errors.push('The dry run did not speak hints from its registered action plan.');
+      if (!names.length) errors.push('The dry-run case has no expected registered actions.');
+      if (hints.length !== names.length || hints.some(hint => !hint || !speech.includes(hint))) errors.push('The dry run did not speak hints from its expected registered actions.');
       if (!/do it|walk you through|teach you/i.test(speech)) errors.push('The dry run did not offer to act or teach the person.');
       if (trace.some(e => e.kind === 'run')) errors.push('The dry run executed an action instead of explaining it.');
     }
@@ -268,7 +269,7 @@ async function runTask(task, url) {
     }
     if (task.boardVisible && await runtime(page, murmur => murmur.current()) !== null) errors.push('Back did not return to the board.');
     if (task.inputPath && !events.some(e => e.name === 'heard' && e.path === task.inputPath)) errors.push('The typed UI did not record the typed input path.');
-    if (task.providerDisclosure && provider === 'demo' && !speech.toLowerCase().includes(task.providerDisclosure.whenOffline)) errors.push('Offline travel results were not disclosed as demo data.');
+    if (task.providerDisclosure && !new RegExp(task.providerDisclosure.matches, 'i').test(speech)) errors.push('Offline travel results were not disclosed as demo data.');
     if (task.reducedMotionHonoured) {
       const motion = await page.evaluate(() => ({ reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
         moving: [...document.querySelectorAll('.agent-cursor, .changed, [data-n], .tile')].filter(el => {

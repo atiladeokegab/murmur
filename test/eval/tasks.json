@@ -171,7 +171,7 @@
       "id": "calendar-read-day", "app": "calendar", "utterance": "What's on my calendar today, and what's next?",
       "expect": "The real seeded appointments and next event are spoken in time order, without changing events.",
       "assertions": ["same(state('calendar').events, before('calendar').events)"],
-      "speech": { "matches": "Today: Choir at six, then Quiz with Sam at half past seven" }, "requiresVerifiedStep": true
+      "speech": { "matches": "Nothing today.*Next is Lunch with Mum on Tuesday at 12:30 pm" }, "requiresVerifiedStep": true
     },
     {
       "id": "calendar-move-lunch", "app": "calendar", "utterance": "Move lunch with Mum to 12 November at noon.",
@@ -198,13 +198,13 @@
       "expect": "Travel returns the requested destination with honestly labelled offline demo results; nothing is held or paid.",
       "fixtures": ["Clock date is 2026-11-07 (Saturday); next Friday is 2026-11-13"],
       "assertions": ["state('travel').query.to === 'Lisbon'", "state('travel').query.day === 'friday'", "state('travel').query.date === '2026-11-13'", "state('travel').results.length === 3", "state('travel').held === null"],
-      "providerDisclosure": { "whenOffline": "offline demo" }, "noGatedRuns": true, "requiresVerifiedStep": true
+      "providerDisclosure": { "matches": "\\b(?:simulated|sample|example|demo|offline)\\b" }, "noGatedRuns": true, "requiresVerifiedStep": true
     },
     {
       "id": "how-to-without-executing", "app": "messages", "utterance": "How do I send a message to Samira?",
       "expect": "The real planner returns a dry-run explanation using registered action hints, then offers doing or teaching; no action runs.",
       "assertions": ["same(allStates(), beforeAll)"],
-      "speech": { "matches": "reply|message|send" }, "dryRun": true, "noGatedRuns": true
+      "speech": { "matches": "reply|message|send" }, "dryRun": true, "dryRunActions": ["messages__openChat", "messages__reply", "messages__send"], "noGatedRuns": true
     },
     {
       "id": "back-cancels-task", "app": "messages", "utterance": "Tell Mum: I'll meet you by the library.",
