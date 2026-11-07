@@ -10,6 +10,7 @@ class Node {
   contains(n) { for (let x = n; x; x = x.parentNode) if (x === this) return true; return false; }
   *all() { for (const c of this.children) { yield c; yield* c.all(); } }
   matches(sel) {
+    if (sel.trim() === ':disabled') { for (let x = this; x; x = x.parentNode) if (x.disabled && (x === this || x.tagName === 'FIELDSET')) return true; return false; }
     return sel.split(',').some((s) => {
       const m = /^\s*([a-z0-9]*)(?:\[([a-z-]+)(?:="([^"]*)")?\])?\s*$/i.exec(s);
       if (!m) return false;

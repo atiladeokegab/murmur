@@ -1,0 +1,12 @@
+/* The demo panel: Station board tokens only. Full width, on top of everything, plain. */
+.demo-panel {
+  position: fixed; inset: auto 0 0 0; z-index: 1000; display: flex; flex-direction: column; gap: 0.75rem;
+  padding: var(--gutter); background: var(--c-sheet); color: var(--c-ink); border-top: var(--bw-now) solid var(--c-accent);
+  max-height: 100svh; overflow-y: auto; box-shadow: 0 0 0 100vmax var(--c-scrim); /* the scrim behind */
+}
+.demo-panel[hidden] { display: none; }
+.demo-panel h2 { margin: 0; font-size: var(--fs-sheet-h); }
+.demo-panel button {
+  min-height: var(--h-link); padding: 0.5rem 1rem; border: var(--bw-talk) solid var(--c-ink); border-radius: var(--r-btn);
+  background: var(--c-board); color: var(--c-ink); font-size: var(--fs-sheet); font-weight: 700; text-align: start; cursor: pointer;
+}

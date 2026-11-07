@@ -18,30 +18,35 @@
 </script>
 <link rel="preload" href="fonts/atkinson-next.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="app.css">
-<script type="module" src="app.js"></script>
+<script type="module" src="os/shell.js"></script>
 </head>
 <body>
-<a class="skip" href="#menu">Skip to your menu</a>
 <main>
   <div class="column">
-    <header>
-      <h1><span class="menu">Your menu<span class="sr">,</span></span> <span class="day" id="day"></span></h1>
-    </header>
-    <p class="note" id="note" hidden></p>
-    <ol id="menu" tabindex="-1" aria-label="Your menu"></ol>
-    <section class="proposal" id="proposal" aria-labelledby="proposal-text" hidden>
-      <p id="proposal-text"></p>
-      <div class="choices">
-        <button class="choice yes" type="button" data-answer="yes">Yes, add it</button>
-        <button class="choice" type="button" data-answer="later">Not now</button>
-        <button class="choice" type="button" data-answer="never">Never</button>
+    <section class="work" id="work" aria-label="What Murmur is doing" hidden>
+      <p class="place" id="place"></p>
+      <p class="step" id="step" hidden></p>
+      <button class="stop" id="stop" type="button" hidden>Stop</button>
+      <div class="done" id="done" hidden>
+        <p class="done-line" id="done-line" tabindex="-1"></p>
+        <button class="choice yes undo" id="undo" type="button" hidden>Undo</button>
+        <p class="done-ms" id="done-ms" aria-hidden="true"></p>
       </div>
+      <ol class="ticks" id="ticks" aria-label="Steps"></ol>
+      <ol class="lines" id="lines" aria-label="What Murmur said"></ol>
     </section>
-    <a class="look" href="#look" id="look-link">Your look: text, colours, voice</a>
+    <div id="board-view">
+      <div class="top">
+        <h1><span class="menu">Murmur<span class="sr">,</span></span> <span class="day" id="day"></span></h1>
+      </div>
+      <ol class="board" id="board" aria-label="Your board"></ol>
+      <a class="look" href="#look" id="look-link">Your look: who speaks, text, colours</a>
+    </div>
+    <div id="apps"></div>
   </div>
 </main>
 <footer>
-  <p class="say"><span class="who" aria-hidden="true">Murmur</span><span id="say" role="status" aria-live="polite"></span></p>
+  <p class="say"><span class="who" aria-hidden="true">Murmur</span><span id="say" role="status"></span></p>
   <form class="typed" id="typed" hidden>
     <label class="sr" for="typed-text">Type to Murmur</label>
     <input id="typed-text" autocomplete="off" enterkeyhint="send" placeholder="Type to Murmur">
@@ -49,13 +54,13 @@
   </form>
   <button class="talk" id="talk" type="button" aria-pressed="false">
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-    <span class="label" id="talk-label">Hold to talk</span>
-    <span class="hint" aria-hidden="true">or hold Space</span>
+    <span class="label" id="talk-label">Tap to talk</span>
+    <span class="hint" aria-hidden="true">or Space</span>
   </button>
 </footer>
-<div class="nolook" id="nolook" role="application" aria-label="No-look mode. Tap anywhere for Now, swipe for the next tile, double tap to do it, hold to talk." hidden>
+<div class="nolook" id="nolook" role="application" aria-label="No-look mode. Tap anywhere and talk. Swipe down to stop, right to carry on, up for where you are. Double tap to hear it again." hidden>
   <div class="nl-band">
-    <p class="nl-help" aria-hidden="true">No-look mode. Tap: Now. Swipe: next. Double tap: do it. Hold: talk.</p>
+    <p class="nl-help" aria-hidden="true">Tap: talk. Swipe down: stop. Right: carry on. Up: where am I. Double tap: again.</p>
     <button class="choice" type="button" id="nolook-exit">Leave no-look mode</button>
   </div>
 </div>

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Murmur demo controls</title>
+<link rel="stylesheet" href="../../app.css">
+<style>
+  body { height: auto; padding: var(--gutter); max-width: var(--w-column); margin: 0 auto; gap: 1rem; }
+  h1 { font-size: var(--fs-sheet-h); margin: 0; }
+  h2 { font-size: var(--fs-title); margin: 1rem 0 0; }
+  p, li, td, th { font-size: var(--fs-sheet); }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: start; vertical-align: top; padding: 0.75rem 0.5rem; border-top: 1px solid var(--c-slat); }
+  kbd { font-family: var(--f-time); color: var(--c-accent); }
+</style>
+</head>
+<body>
+<main>
+<h1>Demo controls</h1>
+<p><strong>Open the panel:</strong> press and hold the clock for <strong>1.5 seconds</strong>, or press <kbd>`</kbd> (the key left of 1).
+In the panel, press <kbd>1</kbd> to <kbd>4</kbd>, or tap the button. <kbd>Esc</kbd> closes it. The panel closes itself before a control runs.</p>
+
+<h2>The four controls</h2>
+<table>
+  <thead><tr><th scope="col">Key</th><th scope="col">Control</th><th scope="col">What it does</th><th scope="col">When</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>1</kbd></td><td>Reset</td><td>Every app back to its demo data, the board back to day 1, the first-open sentence armed again. Says "Reset. Day 1."</td><td>Before going on, and between rehearsals.</td></tr>
+    <tr><td><kbd>2</kbd></td><td>Next morning</td><td>Moves the seeded week on a day. Murmur proposes "Put the bus first?"; answer Yes and the tile says UP.</td><td>1:35, "It learns, with permission".</td></tr>
+    <tr><td><kbd>3</kbd></td><td>Mode</td><td>Switches who speaks: Murmur, or the screen reader (Murmur goes silent and writes to the status line). Says which.</td><td>Race in Murmur mode; switch for the 10 s TalkBack beat, then back.</td></tr>
+    <tr><td><kbd>4</kbd></td><td>Replay</td><td>Runs the last task again, step by step, gates included (it still asks before it sends).</td><td>If a beat stumbles, or to show Inside the rows again.</td></tr>
+  </tbody>
+</table>
+
+<h2>Before going on</h2>
+<ol>
+  <li>Open the panel, press <kbd>1</kbd> Reset. You hear "Reset. Day 1."</li>
+  <li>Reload the phone page. You hear "Tap anywhere and tell me what you need." once.</li>
+  <li>Reset leaves the mode on Murmur, and every row of Your look at its default.</li>
+</ol>
+</main>
+</body>
+</html>

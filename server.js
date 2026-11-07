@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as demo from './lib/demo.js';
 import * as gemini from './lib/gemini.js';
+import * as agent from './lib/agent/planner.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const KEY = process.env.GEMINI_API_KEY || '';
@@ -44,6 +45,10 @@ const api = {
     const info = { part: String(body.part || 'day').slice(0, 12), top: String(body.top || '').slice(0, 60),
       moved: (Array.isArray(body.moved) ? body.moved : []).slice(0, 3).map((s) => String(s).slice(0, 60)) };
     return withFallback('menu', async () => ({ say: await gemini.menuLine(KEY, info) }), () => ({ say: demo.menuLine(info) }));
+  },
+  // The agent's planner: the browser sends what was said and its registry; a validated plan comes back.
+  async 'POST /api/plan'(body) {
+    return agent.plan({ key: KEY, utterance: body.utterance, apps: agent.cleanApps(body.apps), context: { app: String(body.context?.app || '').slice(0, 30), workflows: (Array.isArray(body.context?.workflows) ? body.context.workflows : []).slice(0, 20).map((w) => String(w).slice(0, 60)) } });
   },
   async 'POST /api/live-token'() {
     if (LIVE_URL) return { token: 'test', url: LIVE_URL, model: gemini.LIVE_MODEL, voice: gemini.VOICE, persona: gemini.LIVE_PERSONA, tools: gemini.LIVE_TOOLS };

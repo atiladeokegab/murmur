@@ -53,7 +53,7 @@ test('registry: refuses a malformed app, and tools are generated from what apps 
   const names = tools.map((t) => t.name);
   for (const b of ['open_app', 'read_screen', 'where', 'say', 'ask', 'save_workflow', 'run_workflow', 'explain']) assert.ok(names.includes(b), b);
   assert.ok(names.includes('hello__write') && names.includes('hello__send'));
-  assert.deepEqual(tools.find((t) => t.name === 'open_app').parameters.properties.app.enum, ['hello']);
+  assert.deepEqual(tools.find((t) => t.name === 'open_app').parameters.properties.app.enum, appIds);
   assert.match(tools.find((t) => t.name === 'hello__send').description, /asked first: send/);
   assert.equal(r.resolve('hello__delete'), null, 'an action nobody declared does not exist');
   assert.equal(r.resolve('hello__write__x'), null);
@@ -178,4 +178,35 @@ test('undo and kv: an app keeps its own data, and undo goes back through the sam
   assert.equal(await appKv('b', port).get('k'), undefined);
   await hello.reset();
   assert.deepEqual(hello.state(), { draft: '', sent: [], lastSent: null });
+});
+
+test('review fixes: no typing into a read-only box, no prototype keys through validate, no tick after Stop', async () => {
+  const { ctxFor, registry, roots, run, controller, bus } = await phone();
+  const box = roots.hello.querySelector('#hello-box');
+  box.readOnly = true;
+  await assert.rejects(ctxFor(registry.get('hello')).type(box, 'sneaky'), /can't be changed/);
+  assert.equal(box.value, '');
+  box.readOnly = false;
+  const fs = roots.hello.ownerDocument.createElement('fieldset'); fs.disabled = true;
+  const inner = roots.hello.ownerDocument.createElement('textarea'); fs.append(inner); roots.hello.append(fs);
+  await assert.rejects(ctxFor(registry.get('hello')).type(inner, 'sneaky'), /can't be changed/);
+  const innerBtn = roots.hello.ownerDocument.createElement('button'); fs.append(innerBtn);
+  await assert.rejects(ctxFor(registry.get('hello')).tap(innerBtn, 'Send'), /isn't available/);
+  assert.equal(inner.value, '');
+
+  const s = { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] };
+  const v = validate(s, JSON.parse('{"constructor": 1, "__proto__": {"admin": true}, "toString": 2}'));
+  assert.equal(v.ok, false);
+  assert.deepEqual(v.errors, ['text is required']);
+  assert.equal(v.params.admin, undefined);
+  assert.deepEqual(validate({ type: 'object', properties: {}, required: ['constructor'] }, {}).errors, ['constructor is required']);
+
+  // Stop lands while the step runs: the step fails as stopped, never verified.
+  const app = registry.get('hello');
+  const realRun = app.actions.write.run;
+  app.actions.write.run = async (p, ctx) => { await realRun(p, ctx); controller.abort(); };
+  const r = await run('hello__write', { text: 'late' });
+  app.actions.write.run = realRun;
+  assert.deepEqual([r.ok, r.stopped], [false, true]);
+  assert.ok(!bus.log.some((e) => e.name === 'step:verified'));
 });
