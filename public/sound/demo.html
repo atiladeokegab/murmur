@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Murmur Earcons &amp; Haptics Demo</title>
+  <title>Murmur OS: Earcons &amp; Haptics Demo</title>
   <style>
     :root {
       --bg: #121212;
@@ -13,6 +13,7 @@
       --text-muted: #a0a0a0;
       --accent: #f7c325;
       --accent-hover: #ffd748;
+      --accent-glow: rgba(247, 195, 37, 0.25);
       --danger: #ff5555;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -21,7 +22,7 @@
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       padding: 2rem 1rem;
-      max-width: 640px;
+      max-width: 680px;
       margin: 0 auto;
       line-height: 1.5;
     }
@@ -42,7 +43,7 @@
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       gap: 1rem;
       margin-bottom: 2rem;
     }
@@ -55,10 +56,14 @@
       flex-direction: column;
       justify-content: space-between;
       gap: 0.75rem;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
     .card:hover {
       border-color: var(--accent);
+    }
+    .card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
     }
     .card h2 {
       font-size: 1.2rem;
@@ -124,16 +129,25 @@
       padding: 1rem;
       font-family: ui-monospace, monospace;
       font-size: 0.85rem;
-      height: 120px;
+      height: 140px;
       overflow-y: auto;
       color: #88ff88;
+    }
+    .step-badge {
+      display: inline-block;
+      background: #2a2a2a;
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      margin-left: 0.5rem;
     }
   </style>
 </head>
 <body>
   <header>
     <h1>Murmur OS: Earcons &amp; Haptics</h1>
-    <p class="subtitle">Felt-mallet acoustic physical modeling synthesizer (§7 Sound design)</p>
+    <p class="subtitle">Felt-mallet acoustic physical modeling synthesizer (§7 Sound design &bull; feels like magic)</p>
   </header>
 
   <section class="controls" aria-label="Audio Controls">
@@ -150,13 +164,18 @@
       <input type="checkbox" id="quiet-toggle">
       <label for="quiet-toggle">Quiet Mode (no sound / no haptics)</label>
     </div>
+    <div class="control-group">
+      <button id="reset-step-btn" style="background: #2a2a2a; color: #fff; border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+        Reset Step Ticks
+      </button>
+    </div>
   </section>
 
   <main class="grid" id="earcon-grid" aria-label="Earcon Soundboard"></main>
 
   <section>
     <h3 style="margin-bottom: 0.5rem; font-size: 1rem; color: var(--text-muted);">Event Output Log</h3>
-    <div class="log-box" id="log" aria-live="polite">Waiting for first tap...</div>
+    <div class="log-box" id="log" aria-live="polite">Waiting for first tap... (AudioContext unlocked on first tap)</div>
   </section>
 
   <script type="module">
@@ -168,6 +187,7 @@
     const volVal = document.getElementById('vol-val');
     const muteToggle = document.getElementById('mute-toggle');
     const quietToggle = document.getElementById('quiet-toggle');
+    const resetStepBtn = document.getElementById('reset-step-btn');
 
     function log(msg) {
       const line = `[${new Date().toISOString().substring(11, 19)}] ${msg}`;
@@ -196,18 +216,33 @@
       log(`Quiet mode: ${e.target.checked ? 'ENABLED' : 'DISABLED'}`);
     });
 
+    resetStepBtn.addEventListener('click', () => {
+      sound.resetStepCount();
+      updateStepBadge();
+      log('Step counter reset to 0');
+    });
+
+    function updateStepBadge() {
+      const badge = document.getElementById('step-counter-badge');
+      if (badge) {
+        badge.textContent = `step ${sound.getStepCount()} (+${sound.getStepCount() % 12} st)`;
+      }
+    }
+
     for (const name of EARCON_NAMES) {
       const def = EARCON_DEFS[name];
       const card = document.createElement('div');
       card.className = 'card';
+      card.id = `card-${name}`;
+      const badgeHtml = name === 'step' ? `<span id="step-counter-badge" class="step-badge">step 0 (+0 st)</span>` : '';
       card.innerHTML = `
         <div>
-          <h2>${name}</h2>
+          <h2>${name} ${badgeHtml}</h2>
           <p class="desc">${def.description}</p>
         </div>
         <div>
           <p class="meta">⏱ ${def.durationMs}ms &bull; 📳 [${def.vibratePattern.join(', ')}]ms</p>
-          <button class="play-btn" style="margin-top: 0.5rem; width: 100%;" data-name="${name}">
+          <button class="play-btn" style="margin-top: 0.5rem; width: 100%;" data-name="${name}" data-earcon="${name}">
             <span>▶</span> Play &amp; Buzz
           </button>
         </div>
@@ -222,6 +257,15 @@
       const played = sound.play(name);
       const buzzed = sound.buzz(name);
       const def = EARCON_DEFS[name];
+
+      updateStepBadge();
+
+      const card = document.getElementById(`card-${name}`);
+      if (card) {
+        card.classList.add('active');
+        setTimeout(() => card.classList.remove('active'), def.durationMs + 50);
+      }
+
       log(`Triggered "${name}" (${def.durationMs}ms) &rarr; Sound: ${played ? 'OK' : 'Muted/Quiet'}, Haptics: ${buzzed ? 'Vibrated' : 'Off/No-op'}`);
     });
   </script>
