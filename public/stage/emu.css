@@ -1,0 +1,57 @@
+/* /stage only: the laptop copy and the mirror drawn as a phone emulator. stage.js sets html.stage-emu; the real phone never does. */
+html.stage-emu body { background: radial-gradient(120% 70% at 20% 0%, var(--c-now-top), transparent 60%), linear-gradient(170deg, var(--c-board-press), var(--c-page) 70%) fixed; }
+html.stage-emu .statusbar { padding-inline: 1.75rem; font-weight: 700; }
+/* the punch-hole camera, in the screen above the status bar */
+html.stage-emu body::before { content: ""; position: fixed; z-index: 9; top: 10px; left: 50%; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #000; box-shadow: 0 0 0 2px var(--c-slat); pointer-events: none; }
+
+/* home: a launcher grid of rounded-square icons, the name under each, and the last row as the dock */
+html.stage-emu #board-view .top { padding: 0.5rem 1.25rem 0; }
+html.stage-emu #board-view .top h1 { font-size: 1.1rem; font-weight: 600; color: var(--c-quiet); }
+html.stage-emu #board { display: flex; flex-flow: row wrap; align-content: flex-start; gap: 1rem 0; padding: 1rem 0.5rem 0; margin: 0; list-style: none; }
+html.stage-emu #board li { flex: 0 0 25%; min-width: 0; margin: 0; }
+html.stage-emu #board .tile, html.stage-emu #board .now .tile { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; min-height: 0; padding: 0; background: none; box-shadow: none; border: 0; border-radius: 0; }
+html.stage-emu #board .tile .head, html.stage-emu #board .tile .when, html.stage-emu #board .tile .key, html.stage-emu #board .tile .why { display: none; }
+html.stage-emu #board .tile .what { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; }
+html.stage-emu #board .tile .what::before { display: block; --s-icon: 54px; --r-icon: 16px; box-shadow: 0 4px 10px var(--c-scrim); }
+html.stage-emu #board .tile .title, html.stage-emu #board li:not(.now) .title { font-size: 0.72rem; font-weight: 600; line-height: 1.15; text-align: center; color: var(--c-ink); max-width: 6.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html.stage-emu #board .now .tile .what::after { content: ""; position: absolute; width: 12px; height: 12px; margin-left: 46px; margin-top: -4px; border-radius: 50%; background: var(--c-mark); }
+html.stage-emu #board .now .tile { position: relative; }
+html.stage-emu #board-view .look { display: none; }
+/* the dock: the last four apps on a frosted shelf above the talk bar */
+html.stage-emu #board-view { position: relative; min-height: calc(100svh - 13rem); padding-bottom: 7rem; box-sizing: border-box; }
+html.stage-emu #board li:nth-last-child(-n+4) { position: absolute; bottom: 1.4rem; width: calc((100% - 1rem) / 4); }
+html.stage-emu #board li:nth-last-child(4) { left: 0.5rem; }
+html.stage-emu #board li:nth-last-child(3) { left: calc(0.5rem + (100% - 1rem) / 4); }
+html.stage-emu #board li:nth-last-child(2) { left: calc(0.5rem + (100% - 1rem) / 2); }
+html.stage-emu #board li:nth-last-child(1) { left: calc(0.5rem + 3 * (100% - 1rem) / 4); }
+html.stage-emu #board li:nth-last-child(-n+4) .title { display: none; }
+html.stage-emu #board-view::after { content: ""; position: absolute; z-index: -1; left: 0.5rem; right: 0.5rem; bottom: 0.6rem; height: 5.4rem; border-radius: 28px; background: color-mix(in srgb, var(--c-board) 75%, transparent); }
+html.stage-emu #board-view { z-index: 0; }
+
+/* inside an app: a header bar with a back chevron, then list rows */
+html.stage-emu .app > h2 { position: sticky; top: 0; z-index: 3; margin: 0 -1rem 0.5rem; padding: 0.85rem 1rem 0.85rem 2.5rem; font-size: 1.15rem; background: var(--c-board); border-bottom: 1px solid var(--c-slat); }
+html.stage-emu .app > h2::before { content: "\2039"; position: absolute; left: 1rem; top: 50%; transform: translateY(-55%); font-size: 1.8rem; font-weight: 400; color: var(--c-accent); }
+html.stage-emu .app-list { margin: 0; padding: 0; background: var(--c-board); border-radius: 14px; overflow: hidden; }
+html.stage-emu .app-list li + li { border-top: 1px solid var(--c-slat) !important; }
+html.stage-emu .app-list .app-btn { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; background: none; padding: 0.8rem 2rem 0.8rem 1rem !important; position: relative; min-height: 0; }
+html.stage-emu .app-list .app-btn::after { content: "\203A"; position: absolute; right: 0.9rem; top: 50%; transform: translateY(-50%); color: var(--c-quiet); font-size: 1.3rem; }
+html.stage-emu .app-list .app-title { display: block; font-size: 1rem; }
+html.stage-emu .app-list .app-why { display: block; font-size: 0.85rem; color: var(--c-quiet); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* apps with no glyph of their own: the first letter of the name, on a colour of ours */
+html.stage-emu #board .tile:is([data-app="whatsapp"], [data-app="instagram"], [data-app="uber"], [data-app="deliveroo"], [data-app="maps"], [data-app="spotify"], [data-app="podcasts"], [data-app="audible"], [data-app="places"]) .what::before {
+  -webkit-mask: none; mask: none; display: grid; place-items: center; color: var(--c-on-accent); font: 700 1.5rem/1 var(--f-read);
+}
+html.stage-emu #board .tile[data-app="whatsapp"] .what::before { content: "W"; background: var(--c-mark); color: var(--c-on-mark); }
+html.stage-emu #board .tile[data-app="instagram"] .what::before { content: "I"; background: var(--c-mark); color: var(--c-on-mark); }
+html.stage-emu #board .tile[data-app="uber"] .what::before { content: "U"; background: var(--c-bar); color: var(--c-ink); }
+html.stage-emu #board .tile[data-app="deliveroo"] .what::before { content: "D"; background: var(--c-bar); color: var(--c-ink); }
+html.stage-emu #board .tile[data-app="maps"] .what::before { content: "M"; }
+html.stage-emu #board .tile[data-app="places"] .what::before { content: "P"; }
+html.stage-emu #board .tile[data-app="spotify"] .what::before { content: "S"; background: var(--c-ink); color: var(--c-page); }
+html.stage-emu #board .tile[data-app="podcasts"] .what::before { content: "P"; background: var(--c-ink); color: var(--c-page); }
+html.stage-emu #board .tile[data-app="audible"] .what::before { content: "A"; background: var(--c-ink); color: var(--c-page); }
+/* the real phone hides its board (os/simple.css), so a mirror frame can be the talk bar alone: keep it at the bottom */
+html.stage-emu body { min-height: 100svh; }
+html.stage-emu footer { margin-top: auto; }
+html.stage-emu #board .tile[data-app="calendar"] .what::before { display: grid; }

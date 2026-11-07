@@ -65,7 +65,7 @@ export async function wireExtras({ bus, registry, speak, settings, save, kv, app
     ...(lookSettings().speaker === 'reader' ? { waitTap: false } : {}) }).catch((e) => console.warn('first open', e));
 
   // Inside: only a phone opened with ?room=stage (or #stage) sends its bus to the relay, so judges' phones stay off the projector.
-  import('../inside/forward.js').then((m) => { const room = m.roomFrom(doc?.defaultView?.location || {}); if (room) m.forward(bus, { room }); }).catch(() => { /* no Inside: the phone works the same */ });
+  import('../inside/forward.js').then((m) => { const room = m.roomFrom(doc?.defaultView?.location || {}); if (room) { m.forward(bus, { room }); if (!/[?&]nomirror\b/.test(doc?.defaultView?.location?.search || '')) import('./mirror.js').then((x) => x.mirror({ doc, room })).catch(() => {}); } }).catch(() => { /* no Inside: the phone works the same */ });
 
   return { say, demo, off: () => { offSync(); panel?.off(); } };
 }

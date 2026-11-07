@@ -16,6 +16,7 @@
     var theme = look.theme || 'auto'; // no colours chosen: follow the phone's light or dark setting
     if (theme === 'auto') theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
     if (theme !== 'dark') document.documentElement.dataset.theme = theme;
+    if (!/[?&](full|quiet|nomirror)\b/.test(location.search)) document.write('<link rel="stylesheet" href="os/simple.css">'); // one big talk button (the judges, 7 Nov)
   })();
 </script>
 <link rel="preload" href="fonts/atkinson-next.woff2" as="font" type="font/woff2" crossorigin>
@@ -31,7 +32,22 @@
   <svg viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1.5 4.5a9.5 9.5 0 0 1 13 0M4 7.3a6 6 0 0 1 8 0"/><circle cx="8" cy="10.3" r="1.2" fill="currentColor" stroke="none"/></svg>
   <span class="sb-pct">82%</span><svg viewBox="0 0 26 12" fill="currentColor"><rect x="0.75" y="0.75" width="22" height="10.5" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="2.5" y="2.5" width="15.2" height="7" rx="1.5"/><rect x="24" y="4" width="1.8" height="4" rx="0.9"/></svg>
 </span></div>
+<button class="sr" id="talk-first" type="button" hidden>Talk</button>
+<!-- The bar comes first in Tab order (axe); CSS footer { order: 1 } keeps it at the bottom. -->
+<footer>
+  <p class="say"><span class="who" aria-hidden="true">Murmur</span><span id="say" role="status"></span></p>
+  <form class="typed" id="typed" hidden>
+    <label class="sr" for="typed-text">Type to Murmur</label>
+    <input id="typed-text" autocomplete="off" enterkeyhint="send" placeholder="Type to Murmur">
+    <button type="submit">Send</button>
+  </form>
+  <button class="talk" id="talk" type="button" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    <span class="label" id="talk-label">Tap anywhere to talk</span>
+  </button>
+</footer>
 <main>
+  <h1 class="sr">Murmur</h1>
   <div class="column">
     <section class="work" id="work" aria-label="What Murmur is doing" hidden>
       <p class="place" id="place"></p>
@@ -52,7 +68,7 @@
     </section>
     <div id="board-view">
       <div class="top">
-        <h1><span class="menu">Murmur<span class="sr">,</span></span> <span class="day" id="day"></span></h1>
+        <h1 role="none"><span class="menu">Murmur<span class="sr">,</span></span> <span class="day" id="day"></span></h1>
       </div>
       <ol class="board" id="board" aria-label="Your board"></ol>
       <a class="look" href="#look" id="look-link">Your look: who speaks, text, colours</a>
@@ -61,19 +77,6 @@
     <div id="apps"></div>
   </div>
 </main>
-<footer>
-  <p class="say"><span class="who" aria-hidden="true">Murmur</span><span id="say" role="status"></span></p>
-  <form class="typed" id="typed" hidden>
-    <label class="sr" for="typed-text">Type to Murmur</label>
-    <input id="typed-text" autocomplete="off" enterkeyhint="send" placeholder="Type to Murmur">
-    <button type="submit">Send</button>
-  </form>
-  <button class="talk" id="talk" type="button" aria-pressed="false">
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-    <span class="label" id="talk-label">Tap to talk</span>
-    <span class="hint" aria-hidden="true">or Space</span>
-  </button>
-</footer>
 <div class="nolook" id="nolook" role="application" aria-label="No-look mode. Tap anywhere and talk. Swipe down to stop, right to carry on, up for where you are. Double tap to hear it again." hidden>
   <div class="nl-band">
     <p class="nl-help" aria-hidden="true">Tap: talk. Swipe down: stop. Right: carry on. Up: where am I. Double tap: again.</p>

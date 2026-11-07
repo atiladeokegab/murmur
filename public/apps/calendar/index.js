@@ -16,6 +16,7 @@ let draft = { title: '', day: '', time: '', to: '', who: '' };
 let before = null; // the last move's starting point, for undo
 let pressed = null; // the control just pressed: where a moved event takes off from
 let personal = false; // a person's own tap moves focus; the agent's taps leave it on Stop
+let clearing = null; // the clear action waits for the button's persistence result
 
 // ---------- plain helpers (pure: verify and readback use them on state) ----------
 const mins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
@@ -211,6 +212,31 @@ function invited(e, who) {
   save(); render('cal-status');
 }
 
+// Delete everything always asks: the agent's run was asked by the runner; a person's own tap asks here. No confirm, no delete.
+const clearLine = (n) => (!n ? 'Your calendar is already empty.' : n === 1 ? 'Delete the one event in your calendar?' : `Delete all ${n} events from your calendar?`);
+async function clearAll() {
+  if (!events.length) { status = clearLine(0); render('cal-status'); return false; }
+  if (!personal) return cleared();
+  if (!osConfirm) return false;
+  if ((await osConfirm({ gate: 'delete', readback: clearLine(events.length) })) !== true) {
+    status = 'Nothing deleted.'; render('cal-status'); return false;
+  }
+  return cleared();
+}
+async function cleared() {
+  const n = events.length;
+  try { await kv.set('events', []); }
+  catch {
+    status = "I couldn't save that, so nothing was deleted.";
+    render('cal-status');
+    return false;
+  }
+  events = []; open = null; picking = adding = inviting = false; clash = null; lastMoved = lastAdded = lastInvite = null; before = null;
+  status = `Deleted ${n === 1 ? 'the one event' : `all ${n} events`}. Your calendar is empty.`;
+  render('cal-status');
+  return true;
+}
+
 function render(focusId) {
   const e = ev();
   const days = DAYS.map((d) => {
@@ -253,6 +279,7 @@ function render(focusId) {
       el('ol', { id: 'cal-list' }, ...(on.length
         ? on.map((x) => el('li', {}, btn(`cal-ev-${x.id}`, `${x.title}, ${spoken(x.time)}`, () => { open = x.id; status = ''; render('cal-ev-h'); })))
         : [el('li', { textContent: 'Nothing on.' })]))];
+    if (events.length) body.push(el('div', { className: 'choices' }, btn('cal-clear', 'Delete every event', () => { clearing = clearAll(); })));
   }
   root.querySelector('#cal-days').replaceChildren(...days);
   root.querySelector('#cal-body').replaceChildren(...body);
@@ -334,7 +361,7 @@ const app = {
     };
   },
   async seed() {
-    if (!events.length) events = SEED.map((e) => ({ ...e, invited: [] }));
+    if (!events.length && (await kv.get('events')) === undefined) events = SEED.map((e) => ({ ...e, invited: [] })); // a cleared calendar stays empty
     await kv.set('events', events);
     render();
   },
@@ -349,6 +376,7 @@ const app = {
   actions: {
     whatsOn: {
       describe: "Say what's on today, or on a named day this week",
+      say: "what's on today",   // what a person would say (offer.js)
       doing: 'Reading your day',
       hint: 'The days are buttons under the heading. Pick one to hear it.',
       params: { type: 'object', properties: { day: dayParam } },
@@ -366,6 +394,7 @@ const app = {
     },
     next: {
       describe: "Say what's next in the calendar",
+      say: "what's next",
       doing: "Finding what's next",
       hint: "What's next is the first button under the heading.",
       params: { type: 'object', properties: {} },
@@ -379,6 +408,7 @@ const app = {
     },
     add: {
       describe: 'Add an event to the calendar',
+      say: 'add an event on Friday',
       doing: 'Adding to your calendar',
       hint: 'Add an event is the second button under the heading. Fill in what, day and time, then Save.',
       params: {
@@ -401,6 +431,7 @@ const app = {
     },
     move: {
       describe: 'Move an event to another day, and optionally another time',
+      say: 'move lunch to Wednesday',
       doing: 'Moving an event',
       hint: 'Open the event, then Move is the second button, then pick the day',
       params: {
@@ -428,7 +459,8 @@ const app = {
           if (c?.label !== 'Move anyway') { await ctx.tap($('cal-keep')); throw new Error(`Not moved. ${e.title} stays on ${e.day}.`); }
           await ctx.tap($('cal-anyway'));
         }
-        await ctx.say(e.with ? `Moved. Tell ${e.with}?` : 'Moved.');
+        // A statement, never a question: no sheet is open, so a "yes" would go nowhere. "tell Mum" plans the message.
+        await ctx.say(e.with ? `Moved to ${to}. To let ${e.with} know, say "tell ${e.with}".` : `Moved to ${to}.`);
       },
       verify(s, p) {
         const m = s.lastMoved, d = dayOf(p.day, s.today);
@@ -448,8 +480,27 @@ const app = {
         before = null;
       },
     },
+    clear: {
+      describe: 'Delete every event in the calendar, after asking',
+      doing: 'Clearing your calendar',
+      gate: 'delete',
+      hint: 'Delete every event is the last button under the day. I ask first.',
+      params: { type: 'object', properties: {} },
+      readback: (s) => clearLine(s.events.length),
+      async run(p, ctx) {
+        if (!events.length) throw new Error(clearLine(0));
+        if (open || adding) await ctx.tap($(`cal-day-${shown}`));
+        clearing = null;
+        await ctx.tap($('cal-clear'));
+        if (!(await clearing)) throw new Error(status || 'Nothing deleted.');
+        await ctx.say(status);
+      },
+      verify: (s) => s.events.length === 0 || 'Some events are still there.',
+      done: () => '', // it already said how many went
+    },
     invite: {
       describe: 'Send someone an invite to an event, or tell them its new time',
+      say: 'invite Sam to lunch',
       doing: 'Sending an invite',
       gate: 'send',
       hint: 'Open the event, then Invite is the third button. Say who, then Send invite.',

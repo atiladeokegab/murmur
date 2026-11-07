@@ -1,8 +1,9 @@
 // First open: a guided welcome that makes a stranger fluent in about 30 seconds, then never again.
 // 1. Who Murmur is, how to talk, one thing to try. 2. On the first thing that works: the three words that
 // get you out of trouble. 3. One more thing to try. Reset and rearm() bring it back. No network beyond TTS.
-export const FIRST_WORDS = "Hi, I'm Murmur. I run this phone for you by voice. Tap anywhere and speak. Try saying: read Mum's message.";
-export const NO_EARS = "Hi, I'm Murmur. I run this phone for you by voice, but this browser can't hear you. To talk, open this page in Chrome. To type instead, tap the Talk button at the bottom. Try: read Mum's message.";
+import { PROFILE } from '../../lib/profile.js';
+export const FIRST_WORDS = `Hi ${PROFILE.first}, I'm Murmur. I run this phone for you by voice. Tap anywhere and speak. Try saying: read Mum's message.`;
+export const NO_EARS = `Hi ${PROFILE.first}, I'm Murmur. I run this phone for you by voice, but this browser can't hear you. To talk, open this page in Chrome. To type instead, tap the Talk button at the bottom. Try: read Mum's message.`;
 export const FIRST_WIN = "That's it. Say 'what can I do' any time, 'stop' to stop me, or 'undo' to take it back.";
 // build-plugin's hint, folded into step 2 so it is said once, after the first success, not at open.
 export const OFFER_HINT = "Say 'what can I do' any time.";
@@ -69,12 +70,14 @@ function follow({ kv, say, bus, caption, sleep }) {
 }
 
 /** The first tap (or Space or Enter) says the welcome, and does nothing else, so nobody starts talking over it. */
+const PRESSABLE = 'button, a, select, input, textarea, summary, [role="button"], [role="link"]';
 function onFirstTap(win, fn) {
   const types = ['pointerdown', 'pointerup', 'click', 'contextmenu', 'keydown', 'keyup'];
   let spent = false;
   const off = () => types.forEach((t) => win.removeEventListener(t, swallow, true));
   function swallow(e) {
     if (!e.isTrusted) return; // the agent's own synthetic clicks are not the person's first tap
+    if (e.target?.closest?.(PRESSABLE)) { if (!spent) { spent = true; fn(); } off(); return; } // a first press on a control is the press itself, and still starts the welcome
     const key = e.type.startsWith('key');
     if (key && e.key !== ' ' && e.key !== 'Enter') return; // Tab and the rest still move about
     e.stopImmediatePropagation?.(); e.stopPropagation?.();

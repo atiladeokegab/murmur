@@ -7,6 +7,7 @@ import { createAgent } from '../public/agent/index.js';
 import { hear } from '../public/agent/words.js';
 import { demoPlan } from '../public/agent/demo-plan.js';
 import { describeRegistry } from '../public/agent/plan.js';
+import { planUtterance } from '../public/agent/planner.js';
 import { createBus, createRegistry, runAction } from '../public/sdk/index.js';
 import { moreLine } from '../public/apps/calendar/index.js';
 import { settings } from '../public/apps/look/index.js';
@@ -15,15 +16,15 @@ import { agoWords } from '../public/apps/messages/model.js';
 
 const tick = () => new Promise((r) => setImmediate(r));
 
-async function setup(answers = () => 'short') {
+async function setup(answers = () => 'short', extra = {}) {
   const clock = { t: Date.UTC(2026, 10, 7, 8, 40), now() { return this.t; } };
   const sleep = async (ms) => { clock.t += ms; await tick(); };
   const { librarian } = createToolkit({ kv: memoryKV(), clock });
   const p = await phone();
   const spoken = [];
   const agent = createAgent({ registry: p.registry, bus: p.bus, ctxFor: p.ctxFor, librarian, agency: () => 'just', answers, clock, sleep,
-    planOpts: { offline: true }, speak: async (t) => { spoken.push(t); } });
-  return { ...p, agent, spoken };
+    planOpts: { offline: true }, speak: async (t) => { spoken.push(t); }, ...extra });
+  return { ...p, agent, spoken, clock };
 }
 
 test('1. SDK: an action with more(state, params) gives runAction a `more`; one without gives none', async () => {
@@ -88,7 +89,7 @@ test('1 and 3. Look: a change has a longer answer, and Answers is a row the voic
   s.spoken.length = 0;
   await s.agent.hear('Make the text bigger');
   assert.equal(s.spoken.at(-2), 'Text 150 percent.', 'the short line first');
-  assert.match(s.spoken.at(-1), /^You can also change voice, now 1\.15 times; colours, now .*; and answers, now detailed\./, 'Detailed: the longer answer straight away');
+  assert.match(s.spoken.at(-1), /^You can also change voice, now 115 percent; colours, now .*; and answers, now detailed\./, 'Detailed: the longer answer straight away');
   await s.agent.hear('keep it short');
   assert.equal(settings().answers, 'short');
   s.spoken.length = 0;
@@ -135,4 +136,50 @@ test('3. Look\'s longer answer falls back to the default on a saved value that i
   const line = lookApp.actions.answers.more({ size: 100, rate: 1.15, theme: 'neon', speaker: 'nobody', agency: 'ask', answers: 'huge' });
   assert.match(line, /colours, now match my phone/);
   assert.match(line, /who speaks, now murmur/);
+});
+
+test('a move with Mum ends on a statement, never a dead question, and "tell Mum" then plans a message about it', async () => {
+  const s = await setup();
+  await s.agent.hear('Move lunch to Friday');
+  const line = s.spoken.find((t) => t.startsWith('Moved'));
+  assert.equal(line, 'Moved to Friday. To let Mum know, say "tell Mum".');
+  assert.ok(!s.spoken.some((t) => /^Moved.*\?$/.test(t)), 'no question without a gate');
+  const said = s.agent.hear('tell Mum');
+  for (let i = 0; i < 200 && !s.agent.gates.current; i++) await tick();
+  assert.ok(s.agent.gates.current, 'the send gate opened');
+  await s.agent.yes(); await said;
+  assert.deepEqual(s.state('messages').lastSent, { to: 'mum', text: 'Lunch is now on Friday at 12:30.' });
+});
+
+test('a move and a send in one plan: "tell Mum" afterwards offers nothing already sent', async () => {
+  const both = async (text, apps, ctx, o) => {
+    if (text !== 'Move lunch to Friday and text Mum') return planUtterance(text, apps, ctx, o);
+    const a = await planUtterance('Move lunch to Friday', apps, ctx, o), b = await planUtterance('Text Mum Lunch is now on Friday', apps, ctx, o);
+    return { ...a, steps: [...a.steps, ...b.steps] };
+  };
+  const s = await setup(undefined, { plan: both });
+  const h = s.agent.hear('Move lunch to Friday and text Mum');
+  for (let i = 0; i < 50 && !s.agent.gates.current; i++) await tick();
+  await s.agent.yes(); await h;
+  assert.equal(s.state('messages').lastSent?.text, 'Lunch is now on Friday.', 'the plan sent it');
+  const t = s.agent.hear('tell Mum'); for (let i = 0; i < 50; i++) await tick();
+  const gate = s.agent.gates.current?.readback || ''; if (gate) await s.agent.no(); else await s.agent.stop(); await t;
+  assert.doesNotMatch(gate, /Lunch is now/, 'no second offer of the update already sent');
+});
+
+test('"tell Mum" describes a move once, and not after 2 minutes', async () => {
+  const tellMum = async (s) => { const h = s.agent.hear('tell Mum'); for (let i = 0; i < 50; i++) await tick();
+    const gate = !!s.agent.gates.current; if (gate) await s.agent.yes(); else await s.agent.stop(); await h; return gate; };
+  const s = await setup();
+  await s.agent.hear('Move lunch to Friday');
+  assert.equal(await tellMum(s), true);
+  assert.equal(s.state('messages').lastSent.text, 'Lunch is now on Friday at 12:30.');
+  s.spoken.length = 0;
+  assert.equal(await tellMum(s), false, 'told once: a second "tell Mum" does not resend the move');
+  assert.ok(!s.spoken.some((t) => /Lunch is now/.test(t)));
+  const late = await setup();
+  await late.agent.hear('Move lunch to Friday');
+  late.clock.t += 121000;
+  assert.equal(await tellMum(late), false, 'after 2 minutes the move is not described');
+  assert.equal(late.state('messages').lastSent, null);
 });

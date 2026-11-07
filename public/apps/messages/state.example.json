@@ -48,6 +48,258 @@
             "text": "Any time. See you at choir."
           }
         ]
+      },
+      {
+        "id": "priya",
+        "name": "Priya",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "tomas",
+        "name": "Tomas",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "amara",
+        "name": "Amara",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "ben",
+        "name": "Ben",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "chloe",
+        "name": "Chloe",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "dev",
+        "name": "Dev",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "ellie",
+        "name": "Ellie",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "femi",
+        "name": "Femi",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "grace",
+        "name": "Grace",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "hassan",
+        "name": "Hassan",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "isla",
+        "name": "Isla",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "jack",
+        "name": "Jack",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "kemi",
+        "name": "Kemi",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "leo",
+        "name": "Leo",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "maya",
+        "name": "Maya",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "noah",
+        "name": "Noah",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "olu",
+        "name": "Olu",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "rosa",
+        "name": "Rosa",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "tariq",
+        "name": "Tariq",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "uche",
+        "name": "Uche",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
+      },
+      {
+        "id": "zara",
+        "name": "Zara",
+        "unread": 0,
+        "messages": [
+          {
+            "from": "them",
+            "text": "Speak soon!",
+            "ago": 4320
+          }
+        ]
       }
     ],
     "currentChat": null,
@@ -126,6 +378,258 @@
             {
               "from": "them",
               "text": "Any time. See you at choir."
+            }
+          ]
+        },
+        {
+          "id": "priya",
+          "name": "Priya",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "tomas",
+          "name": "Tomas",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "amara",
+          "name": "Amara",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "ben",
+          "name": "Ben",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "chloe",
+          "name": "Chloe",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "dev",
+          "name": "Dev",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "ellie",
+          "name": "Ellie",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "femi",
+          "name": "Femi",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "grace",
+          "name": "Grace",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "hassan",
+          "name": "Hassan",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "isla",
+          "name": "Isla",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "jack",
+          "name": "Jack",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "kemi",
+          "name": "Kemi",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "leo",
+          "name": "Leo",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "maya",
+          "name": "Maya",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "noah",
+          "name": "Noah",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "olu",
+          "name": "Olu",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "rosa",
+          "name": "Rosa",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "tariq",
+          "name": "Tariq",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "uche",
+          "name": "Uche",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
+            }
+          ]
+        },
+        {
+          "id": "zara",
+          "name": "Zara",
+          "unread": 0,
+          "messages": [
+            {
+              "from": "them",
+              "text": "Speak soon!",
+              "ago": 4320
             }
           ]
         }

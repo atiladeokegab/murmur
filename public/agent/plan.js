@@ -39,13 +39,17 @@ export const WORD_TOOLS = new Set(['stop', 'undo', 'carry_on']);
  */
 export function describeRegistry(registry) {
   const apps = Array.isArray(registry) ? registry : typeof registry?.list === 'function' ? registry.list() : Object.values(registry || {});
-  return apps.map((a) => ({
-    id: a.id, name: a.name || a.id,
-    actions: Object.entries(a.actions || {}).map(([name, x]) => ({
-      name, describe: typeof x.describe === 'string' ? x.describe : name,
-      params: x.params || { type: 'object', properties: {} }, gate: x.gate || null, hint: x.hint || '',
-    })),
-  }));
+  return apps.map((a) => {
+    let st; try { st = a.state?.(); } catch { /* not mounted: a say that needs state is left out */ }
+    const said = (x) => { try { const v = typeof x.say === 'function' ? x.say(st) : x.say; return typeof v === 'string' ? v.trim() : ''; } catch { return ''; } };
+    return {
+      id: a.id, name: a.name || a.id,
+      actions: Object.entries(a.actions || {}).map(([name, x]) => ({
+        name, describe: typeof x.describe === 'string' ? x.describe : name, say: said(x),
+        params: x.params || { type: 'object', properties: {} }, gate: x.gate || null, hint: x.hint || '',
+      })),
+    };
+  });
 }
 
 /** Gemini function declarations from the described registry. */
@@ -110,7 +114,7 @@ export function validatePlan(plan, apps, { dryRun = false } = {}) {
       const [id, name] = tool.split(SEP);
       app = apps.find((a) => a.id === id);
       const x = app?.actions.find((y) => y.name === name);
-      if (!app) { dropped.push({ tool, reason: 'unknown app', say: "That app isn't on this phone." }); continue; }
+      if (!app) { dropped.push({ tool, reason: 'unknown app', say: "That app isn't here yet. I'm starting to bring it over from your phone now." }); continue; }
       if (!x) { dropped.push({ tool, reason: 'unknown action', say: cantLine(app) }); continue; }
       spec = x; action = name;
     }

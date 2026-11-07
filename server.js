@@ -19,16 +19,16 @@ const LIVE_URL = process.env.MURMUR_LIVE_URL || ''; // test only: point the brow
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json' };
-const PAGES = { '/': 'index.html', '/race': 'race.html', '/inside': 'inside/index.html' };
+const PAGES = { '/': 'index.html', '/race': 'race.html', '/inside': 'inside/index.html', '/stage': 'stage/index.html' };
 
 function send(res, status, body, type = 'application/json') {
   res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
-async function readJson(req) {
+async function readJson(req, cap = 32 * 1024) {
   let size = 0; const chunks = [];
-  for await (const c of req) { size += c.length; if (size > 32 * 1024) throw Object.assign(new Error('too big'), { status: 413 }); chunks.push(c); }
+  for await (const c of req) { size += c.length; if (size > cap) throw Object.assign(new Error('too big'), { status: 413 }); chunks.push(c); }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); }
   catch { throw Object.assign(new Error('bad json'), { status: 400 }); }
 }
@@ -53,7 +53,8 @@ const api = {
   },
   // The agent's planner: the browser sends what was said and its registry; a validated plan comes back.
   async 'POST /api/plan'(body) {
-    return agent.plan({ key: KEY, utterance: body.utterance, apps: agent.cleanApps(body.apps), context: { app: String(body.context?.app || '').slice(0, 30), workflows: (Array.isArray(body.context?.workflows) ? body.context.workflows : []).slice(0, 20).map((w) => String(w).slice(0, 60)) } });
+    return agent.plan({ key: KEY, spend: () => guard.spend(), utterance: body.utterance, apps: agent.cleanApps(body.apps), context: { app: String(body.context?.app || '').slice(0, 30), workflows: (Array.isArray(body.context?.workflows) ? body.context.workflows : []).slice(0, 20).map((w) => String(w).slice(0, 60)),
+      me: Object.fromEntries(['name', 'home', 'work', 'usual'].map((k) => [k, String(body.context?.me?.[k] || '').slice(0, 80)])) } }); // the invented profile, capped
   },
   async 'POST /api/live-token'() {
     if (LIVE_URL) return { token: 'test', url: LIVE_URL, model: gemini.LIVE_MODEL, voice: gemini.VOICE, persona: gemini.LIVE_PERSONA, tools: gemini.LIVE_TOOLS };
@@ -83,13 +84,20 @@ function speakLine(text, o) {
 // A provider that says quota or auth (401, 402, 429) rests a minute, so the phone's own voice starts at once.
 const resting = { elevenlabs: 0, gemini: 0 };
 const rest = (name, e) => { if (/\b(401|402|429)\b/.test(e.message)) resting[name] = Date.now() + 60000; };
+// ElevenLabs Creator allows a few requests at once; a page that asks for 20 lines together got 429s and a minute of the phone voice (7 Nov preview).
+let elevenBusy = 0; const elevenWait = [];
+async function elevenSlot(fn) {
+  while (elevenBusy >= 3) await new Promise((r) => elevenWait.push(r));
+  elevenBusy++;
+  try { return await fn(); } finally { elevenBusy--; elevenWait.shift()?.(); }
+}
 async function synth(text, { warm = false } = {}) {
   const today = new Date().toISOString().slice(0, 10);
   if (today !== elevenDay) { elevenDay = today; elevenChars = 0; }
   // shortcut: the cap is per instance and resets on a restart; a shared counter if Murmur ever runs many instances
   if (ELEVEN && text && Date.now() >= resting.elevenlabs && elevenChars + text.length <= ELEVEN_DAILY_CHARS) {
     elevenChars += text.length;
-    try { return { ...(await eleven.tts(ELEVEN, text)), provider: 'elevenlabs' }; }
+    try { return { ...(await elevenSlot(() => eleven.tts(ELEVEN, text))), provider: 'elevenlabs' }; }
     catch (e) { rest('elevenlabs', e); console.warn(`[tts] elevenlabs failed (${String(e.message).slice(0, 40)})`); }
   }
   // The warm never spends Gemini: its free tier allows 10 TTS requests a day, fewer than the fixed lines.
@@ -119,7 +127,7 @@ export const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/bus') && !relay.allowed(req, url)) return send(res, 403, { error: 'forbidden' });
     if (url.pathname === '/api/bus/stream' && req.method === 'GET') return relay.stream(req, res, relay.roomOf(url) || 'stage');
     // The phone forwards every bus event: same-origin checked above, no model behind it, so it skips the rate limit and the daily cap.
-    if (url.pathname === '/api/bus' && req.method === 'POST') return send(res, 200, await relay.api['POST /api/bus'](await readJson(req), relay.roomOf(url)));
+    if (url.pathname === '/api/bus' && req.method === 'POST') return send(res, 200, await relay.api['POST /api/bus'](await readJson(req, 256 * 1024), relay.roomOf(url)) /* a mirror frame is up to 200 KB */);
     const handler = api[`${req.method} ${url.pathname}`];
     if (url.pathname.startsWith('/api/')) {
       const no = guard(req, { model: !!KEY || !!ELEVEN }); // every /api route may spend a key once one is set

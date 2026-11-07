@@ -21,7 +21,7 @@ async function phone() {
   registry.register(look);
   const port = browserKV({ storage: fakeStorage(), prefix: 'murmur' });
   const roots = {};
-  for (const app of registry.list()) { roots[app.id] = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say: (text) => bus.emit('say', { text }) }); await app.seed(); }
+  for (const app of registry.list()) { roots[app.id] = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say: (text) => bus.emit('say', { text }), confirm: async () => true }); await app.seed(); }
   const ctxFor = (app) => createCtx({ app, root: roots[app.id], bus, kv: appKv(app.id, port), cursor: { async moveTo() {}, hide() {} }, ask: async () => true });
   const run = (name, params, n, of) => runAction({ registry, name, params, bus, ctxFor, n, of });
   const said = [], board = { day: 7, async reset() { this.day = 1; }, async nextMorning() { this.day++; } };
@@ -37,13 +37,14 @@ test('first open says one sentence, only once, and reset re-arms it', async () =
   assert.equal(await firstOpen({ kv, say }), false);
   assert.deepEqual(said, [FIRST_WORDS], 'the what-can-I-do hint is not said at open');
   assert.ok(FIRST_WIN.includes(OFFER_HINT.replace(/\.$/, '')), 'it is step 2, said once after the first success');
-  assert.equal(FIRST_WORDS, "Hi, I'm Murmur. I run this phone for you by voice. Tap anywhere and speak. Try saying: read Mum's message.");
+  assert.equal(FIRST_WORDS, "Hi Joy, I'm Murmur. I run this phone for you by voice. Tap anywhere and speak. Try saying: read Mum's message.");
   await rearm({ kv });
   assert.equal(await firstOpen({ kv, say }), true);
 });
 
 test('reset puts every app and the board back, and re-arms first open', async () => {
-  const { demo, run, registry, board, onboard, said } = await phone();
+  const { demo, run, registry, board, onboard, said, bus } = await phone();
+  const resets = []; bus.on('reset', (e) => resets.push(e));
   await run('hello__write', { text: 'late' });
   await run('look__textBigger', {});
   await firstOpen({ kv: onboard.kv, say: async () => {} });
@@ -53,6 +54,7 @@ test('reset puts every app and the board back, and re-arms first open', async ()
   assert.equal(board.day, 1);
   assert.equal(await onboard.kv.get('said'), undefined);
   assert.equal(said.at(-1), 'Reset. Day 1.');
+  assert.equal(resets.length, 1, 'the bus says reset, so /inside clears');
 });
 
 test('next morning moves the board on a day; mode flips who speaks through the look action', async () => {

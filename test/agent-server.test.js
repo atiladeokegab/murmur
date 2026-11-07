@@ -137,3 +137,37 @@ test('the phone keeps the code from ?code= and sends it only to its own /api/', 
   await win.fetch('https://elsewhere.example/api/x');
   assert.deepEqual(seen, [['/api/plan', 'abc'], ['/apps/apps.js', null], ['https://elsewhere.example/api/x', null]]);
 });
+
+test('a real bank is refused before the model is asked, even when the model would plan it; a message about one still sends', async () => {
+  const realFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return { ok: true, json: async () => ({ candidates: [{ content: { parts: [
+    { functionCall: { name: 'messages__openChat', args: { who: 'Sam' } } }] } }] }) }; };
+  try {
+    const bankApps = [...apps, { id: 'bank', name: 'Murmur Bank', actions: [{ name: 'balance', params: { type: 'object', properties: {} } }] }];
+    const out = await plan({ key: 'k', utterance: 'Check my Barclays bank balance', apps: bankApps });
+    assert.deepEqual([out.kind, out.steps.length, calls], ['refuse', 0, 0]);
+    const { demoPlan } = await import('../public/agent/demo-plan.js');
+    const ok = demoPlan('Tell Sam: I switched from Monzo', apps);
+    assert.equal(ok.kind, 'task'); assert.match(ok.plan[1].params.text, /Monzo/);
+    assert.equal(demoPlan('Text Sam my sort code is 12 34 56', apps).kind, 'refuse', 'credentials never go, even in a message');
+    assert.equal(demoPlan('Text Sam then check my Barclays balance', apps).kind, 'refuse', 'a bank request behind a message is a request, not content');
+    assert.equal(demoPlan('Tell Sam: I moved to Monzo, then went home', apps).kind, 'task', 'a quote is all content');
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test('the client refuses before any provider too: a model that would plan a real bank is never asked', async () => {
+  const { planUtterance } = await import('../public/agent/planner.js');
+  let calls = 0;
+  const fetch = async () => { calls++; return { ok: true, json: async () => ({ kind: 'task', steps: [{ tool: 'bank__balance', params: {} }], provider: 'gemini' }) }; };
+  const bankApps = [...apps, { id: 'bank', name: 'Murmur Bank', actions: [{ name: 'balance', params: { type: 'object', properties: {} } }] }];
+  for (const u of ['Check my Barclays bank balance', 'Move GBP 20 from my current account to another account', 'Check my Chase balance', 'Open my TSB account']) {
+    const out = await planUtterance(u, bankApps, {}, { fetch });
+    assert.deepEqual([u, out.kind, out.steps.length], [u, 'refuse', 0]);
+  }
+  assert.equal(calls, 0);
+  const server = await plan({ key: '', utterance: 'Move GBP 20 from my current account to another account', apps: bankApps });
+  assert.equal(server.kind, 'refuse', 'money movement is refused, never a calendar move');
+  assert.equal((await planUtterance("What's my balance", bankApps, {}, { fetch })).steps[0].tool, 'bank__balance', 'the phone\'s own Bank still works');
+  assert.equal(calls, 0, 'and plans locally');
+});

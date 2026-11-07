@@ -87,3 +87,28 @@ body.inside[data-link="on"] #link::before { background: var(--c-ink); }
   @keyframes turn { to { transform: rotate(1turn); } }
   @keyframes flip { 0% { transform: perspective(300px) rotateX(-88deg); opacity: .2 } 70% { transform: perspective(300px) rotateX(8deg) } 100% { transform: none; opacity: 1 } }
 }
+
+/* /inside?big (or ?stage): the projector view, read from the back of the room. The root at 25px puts the smallest
+   type (.8rem) at 20px. No heading, no footer, three counters on one row; the live task gets the rest of the height. */
+html.big { font-size: 25px; }
+html.big body.inside { height: 100svh; overflow: hidden; padding: .6rem .8rem; gap: .6rem; grid-template-rows: auto minmax(0, 1fr); }
+html.big .inside h1, html.big .inside #link, html.big .inside footer { display: none; }
+html.big .inside header { display: block; }
+html.big .inside #tally { display: flex; flex-wrap: nowrap; gap: 6px; }
+html.big .inside #tally div { flex: 1 1 0; min-width: 0; flex-direction: row-reverse; justify-content: center; gap: .4rem; padding: .3rem .4rem; }
+html.big .inside #tally dd { font-size: 1.25rem; padding: .1rem .35rem; min-width: 0; }
+html.big .inside #tally dt { white-space: normal; line-height: 1.1; }
+html.big .inside #tally :is(.t-tasks, .t-failed, .t-modelCalls) { display: none; } /* the room needs verified, asked, bypassed */
+/* one column: Heard and Plan stay on top, Actions takes the rest and follows its newest step, Asked under it;
+   Memory is on the laptop view only */
+html.big .inside main { display: flex; flex-direction: column; gap: 6px; overflow: hidden; min-height: 0; }
+html.big .inside section { flex: none; max-height: none; min-height: 0; }
+html.big .inside section:has(#c-Actions) { flex: 1 1 auto; min-height: 4rem; } /* heading plus the step name */
+html.big .inside section:has(#c-Asked) { flex: none; max-height: 40%; overflow: hidden; } /* never shrinks to its heading: the readback and answer stay readable */
+html.big .inside section:has(#c-Memory) { display: none; }
+@media (max-height: 700px) { html.big .inside section:has(#c-Plan) { display: none; } } /* a short screen: Actions already names each step, and Asked keeps its room */
+html.big .inside h2 { padding: .3rem .6rem; }
+html.big .inside li.old { display: none; } /* history lives on the laptop view; the room sees what is happening now */
+/* the room reads what was heard, the plan, and each step's verify; the paths, providers and params stay on the laptop */
+html.big .inside :is(#c-Heard, #c-Plan) .meta, html.big .inside #c-Heard .raw, html.big .inside #c-Actions p.meta:not(:has(.res)) { display: none; }
+html.big .inside section > ol > li { padding: .35rem 0; }

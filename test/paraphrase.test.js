@@ -34,78 +34,81 @@ const LINES = [
   ["Message Sam saying I'll be ten minutes late", SAM_LATE, true],
   ["Send Sam a message saying I'm late", SAM_LATE, true],
   ["Text Sam that I'm going to be late", SAM_LATE, true],
-  ["Can you text Sam and say I'm late", SAM_LATE, false, 'planner'],
-  ["Let Sam know I'm running late", SAM_LATE, false, 'planner'],
+  ["Can you text Sam and say I'm late", SAM_LATE, true],
+  ["Let Sam know I'm running late", SAM_LATE, true],
 
   ['What did Sam say', READ, true],
   ["Read Sam's last message", READ, true],
-  ['Read my messages', READ, false, 'planner'],
-  ['Read me my messages', READ, false, 'planner'],
-  ['Any new messages?', READ, false, 'planner'],
-  ['Do I have any messages', READ, false, 'planner: plans run_workflow "I have any messages"'],
-  ['Check my texts', READ, false, 'planner'],
+  ['Read my messages', READ, true],
+  ['Read me my messages', READ, true],
+  ['Any new messages?', READ, true],
+  ['Do I have any messages', READ, true],
+  ['Check my texts', READ, true],
 
   ["What's on today", TODAY, true],
   ["What's on my calendar today", TODAY, true],
   ["What's happening today", TODAY, true],
   ["What's on tomorrow", [['calendar__whatsOn', { day: /tomorrow/i }]], true],
   ["What's next", [['calendar__next', {}]], true],
-  ['What have I got today', TODAY, false, 'planner'],
-  ['Am I busy today', TODAY, false, 'planner'],
+  ['What have I got today', TODAY, true],
+  ['Am I busy today', TODAY, true],
 
   ['Move my 3pm to Thursday', [['calendar__move', { event: /3 ?pm/i, day: 'Thursday' }]], true],
   ["Move my three o'clock to Friday", [['calendar__move', { event: /three/i, day: 'Friday' }]], true],
   ['Move lunch with Mum to Wednesday', [['calendar__move', { event: /lunch/i, day: 'Wednesday' }]], true],
   ['Reschedule lunch with Mum to Wednesday', [['calendar__move', { event: /lunch/i, day: 'Wednesday' }]], true],
-  ['Can you move my 3pm meeting to tomorrow', [['calendar__move', { event: /3 ?pm/i, day: /tomorrow/i }]], false, 'planner'],
-  ['Push my 3pm back to Thursday', [['calendar__move', { event: /3 ?pm/i, day: 'Thursday' }]], false, 'planner'],
+  ['Can you move my 3pm meeting to tomorrow', [['calendar__move', { event: /3 ?pm/i, day: /tomorrow/i }]], true],
+  ['Push my 3pm back to Thursday', [['calendar__move', { event: /3 ?pm/i, day: 'Thursday' }]], true],
 
   ['Make the text bigger', BIGGER, true],
   ['Bigger text', BIGGER, true],
-  ['Can you make the writing larger', BIGGER, false, 'planner'],
-  ['Increase the text size', BIGGER, false, 'planner'],
+  ['Can you make the writing larger', BIGGER, true],
+  ['Increase the text size', BIGGER, true],
   ['Dark mode', DARK, true],
   ['Switch to dark mode', DARK, true],
   ['Make it yellow on black', [['look__colours', { colours: 'yellow' }]], true],
-  ['Turn on dark mode', DARK, false, 'planner'],
+  ['Turn on dark mode', DARK, true],
 
   ['Pay Sam twenty pounds', PAY, has('bank'), 'Bank not on main'],
   ['Pay Sam £20', PAY, has('bank'), 'Bank not on main'],
   ['Send Sam 20 quid', PAY, has('bank'), 'Bank not on main'],
-  ['Can you pay Sam twenty pounds', PAY, false, 'planner'],
-  ['Give Sam twenty pounds', PAY, false, 'planner'],
+  ['Can you pay Sam twenty pounds', PAY, has('bank'), 'Bank not on main'],
+  ['Give Sam twenty pounds', PAY, has('bank'), 'Bank not on main'],
 
-  ["What's my Murmur Bank balance", BALANCE, false, 'planner: NO_GO refuses "bank|balance", even for the Murmur Bank app'],
-  ['Check my balance', BALANCE, false, 'planner: refused by NO_GO'],
-  ['How much money do I have', BALANCE, false, 'planner'],
-  ['Open Murmur Bank', [[/^(open_app|bank__)/, {}]], false, 'planner: refused by NO_GO'],
+  ["What's my Murmur Bank balance", BALANCE, has('bank'), 'Bank not on main'],
+  ['Check my balance', BALANCE, has('bank'), 'Bank not on main'],
+  ['How much money do I have', BALANCE, has('bank'), 'Bank not on main'],
+  ['Open Murmur Bank', [[/^(open_app|bank__)/, {}]], has('bank'), 'Bank not on main'],
 
   ['Open travel', TRAVEL, has('travel'), 'Travel not on main'],
   ['Open the travel app', TRAVEL, has('travel'), 'Travel not on main'],
-  ["When's my flight", TRAVEL, false, 'planner'],
-  ['Show me my flight', TRAVEL, false, 'planner'],
-  ['What time is my flight', TRAVEL, false, 'planner'],
+  ["When's my flight", TRAVEL, has('travel'), 'Travel not on main'],
+  ['Show me my flight', TRAVEL, has('travel'), 'Travel not on main'],
+  ['What time is my flight', TRAVEL, has('travel'), 'Travel not on main'],
 
   ['Stop', word('stop'), true],
   ['Stop it', word('stop'), true],
   ['Cancel', word('stop'), true],
   ['Hang on', word('stop'), true],
-  ['Shut up', word('stop'), false, 'words.js'],
+  ['Shut up', word('stop'), true],
 
   ['Undo', word('undo'), true],
   ['Undo that', word('undo'), true],
   ['Take that back', word('undo'), true],
   ['Undo the last thing', [['undo', {}]], true],
-  ['Go back', word('undo'), false, 'words.js (or go_home): nothing'],
+  ['Go back', word('undo'), true],
+  ['Undo the last thing I did', [['undo', {}]], true, 'blind probe'],
+  ["No, I didn't mean that", [['undo', {}]], true, 'blind probe'],
+  ['Start over', [['stop', {}]], true, 'blind probe'],
 
   ['Yes', word('confirm', 'yes'), true, '', GATE],
   ['Yes please', word('confirm', 'yes'), true, '', GATE],
   ['Send it', word('confirm', 'send'), true, '', GATE],
-  ['Yeah', word('confirm', 'yes'), false, 'words.js', GATE],
+  ['Yeah', word('confirm', 'yes'), true, '', GATE],
   ['No', word('deny'), true, '', GATE],
   ['No thanks', word('deny'), true, '', GATE],
   ["Don't send it", word('deny'), true, '', GATE],
-  ['Nope', word('deny'), false, 'words.js', GATE],
+  ['Nope', word('deny'), true, '', GATE],
 ];
 
 // Messy speech, the way dictation hands it over: lower case, no punctuation, fillers, a repeated word.
@@ -113,28 +116,28 @@ const SAM_LATE_CLEAN = [['messages__openChat', { who: 'Sam' }], ['messages__repl
 const TO_WED = [['calendar__move', { event: /lunch/i, day: /wednesday/i }]]; // the calendar's dayOf drops "um" and "please"
 LINES.push(
   ['text sam im gonna be late', SAM_LATE_CLEAN, true],
-  ['um text sam im late', SAM_LATE_CLEAN, false, 'planner: a leading filler'],
-  ['text text sam im running late', SAM_LATE_CLEAN, false, 'planner: a repeated word; opens a chat with "Text"'],
-  ["uh tell sam i'll be like ten minutes late", SAM_LATE_CLEAN, false, 'planner: a leading filler'],
-  ['murmur text sam im late', SAM_LATE_CLEAN, false, 'planner: the wake word'],
-  ['okay so text sam that im late', SAM_LATE_CLEAN, false, 'planner: leading fillers'],
-  ['text sam im late please', SAM_LATE_CLEAN, false, 'planner: "please" goes into the message'],
-  ['um read my messages', READ, false, 'planner'],
-  ['read read my messages', READ, false, 'planner'],
-  ['uh what did sam say', READ, false, 'planner: a leading filler'],
+  ['um text sam im late', SAM_LATE_CLEAN, true],
+  ['text text sam im running late', SAM_LATE_CLEAN, true],
+  ["uh tell sam i'll be like ten minutes late", SAM_LATE_CLEAN, true],
+  ['murmur text sam im late', SAM_LATE_CLEAN, true],
+  ['okay so text sam that im late', SAM_LATE_CLEAN, true],
+  ['text sam im late please', SAM_LATE_CLEAN, true],
+  ['um read my messages', READ, true],
+  ['read read my messages', READ, true],
+  ['uh what did sam say', READ, true],
   ['whats on today', TODAY, true],
-  ['um whats on today', TODAY, false, 'planner: a leading filler'],
-  ["what's on what's on today", TODAY, false, 'planner: a repeated phrase'],
+  ['um whats on today', TODAY, true],
+  ["what's on what's on today", TODAY, true],
   ['whats next', [['calendar__next', {}]], true],
   ['move lunch with mum to wednesday please', TO_WED, true],
   ['move lunch with mum to um wednesday', TO_WED, true],
-  ['um move lunch with mum to wednesday', TO_WED, false, 'planner: a leading filler'],
-  ['make the text bigger please', BIGGER, false, 'planner: a trailing "please"'],
-  ['um make the text bigger', BIGGER, false, 'planner: a leading filler'],
-  ['uh dark mode', DARK, false, 'planner: a leading filler'],
-  ['switch to dark mode please', DARK, false, 'planner: a trailing "please"'],
+  ['um move lunch with mum to wednesday', TO_WED, true],
+  ['make the text bigger please', BIGGER, true],
+  ['um make the text bigger', BIGGER, true],
+  ['uh dark mode', DARK, true],
+  ['switch to dark mode please', DARK, true],
   ['pay sam twenty pounds', PAY, has('bank'), 'Bank not on main'],
-  ['um pay sam 20 pounds', PAY, false, 'planner: a leading filler'],
+  ['um pay sam 20 pounds', PAY, has('bank'), 'Bank not on main'],
   ['stop stop', word('stop'), true],
   ['um stop', word('stop'), true],
   ['undo undo', word('undo'), true],
@@ -170,4 +173,17 @@ test('paraphrase: the sweep has at least 90 lines; the hit rate and misses are i
   t.diagnostic(`hit rate ${LINES.length - missed.length} of ${LINES.length}`);
   for (const m of missed) t.diagnostic(`miss: ${m}`);
   assert.ok(LINES.length - missed.length >= LINES.filter((l) => l[2]).length);
+});
+
+test('"No, I didn\'t mean that" undoes the last change, end to end', async () => {
+  const { createAgent } = await import('../public/agent/index.js');
+  const { createToolkit } = await import('../public/vendor/toolkit/index.js');
+  const { phone, memoryKV } = await import('./agent-fixtures.js');
+  const p = await phone();
+  const agent = createAgent({ registry: p.registry, bus: p.bus, ctxFor: p.ctxFor, librarian: createToolkit({ kv: memoryKV() }).librarian,
+    agency: () => 'just', planOpts: { offline: true }, speak: async () => {} });
+  await agent.hear('Make the text bigger');
+  assert.equal(p.state('look').size, 150);
+  await agent.hear("No, I didn't mean that");
+  assert.equal(p.state('look').size, 100);
 });

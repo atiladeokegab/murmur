@@ -24,12 +24,21 @@ function el(tag, props = {}, ...kids) {
 const total = () => basket.reduce((s, i) => s + SHOP.find((x) => x.item === i).pence, 0);
 const readback = () => `Order your basket: ${words(basket)}, ${money(total())}, delivered by 6 pm. Pay?`;
 const save = () => Promise.all([kv.set('basket', basket), kv.set('order', order)]);
+const tell = (e) => { if (e?.isTrusted && line.textContent) os?.say?.(line.textContent); };
 function render() {
   if (addBox.value !== draft) addBox.value = draft;
   removers.clear();
   list.replaceChildren(...basket.map((i) => {
     const b = el('button', { type: 'button', className: 'app-btn quiet', textContent: `Remove ${i}` });
-    b.addEventListener('click', async () => { basket = basket.filter((x) => x !== i); note = `Took ${i} out.`; await save(); render(); });
+    b.addEventListener('click', async (e) => {
+      const had = root.ownerDocument.activeElement === b, at = basket.indexOf(i);
+      // Delete always asks, a person's own tap too (contract §7); the agent's press was already asked. No confirm, no change.
+      if (!(os?.confirm && await os.confirm({ gate: 'delete', readback: `Take ${i} out of your basket?` }))) return;
+      basket = basket.filter((x) => x !== i); note = `Took ${i} out.`;
+      await save(); render(); tell(e);
+      // the pressed button is gone: keep the person's place on the next item, else the total
+      if (had) (removers.get(basket[at]) || removers.get(basket[at - 1]) || totalLine).focus();
+    });
     removers.set(i, b);
     return el('li', { className: 'app-card' }, el('span', { className: 'app-title', textContent: `${i[0].toUpperCase()}${i.slice(1)}, ${money(SHOP.find((x) => x.item === i).pence)}` }), b);
   }));
@@ -48,24 +57,24 @@ const app = {
     addBox = el('input', { id: 'grocer-add', type: 'text', className: 'app-field', autocomplete: 'off' });
     addBox.addEventListener('input', () => { draft = addBox.value; });
     addBtn = el('button', { type: 'button', id: 'grocer-add-btn', className: 'app-btn', textContent: 'Add to basket' });
-    addBtn.addEventListener('click', async () => {
+    addBtn.addEventListener('click', async (e) => {
       const x = find(draft);
-      if (!x) { note = `We don't sell ${draft || 'that'}. ${sells}`; render(); return; }
+      if (!x) { note = `We don't sell ${draft || 'that'}. ${sells}`; render(); tell(e); return; }
       if (!basket.includes(x.item)) basket = [...basket, x.item];
       note = `Added ${x.item}.`; draft = '';
-      await save(); render();
+      await save(); render(); tell(e);
     });
     orderBtn = el('button', { type: 'button', id: 'grocer-order', className: 'app-btn primary', textContent: 'Order and pay' });
-    orderBtn.addEventListener('click', async () => {
+    orderBtn.addEventListener('click', async (e) => {
       if (!basket.length) return;
       // The person's own tap asks through the shell (contract §7); the agent's press was already asked. No confirm, no order.
       if (!(os?.confirm && await os.confirm({ gate: 'pay', readback: readback() }))) return;
       order = { items: basket.slice(), total: total(), n: (order?.n || 0) + 1 };
       note = `Ordered. ${money(order.total)}, delivered by 6 pm.`;
-      await save(); render();
+      await save(); render(); tell(e);
     });
-    totalLine = el('p', { id: 'grocer-total', className: 'app-why' });
-    line = el('p', { id: 'grocer-line', className: 'app-done' });
+    totalLine = el('p', { id: 'grocer-total', className: 'app-why', tabIndex: -1 });
+    line = el('p', { id: 'grocer-line', className: 'app-done' });   // the result; a hand tap says it through the shell's one voice, never a second live region
     root.append(
       el('h2', { id: 'grocer-h', textContent: 'Corner Grocer' }),
       el('p', { className: 'app-h3', textContent: 'Your usual basket' }), list, totalLine,
@@ -93,6 +102,7 @@ const app = {
   actions: {
     basket: {
       describe: 'Read what is in the basket and what it costs',
+      say: 'read my basket',
       doing: 'Reading your basket',
       hint: 'Your basket is the list under the heading.',
       params: { type: 'object', properties: {} },
@@ -101,6 +111,7 @@ const app = {
     },
     add: {
       describe: 'Add one item to the basket',
+      say: 'put an item in my basket',
       doing: 'Adding to your basket',
       hint: 'Type the item under Add an item, then Add to basket.',
       params: { type: 'object', properties: { item: { type: 'string', description: 'One thing, like milk or tea' } }, required: ['item'] },
@@ -113,7 +124,10 @@ const app = {
     },
     remove: {
       describe: 'Take one item out of the basket',
+      say: 'take an item out',
       doing: 'Removing from your basket',
+      gate: 'delete',
+      readback: (s, p) => `Take ${find(p.item)?.item ?? p.item} out of your basket?`,
       hint: 'Each item in the basket has its own Remove button.',
       params: { type: 'object', properties: { item: { type: 'string', description: 'The item to take out' } }, required: ['item'] },
       async run(p, ctx) {
@@ -126,6 +140,7 @@ const app = {
     },
     order: {
       describe: 'Order and pay for the basket, delivered today',
+      say: 'order my basket',
       doing: 'Ordering your shopping',
       gate: 'pay',
       hint: 'Order and pay is the big button under the basket.',

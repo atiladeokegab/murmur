@@ -1,4 +1,5 @@
 // Messages on the Murmur SDK (os/contract.md). The agent presses the same controls a person does.
+import { CONTACTS } from '../../lib/tiles.js';
 import * as M from './model.js';
 import { replaceWord, sentences } from '../../lib/notes.js';
 
@@ -15,7 +16,7 @@ async function speakItems(say) {
   for (let i = 0; i < list.length; i++) {
     s.reading.at = i;
     items.forEach((li, k) => { li.className = k === i ? 'is-current' : ''; });
-    await say(list[i]);
+    await say(list[i], i);
   }
 }
 
@@ -34,12 +35,14 @@ const app = {
   state: () => structuredClone(s),
   read: () => M.read(s),
   place: () => M.place(s),
+  now: () => { const c = s?.chats.find((x) => x.unread); return c ? { why: `Read ${c.name}'s message.`, say: M.read(s) } : null; }, // the board's Now tile: the first unread chat is the top real thing
 
   actions: {
     openChat: {
       describe: 'Open the chat with a person',
+      say: (st) => (M.chatOf(st) ? '' : "open Mum's chat"),   // what a person would say (offer.js); '' = not here, now
       doing: 'Opening the chat',
-      params: { type: 'object', properties: { who: { type: 'string', description: 'The name as said' }, id: { type: 'string', enum: ['mum', 'sam', 'samira'] } } },
+      params: { type: 'object', properties: { who: { type: 'string', description: 'The name as said' }, id: { type: 'string', enum: Object.keys(CONTACTS) } } },
       gate: null,
       hint: 'Your chats are buttons under the Messages heading',
       async run(p, ctx) {
@@ -60,6 +63,7 @@ const app = {
     },
     read: {
       describe: 'Read the new message in the open chat, sentence by sentence. new: true opens the first chat with a new message ("Read my messages")',
+      say: (st) => (M.chatOf(st) ? `read ${M.possessive(M.chatOf(st).name)} message` : 'read my messages'),
       doing: 'Reading',
       params: { type: 'object', properties: { new: { type: 'boolean', description: 'Go to the first chat with a new message first' } } },
       gate: null,
@@ -72,7 +76,8 @@ const app = {
           if (s.currentChat !== c.id) await ctx.tap(q(`[data-chat="${c.id}"]`));
         }
         await ctx.tap(q('#msg-read'));
-        await speakItems((t) => ctx.say(t));
+        const who = M.chatOf(s)?.name; // "Mum: Lunch on Tuesday?": the first sentence says who it is from
+        await speakItems((t, i) => ctx.say(i === 0 && who ? `${who}: ${t}` : t));
       },
       verify: (st) => (!!st.currentChat && st.reading?.chat === st.currentChat) || 'Nothing was read.',
       more: (st) => { // "tell me more": who, what came before, which other chats wait, and what to say next
@@ -87,6 +92,7 @@ const app = {
     },
     reply: {
       describe: 'Write a reply in the open chat',
+      say: (st) => (M.chatOf(st) ? `reply to ${M.chatOf(st).name}` : ''),
       doing: 'Writing your reply',
       params: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       gate: null,
@@ -96,6 +102,7 @@ const app = {
     },
     replace: {
       describe: 'Change one word in the reply to another',
+      say: (st) => (st.draft ? 'change a word' : ''),
       doing: 'Changing the word',
       params: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] },
       gate: null,
@@ -114,6 +121,7 @@ const app = {
     },
     send: {
       describe: 'Send the reply',
+      say: (st) => (st.draft ? 'send it' : ''),
       doing: 'Sending',
       params: { type: 'object', properties: {} },
       gate: 'send',

@@ -2,7 +2,7 @@
 
 This is the contract between the shell, the agent and the apps. It is the source of truth on `main`. To
 change it, send a change request to Zeus; never edit it silently. Rev 3 (13:30): `step:next`, `task:done`
-`line` and `undo`, `confirm` `fingerprint` and `byHand`, the hand-tap rule for gates (§7) and the host (§9). Rev 4 (15:10): an action's optional `more`. Spec: Murmur OS §3.3 and §8.1.
+`line` and `undo`, `confirm` `fingerprint` and `byHand`, the hand-tap rule for gates (§7) and the host (§9). Rev 4 (15:10): an action's optional `more`. Rev 5: the `reset` event. Rev 6: `mirror:frame`. Rev 7: `app:import`. Rev 8: `app:open`. Spec: Murmur OS §3.3 and §8.1.
 
 The code is in `public/sdk/` (import everything from `public/sdk/index.js`). The worked example is
 `public/apps/hello/`, and `test/sdk.test.js` runs it end to end.
@@ -33,6 +33,8 @@ export default {
   actions: {
     reply: {
       describe: 'Reply to the open chat',   // imperative. The model's tool description and Teach me's words
+      say: (state) => 'reply to Mum',       // optional: how a person would ask, for "what can I do". A string or
+                                            //   (state) => string; '' leaves it out for now. Default: describe, shortened
       doing: 'Replying to Mum',             // REQUIRED. The step label: 2 to 5 words, present tense, shown and spoken as is
       params: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       gate: null,                           // null | 'send' | 'pay' | 'call' | 'delete'
@@ -144,6 +146,10 @@ plain JSON.
 | `memory` | `{ observation }` \| `{ proposal }` \| `{ workflow }` | agent (Librarian) |
 | `undo` | `{ task?, action, ok }` | agent |
 | `task:done` | `{ task, ms, ok, reason?, line?, undo? }`: always ends a task (done, failed or stopped). `line` is the Done line ("Sent to Sam."); `undo: { label, until }` (ms since epoch) offers Undo until then | agent |
+| `reset` | `{}`: the demo panel's Reset; the Inside relay clears that room's ring, and /inside starts over | os (demo panel) |
+| `mirror:frame` | `{ html, w, h, cx, cy, sy, theme, at }`: the phone's screen (os/mirror.js, ?room only, at most one per 150 ms, ≤ 200 KB). Posted to the relay directly, never through the bus log; the relay keeps only the latest per room and gives it to a laptop on connect | os (mirror) |
+| `app:import` | `{ name }`: an app this phone lacks, being brought over (Inside Plan column) | agent |
+| `app:open` | `{ name }`: a popular app the phone lacks, acted out (agent/phone-apps.js): a task:start, its step ticks and a task:done follow; nothing is sent, paid, called or deleted | agent |
 
 `task` is a string id the agent makes (`t-<timestamp>`). runAction leaves it out, and the agent adds it by
 wrapping the bus it passes in. The shell's work panel numbers steps from `n` and `of`. Its "Done in N s"
@@ -181,13 +187,17 @@ Also decided:
   `runAction` still verifies every step.
 - Ids have no underscores.
 - `seed()` is idempotent, and `reset()` wipes and then calls seed.
-- **A person's own tap on a gated control is their yes** (rev 3, 13:30). The app calls
-  `await os.confirm({ gate, readback })` before it acts, and acts only on `true`. For `send`, `call` and
-  `delete` a hand tap gets no extra sheet: `os.confirm` records `confirm { byHand: true, result: true }` and
-  says yes. **Pay always needs the fingerprint** (spec §3.7), hand tap or not: `os.confirm` runs the passkey
-  (`public/passkey.js`) and says yes only when it verified the person. A phone with no platform authenticator
-  gets the readback sheet instead, recorded `fingerprint: false`. When the agent pressed the control,
-  `os.confirm` answers yes at once, because the runner already asked through `ctx.confirm`.
+- **Send, pay, call and delete ALWAYS ask, a person's own tap included** (the lead's rule; rev 3, corrected
+  13:40). The app calls `await os.confirm({ gate, readback })` before it acts, and acts only on `true`. A hand
+  tap shows the same readback sheet ("Send to Sam: …", Yes or No), because a mis-tap by someone who cannot see
+  is the risk. The only difference is that a hand tap has no 0.5 s grace. `confirm` is recorded with `byHand: true`.
+  When the agent pressed the control, `os.confirm` answers yes at once, because the runner already asked
+  through `ctx.confirm` (the grant is scoped to that one synthetic click).
+- **Every pay needs a yes AND the fingerprint, and fails closed** (spec §3.7, the lead's rule), on the hand
+  path and the agent path alike (`public/os/gate.js` `checkFingerprint`). A saved passkey is asked for. With
+  none, making one (`setup()`) is the fingerprint ask. A cancel, or no answer in 20 s, says "No fingerprint, so
+  nothing was paid." No platform authenticator says "This phone can't check a fingerprint, so I can't pay."
+  Either way nothing is paid and the agent is free. The spoken or tapped yes never stands alone.
 - **The shell owns the gate sheet** (rev 3). Every gate the runner meets goes through `ctx.confirm`, which
   calls the shell's sheet: the readback said aloud, a yes in the first 0.5 s ignored, the passkey for `pay`,
   and the `confirm` event. The agent does not draw its own sheet or check its own fingerprint.
@@ -198,7 +208,7 @@ Also decided:
 - [ ] `id`, `name`, and an `<h2>` with the name in `mount`
 - [ ] every control is real and named, at least 64 px, source order is reading order, tokens only
 - [ ] `read()` and `place()` in plain words; `state()` is JSON and holds everything verify needs
-- [ ] `seed()` and `reset()` with invented people only. No banking, health or government
+- [ ] `seed()` and `reset()` with invented people only. No health or government. A simulated Bank only: invented money, and every pay needs a yes and the fingerprint (the lead, 13:15)
 - [ ] each action has `describe`, `doing` (2 to 5 words), `params` schema, `hint`, `run` through ctx, and `verify`
 - [ ] gated actions (`send`, `pay`, `call`, `delete`) have a `readback` and no `undo`, and the control's own
       handler awaits `os.confirm({ gate, readback })` before it acts

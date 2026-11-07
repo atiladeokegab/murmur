@@ -109,7 +109,7 @@ test('demo lines: install, taxi, bank, the 9:40, leave for work', () => {
   const app = (id, name, acts) => ({ id, name, actions: acts.map(([n, props]) => ({ name: n, params: { type: 'object', properties: props } })) });
   const S = { type: 'string' }, N = { type: 'number' };
   const apps = [app('shop', 'Shop', [['add', { item: S, quantity: N }]]), app('taxi', 'Northline Taxis', [['book', { to: S }]]),
-    app('bank', 'Bank', [['payPerson', { who: S, amount: N }]]), app('travel', 'Travel', [['hold', { flight: S }]]), app('transit', 'Transit', [['whenToLeave', { place: S }]])];
+    app('bank', 'Bank', [['balance', {}], ['recent', {}], ['payPerson', { who: S, amount: N }]]), app('travel', 'Travel', [['hold', { flight: S }]]), app('transit', 'Transit', [['whenToLeave', { place: S }]])];
   const plan = (u, a = apps) => demoPlan(u, a).plan;
   assert.deepEqual(plan('Add Northline Taxis', apps.filter((a) => a.id !== 'taxi')), [{ tool: 'install_app', params: { name: 'Northline Taxis' } }]);
   assert.equal(plan('Add a flat white')[0].tool, 'shop__add');
@@ -119,8 +119,16 @@ test('demo lines: install, taxi, bank, the 9:40, leave for work', () => {
   assert.deepEqual(plan('Pay Sam twenty pounds please.'), [{ tool: 'bank__payPerson', params: { who: 'Sam', amount: 20 } }]);
   assert.deepEqual(plan('Pay Samira five pounds fifty'), [{ tool: 'bank__payPerson', params: { who: 'Samira', amount: 5.5 } }]);
   assert.equal(plan('Pay Sam twenty pounds for lunch').length, 0, 'unknown words after the amount are not guessed as pence');
-  for (const u of ['Move money to my savings', 'Log in to my Barclays account', 'Check my bank balance', 'What is my sort code'])
+  for (const u of ['Move money to my savings', 'Log in to my Barclays account', "What's my sort code", 'What is my account number', 'Tell me my PIN number'])
     assert.equal(demoPlan(u, apps).kind, 'refuse', u);
+  // The phone's own Bank (invented money) is in scope when it is installed; with no Bank app its words are refused
+  for (const [u, tool] of [['Open the bank', 'open_app'], ['Open Murmur Bank', 'bank__balance'], ["What's my balance", 'bank__balance'],
+    ['Check my bank balance', 'bank__balance'], ['Read my recent payments', 'bank__recent']]) assert.equal(plan(u)[0]?.tool, tool, u);
+  assert.deepEqual(plan('Pay Sam 20 pounds from Murmur Bank'), [{ tool: 'bank__payPerson', params: { who: 'Sam', amount: 20 } }]);
+  assert.equal(demoPlan('Log in to my account', apps).kind, 'refuse');
+  assert.notEqual(demoPlan("Tell Mum I'm logging in now", apps).kind, 'refuse', 'logging in inside a message is content');
+  const noBank = apps.filter((a) => a.id !== 'bank');
+  for (const u of ['Open the bank', "What's my balance"]) assert.equal(demoPlan(u, noBank).kind, 'refuse', u);
   const withGrocer = [...apps, app('grocer', 'Corner Grocer', [['add', { item: S }]])];
   assert.deepEqual(plan('Get rid of the grocer app', withGrocer), [{ tool: 'remove_app', params: { name: 'grocer' } }]);
   assert.deepEqual(plan('Remove Corner Grocer', withGrocer), [{ tool: 'remove_app', params: { name: 'Corner Grocer' } }]);
@@ -171,4 +179,27 @@ test('remove_app: the agent gate asks, a spoken no keeps it, a tile of the same 
   await until(() => s.agent.gates.current); await s.agent.yes(); await p;
   assert.deepEqual(removed, ['hello']);
   assert.deepEqual(demoPlan('Remove pizza', describeRegistry(s.registry)).plan.map((x) => x.tool).includes('remove_app'), false);
+});
+
+test('Stop while a gated action resolves its person finishes the task: nothing paid, the runner free', async () => {
+  const p = await phone({ patch: { shop: (a) => ({ pay: { ...a.pay, readback: (st, prm) => `Pay ${prm.who} £3.20.`,
+    params: { type: 'object', properties: { who: { type: 'string' } } },
+    async resolve(prm, ctx) { await ctx.choose('Sam or Samira?', [{ label: 'Sam' }, { label: 'Samira' }]); throw Object.assign(new Error('Stopped'), { name: 'AbortError' }); } } }) } });
+  const asked = [];
+  const agent = createAgent({ registry: p.registry, bus: p.bus, ctxFor: p.ctxFor, agency: () => 'just', fingerprint: async () => true,
+    planOpts: { offline: true }, speak: async (t) => { asked.push(t); } });
+  const done = agent.runner.run({ utterance: 'pay', steps: [{ tool: 'shop__pay', app: 'shop', action: 'pay', params: { who: 'Sam' } }] });
+  await until(() => asked.includes('Sam or Samira?'));
+  await agent.hear('stop');
+  const out = await done;
+  assert.equal(out.status, 'stopped');
+  assert.equal(agent.runner.busy, false);
+  assert.equal(agent.gates.current, null);
+});
+
+test('"clear my calendar" and "delete everything" plan the gated calendar clear; "delete the calendar app" still removes the app', () => {
+  const apps = describeRegistry([{ id: 'calendar', name: 'Calendar', actions: { clear: { gate: 'delete' }, add: {} } }]);
+  for (const said of ['clear my calendar', 'Delete everything', 'delete all my events', 'wipe the calendar', 'delete everything from my calendar'])
+    assert.deepEqual(demoPlan(said, apps)?.plan?.map((x) => x.tool), ['calendar__clear'], said);
+  assert.deepEqual(demoPlan('delete the calendar app', apps)?.plan?.map((x) => x.tool), ['remove_app']);
 });
