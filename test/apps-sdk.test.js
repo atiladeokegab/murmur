@@ -30,7 +30,7 @@ async function phone({ answers = [], picks = [], stopAfter = Infinity } = {}) {
   const ctxFor = (app) => createCtx({ app, root: roots[app.id], bus, kv: appKv(app.id, port), cursor, ask, choose, speak, signal: controller.signal });
   let n = 0;
   const run = (name, params = {}) => (controller = new AbortController(), runAction)({ registry, name, params, bus, ctxFor, n: ++n, of: 9 });
-  return { doc, bus, registry, roots, taps, said, asked, chose, run };
+  return { doc, bus, registry, roots, taps, said, asked, chose, run, ctxFor };
 }
 
 test('every app registers, mounts with an h2, and every tool exists', async () => {
@@ -205,4 +205,21 @@ test('Mine reads the agent store: skills with recipe.actions, slots said as some
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(removed, 'Message someone');
   await mine.reset();
+});
+
+test('the Writer: undo puts back the last change, then the last dictate, through the Undo button', async () => {
+  const p = await phone();
+  const before = writer.state().chapters[1].text;
+  assert.equal(p.roots.writer.querySelector('#wr-undo'), null, 'no Undo until something changed');
+  let r = await p.run('writer__dictate', { text: 'The train was late.' });
+  assert.ok(r.ok, r.reason);
+  r = await p.run('writer__change', { from: 'late', to: 'early' });
+  assert.ok(r.ok, r.reason);
+  await writer.actions.change.undo(p.ctxFor(writer), { from: 'late', to: 'early' });
+  assert.ok(writer.state().chapters[1].text.endsWith('The train was late.'));
+  assert.equal(p.taps.at(-1), 'Undo the last change');
+  r = await p.run('writer__dictate', { text: 'Then it rained.' });
+  await writer.actions.dictate.undo(p.ctxFor(writer), { text: 'Then it rained.' });
+  assert.ok(writer.state().chapters[1].text.endsWith('The train was late.'));
+  assert.notEqual(writer.state().chapters[1].text, before);
 });

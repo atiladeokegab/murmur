@@ -85,6 +85,7 @@ export function dictate(s, text) {
   const t = String(text).trim();
   if (!t) return false;
   const ch = current(s);
+  keep(s);
   ch.text = ch.text ? `${ch.text} ${t}` : t;
   s.sentence = count(s) - 1;
   s.changed = null;
@@ -95,6 +96,7 @@ export function change(s, from, to) {
   const ch = current(s);
   const r = replaceWord(ch.text, from, to, s.sentence);
   if (!r.changed) return false;
+  keep(s);
   ch.text = r.text;
   s.sentence = r.index;
   s.changed = { chapter: s.chapter, sentence: r.index, to };
@@ -113,4 +115,14 @@ export function read(s) {
 
 export function place(s) {
   return { where: `Chapter ${s.chapter + 1}, ${current(s).title}`, item: 'sentence', n: Math.min(s.sentence + 1, count(s)), of: count(s), next: 'carryOn', say: where(s) };
+}
+
+// One step back for the last dictate or change: the chapter text and place as they were.
+function keep(s) { s.undo = { chapter: s.chapter, text: current(s).text, sentence: s.sentence }; }
+export function undo(s) {
+  const u = s.undo;
+  if (!u || !s.chapters[u.chapter]) return false;
+  s.chapters[u.chapter].text = u.text;
+  s.chapter = u.chapter; s.sentence = u.sentence; s.changed = null; s.undo = null;
+  return true;
 }

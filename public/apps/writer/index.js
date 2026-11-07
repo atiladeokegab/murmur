@@ -93,6 +93,7 @@ const app = {
         await ctx.tap(box); await ctx.type(box, p.text); await ctx.tap(q('#wr-add'));
       },
       verify: (st, p) => (!!String(p.text).trim() && st.chapters[st.chapter].text.endsWith(String(p.text).trim())) || 'It did not go in.',
+      async undo(ctx) { await ctx.tap(q('#wr-undo')); },
     },
     change: {
       describe: 'Change one word in the open chapter to another, nearest where you are',
@@ -109,6 +110,7 @@ const app = {
       },
       verify: (st, p) => (!!st.changed && st.changed.chapter === st.chapter && st.changed.to === p.to
         && words(p.to).test(sentences(st.chapters[st.chapter].text)[st.changed.sentence] || '')) || `${p.from} wasn't changed.`,
+      async undo(ctx) { await ctx.tap(q('#wr-undo')); },
     },
     newChapter: {
       describe: 'Start a new, empty chapter at the end of the book',
@@ -155,7 +157,7 @@ function render() {
     else li.append(t);
     return li;
   });
-  body.replaceChildren(
+  body.replaceChildren(...[
     el('h3', { className: 'app-h3' }, `Chapter ${s.chapter + 1}: ${ch.title}`),
     el('p', { className: 'app-place', id: 'wr-place' }, W.where(s)),
     button('Read the last page', { id: 'wr-last', className: 'app-btn primary', onclick: (e) => { W.startLastPage(s); save(); render(); personReads(e); } }),
@@ -166,6 +168,7 @@ function render() {
     el('label', { for: 'wr-text', className: 'app-label' }, 'Dictate or type the next sentences'),
     text,
     button('Add to the chapter', { id: 'wr-add', onclick: () => { if (W.dictate(s, text.value)) { save(); render(); } } }),
+    s.undo && button('Undo the last change', { id: 'wr-undo', onclick: () => { if (W.undo(s)) { save(); render(); } } }),
     el('h3', { className: 'app-h3' }, 'Change a word'),
     ...field('wr-from', 'The word'),
     ...field('wr-to', 'The new word'),
@@ -179,5 +182,5 @@ function render() {
         onclick: () => { W.openChapter(s, i + 1); save(); render(); } })))),
     ...field('wr-title', 'New chapter title, if you want one'),
     button('New chapter', { id: 'wr-new', onclick: () => { W.newChapter(s, q('#wr-title').value); save(); render(); } }),
-  );
+  ].filter(Boolean));
 }
