@@ -31,6 +31,7 @@ export function createDemo({ registry, bus, run, say = async () => {}, board = {
       for (const app of registry.list()) await app.reset();
       if (board.reset) await board.reset();
       await rearm(onboard);
+      bus.emit('reset', {}); // the relay clears the stage room, so /inside starts over with the phone
       await say('Reset. Day 1.');
     },
     async nextMorning() {

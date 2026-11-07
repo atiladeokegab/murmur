@@ -15,7 +15,7 @@ async function speakItems(say) {
   for (let i = 0; i < list.length; i++) {
     s.reading.at = i;
     items.forEach((li, k) => { li.className = k === i ? 'is-current' : ''; });
-    await say(list[i]);
+    await say(list[i], i);
   }
 }
 
@@ -34,6 +34,7 @@ const app = {
   state: () => structuredClone(s),
   read: () => M.read(s),
   place: () => M.place(s),
+  now: () => { const c = s?.chats.find((x) => x.unread); return c ? { why: `Read ${c.name}'s message.`, say: M.read(s) } : null; }, // the board's Now tile: the first unread chat is the top real thing
 
   actions: {
     openChat: {
@@ -72,7 +73,8 @@ const app = {
           if (s.currentChat !== c.id) await ctx.tap(q(`[data-chat="${c.id}"]`));
         }
         await ctx.tap(q('#msg-read'));
-        await speakItems((t) => ctx.say(t));
+        const who = M.chatOf(s)?.name; // "Mum: Lunch on Tuesday?": the first sentence says who it is from
+        await speakItems((t, i) => ctx.say(i === 0 && who ? `${who}: ${t}` : t));
       },
       verify: (st) => (!!st.currentChat && st.reading?.chat === st.currentChat) || 'Nothing was read.',
       more: (st) => { // "tell me more": who, what came before, which other chats wait, and what to say next

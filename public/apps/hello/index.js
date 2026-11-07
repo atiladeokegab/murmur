@@ -39,7 +39,7 @@ const app = {
   },
 
   read() {
-    return draft ? `Your message to Sam says: ${draft}` : 'Your message to Sam is empty.'; // no app name: the board shows it under the title
+    return draft ? `Your message to Sam says: ${draft}` : 'Say hello to Sam.'; // an invitation, not an error; no app name: the board shows it under the title
   },
   place() {
     return { where: 'Hello', item: 'your message to Sam', next: draft ? 'send' : 'write' };

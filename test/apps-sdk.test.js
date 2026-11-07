@@ -90,7 +90,7 @@ test('the race: read Mum, reply, change Tuesday to Wednesday, send', async () =>
     const r = await p.run(name, params);
     assert.ok(r.ok, `${name}: ${r.reason}`);
   }
-  assert.deepEqual(p.said, ['Lunch on Tuesday?', "Wednesday's fine."]);
+  assert.deepEqual(p.said, ['Mum: Lunch on Tuesday?', "Wednesday's fine."]);
   assert.equal(p.asked[0].readback, "Send 'Wednesday's fine' to Mum?");
   assert.equal(messages.state().chats[0].messages.at(-1).text, "Wednesday's fine.");
   assert.match(messages.read(), /Sent\.$/);
