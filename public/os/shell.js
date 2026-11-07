@@ -90,7 +90,8 @@ const ding = (name) => earcon(name, { sound: sound() });
 // ---------- Back: every open, sheet and task is a history entry ----------
 const stack = [];
 let skipPops = 0;
-function push(kind) { stack.push(kind); history.pushState({ d: stack.length }, ''); }
+const queued = []; // pushes made while a history.go() is still travelling land after it, or they would be undone
+function push(kind) { stack.push(kind); if (skipPops) queued.push(stack.length); else history.pushState({ d: stack.length }, ''); }
 function drop(kind) {
   const i = stack.lastIndexOf(kind);
   if (i < 0) return;
@@ -100,7 +101,7 @@ function drop(kind) {
   if (n) { skipPops++; history.go(-n); }
 }
 addEventListener('popstate', (e) => {
-  if (skipPops) { skipPops--; return; }
+  if (skipPops) { if (!--skipPops) while (queued.length) history.pushState({ d: queued.shift() }, ''); return; }
   const d = e.state?.d ?? 0;
   let handled = false;
   while (stack.length > d) { const k = stack.pop(); if (k) { onBack(k); handled = true; break; } }
