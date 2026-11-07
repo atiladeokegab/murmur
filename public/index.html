@@ -16,6 +16,7 @@
     var theme = look.theme || 'auto'; // no colours chosen: follow the phone's light or dark setting
     if (theme === 'auto') theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
     if (theme !== 'dark') document.documentElement.dataset.theme = theme;
+    if (!/[?&](full|quiet|nomirror)\b/.test(location.search)) document.write('<link rel="stylesheet" href="os/simple.css">'); // one big talk button (the judges, 7 Nov)
   })();
 </script>
 <link rel="preload" href="fonts/atkinson-next.woff2" as="font" type="font/woff2" crossorigin>
