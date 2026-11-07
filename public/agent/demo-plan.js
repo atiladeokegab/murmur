@@ -345,6 +345,10 @@ function plan(said, apps, context, dry) {
   if (/^how (?:long|much time)(?:'s| is| have i got)? (?:left|remaining)(?: on (?:the |my )?timer)?$/i.test(t)) return task([step('clock', ['timeLeft'])]);
   if (/^(?:cancel|stop|end|clear)\s+(?:the\s+|my\s+)?timer$/i.test(t)) return task([step('clock', ['cancelTimer'])]);
   if ((m = t.match(/^(?:wake me(?: up)?|set (?:an |my |the )?alarm)\s+(?:at|for)\s+(.+)$/i))) return task([step('clock', ['setAlarm'], { time: m[1] })]);
+  // As speech writes them: "alarm at seven a.m.", "set an alarm", "wake me up tomorrow"; no time heard is 7 am.
+  if ((m = t.match(/^(?:(?:can you |please )?set(?: up)?\s+)?(?:an?\s+|my\s+|the\s+)?alarm\b\s*(.*)$/i)) || (m = t.match(/^wake me(?: up)?\b\s*(.*)$/i))) return task([step('clock', ['setAlarm'], { time: m[1] })]);
+  // Reminders as a timer: "set up a two minute reminder", "a 2-minute reminder", "remind me in ten minutes"; none is 10 minutes.
+  if ((m = t.match(/^(?:(?:can you |please )?set(?: up)?\s+)?(?:an?\s+|my\s+)?(.*?)\s*reminder\b(?:\s+(?:for|in)\s+(.+))?$/i)) || (m = t.match(/^remind me in\s+(.+)$/i))) return task([step('clock', ['setTimer'], { length: m[2] || m[1] })]);
   if (/^(?:what time is it|what'?s the time)(?: now)?$/i.test(t)) return task([step('clock', ['time'])]);
 
   // Calendar (before the generic "change X to Y")

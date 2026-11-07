@@ -14,7 +14,7 @@ const adj = (label) => label.replace(/(\w)s\b/g, '$1'); // "your 10 minute timer
 
 /** "10 minutes", "an hour and a half", "half an hour", "90 seconds" -> ms, or 0 when it is not a length. */
 export function lengthOf(said) {
-  const t = String(said || '').toLowerCase().replace(/half an hour/g, '30 minutes').replace(/(\d+|\w+) and a half hours?|(\w+) hours? and a half/g,
+  const t = String(said || '').toLowerCase().replace(/(\w)-(?=(?:second|sec|minute|min|hour|hr)s?\b)/g, '$1 ').replace(/half an hour/g, '30 minutes').replace(/(\d+|\w+) and a half hours?|(\w+) hours? and a half/g,
     (x, a, b) => `${a || b} hours 30 minutes`);
   let ms = 0;
   for (const [, n, u] of t.matchAll(/(\d+(?:\.\d+)?|[a-z-]+(?:\s+(?:one|two|three|four|five|six|seven|eight|nine))?)\s+(second|sec|minute|min|hour|hr)s?\b/g)) {
@@ -28,9 +28,17 @@ export function words(ms) {
   const s = Math.round(ms / 1e3), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   return [h && plural(h, 'hour'), m && plural(m, 'minute'), (sec || !s) && plural(sec, 'second')].filter(Boolean).join(' ');
 }
+// What speech recognition writes: "7 a.m. tomorrow morning", "seven a.m.", "7am", "7 o'clock", "at 7".
+const spokenTime = (said) => String(said || '').toLowerCase().replace(/\ba\.?\s?m\.?(?=\s|$)/g, 'am').replace(/\bp\.?\s?m\.?(?=\s|$)/g, 'pm')
+  .replace(/\b(?:at|for|on|o'?clock|oclock|tomorrow|today|please)\b/g, ' ').replace(/(?<!in )\b(?:this|the)\s+(morning|evening)\b/g, 'in the $1')
+  .replace(/(?<!in the )\bmorning\b/g, 'in the morning').replace(/\bnight\b/g, 'tonight').replace(/(\d)(am|pm)\b/g, '$1 $2')
+  .replace(/\s+/g, ' ').trim().replace(/^(.*?)\s+(am|pm|in the morning|in the evening|tonight)(?:\s+(?:am|pm|in the morning|in the evening|tonight))*$/, '$1 $2');
+// Nothing heard that is a length or a time: a sensible default, said back, never "try again".
+export const DEFAULT_LENGTH = '10 minutes', DEFAULT_TIME = '7 am';
+const lengthOr = (said) => (lengthOf(said) ? said : DEFAULT_LENGTH), timeOr = (said) => (timeOf(said) ? said : DEFAULT_TIME);
 /** "7", "7 am", "7:30", "6.45 pm", "seven" -> { h, m } on the 24 h clock, or null. A bare hour is morning (wake me at 7). */
 export function timeOf(said) {
-  const m = String(said || '').toLowerCase().trim().match(/^(\d{1,2}|[a-z]+)(?:[:.](\d\d))?\s*(am|pm|a\.m\.|p\.m\.|in the morning|in the evening|tonight)?$/);
+  const m = spokenTime(said).match(/^(\d{1,2}|[a-z]+)(?:[:.](\d\d))?\s*(am|pm|a\.m\.|p\.m\.|in the morning|in the evening|tonight)?$/);
   if (!m) return null;
   const h = /^\d/.test(m[1]) ? Number(m[1]) : NUM[m[1]];
   const min = Number(m[2] || 0);
@@ -81,17 +89,16 @@ const app = {
       describe: 'Set a timer for a length of time',
       doing: 'Setting the timer',
       say: 'Set a timer for 10 minutes',
-      params: { type: 'object', properties: { length: { type: 'string', description: 'As said: "10 minutes", "half an hour"' } }, required: ['length'] },
+      params: { type: 'object', properties: { length: { type: 'string', description: 'As said: "10 minutes", "half an hour"; none said is 10 minutes' } } },
       gate: null,
       hint: 'Type the length in the Timer box, then press Start timer',
       async run(p, ctx) {
-        if (!lengthOf(p.length)) throw new Error(`I can't time "${p.length}". Say a length, like 10 minutes.`);
         const box = q('#clock-length');
-        await ctx.tap(box); await ctx.type(box, p.length);
+        await ctx.tap(box); await ctx.type(box, lengthOr(p.length));
         await ctx.tap(q('#clock-start'));
         await ctx.say(`Timer set: ${s.timer.label}.`);
       },
-      verify: (st, p) => (st.timer?.ms === lengthOf(p.length)) || 'The timer did not start.',
+      verify: (st, p) => (st.timer?.ms === lengthOf(lengthOr(p.length))) || 'The timer did not start.',
     },
     timeLeft: {
       describe: 'Say how long is left on the timer',
@@ -122,17 +129,16 @@ const app = {
       describe: 'Set the alarm for a time of day',
       doing: 'Setting the alarm',
       say: 'Wake me at 7',
-      params: { type: 'object', properties: { time: { type: 'string', description: 'As said: "7", "6:30 am"' } }, required: ['time'] },
+      params: { type: 'object', properties: { time: { type: 'string', description: 'As said: "7", "6:30 am"; none said is 7 am' } } },
       gate: null,
       hint: 'Type the time in the Alarm box, then press Set alarm',
       async run(p, ctx) {
-        if (!timeOf(p.time)) throw new Error(`I can't set an alarm for "${p.time}". Say a time, like 7 am.`);
         const box = q('#clock-at');
-        await ctx.tap(box); await ctx.type(box, p.time);
+        await ctx.tap(box); await ctx.type(box, timeOr(p.time));
         await ctx.tap(q('#clock-alarm'));
         await ctx.say(`Alarm set for ${s.alarm.label}.`);
       },
-      verify: (st, p) => (!!st.alarm && st.alarm.label === clockWords(timeOf(p.time))) || 'The alarm was not set.',
+      verify: (st, p) => (!!st.alarm && st.alarm.label === clockWords(timeOf(timeOr(p.time)))) || 'The alarm was not set.',
     },
     time: {
       describe: 'Say the time',
@@ -178,8 +184,7 @@ function render() {
     s.timer ? el('p', { className: 'app-why' }, `${adj(s.timer.label)} timer running.`) : null,
     s.timer ? null : field('clock-length', 'Timer length, like 10 minutes', keep.length),
     s.timer ? null : button('Start timer', { id: 'clock-start', className: 'app-btn primary', onclick: (e) => {
-      const ms = lengthOf(q('#clock-length').value);
-      if (!ms) { s.note = 'Type a length, like 10 minutes.'; render(); return; }
+      const ms = lengthOf(lengthOr(q('#clock-length').value));
       startTimer(ms); s.note = `Timer set: ${s.timer.label}.`; render(); tell(e, s.note);
     } }),
     button('How long is left', { id: 'clock-left', onclick: (e) => { s.said = 'left'; tell(e, leftWords()); } }),
@@ -191,8 +196,7 @@ function render() {
     el('p', { className: 'app-why' }, s.alarm ? `Alarm set for ${s.alarm.label}.` : 'No alarm.'),
     ...field('clock-at', 'Alarm time, like 7 am', keep.at),
     button('Set alarm', { id: 'clock-alarm', onclick: (e) => {
-      const at = timeOf(q('#clock-at').value);
-      if (!at) { s.note = 'Type a time, like 7 am.'; render(); return; }
+      const at = timeOf(timeOr(q('#clock-at').value));
       setAlarm(at); s.note = `Alarm set for ${s.alarm.label}.`; render(); tell(e, s.note);
     } }),
   ));
