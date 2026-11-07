@@ -50,8 +50,9 @@ saveLook();
 // ---------- one voice: Murmur speaks, or the screen reader reads the one status region ----------
 const status = $('#say');
 const caps = /[?&]quiet\b/.test(location.search) ? {} : await fetch('/health').then((r) => r.json()).catch(() => ({}));
-// GPT live (the lead, 7 Nov): OpenAI's voice when the server has the key, or ?voice=gpt; any failure falls back for good.
-let gpt = null, gptOn = false, gptBroken = !(caps.gpt || /[?&]voice=gpt\b/.test(location.search)), collect = null;
+// GPT live (the lead, 7 Nov): OpenAI's voice by default when the server has the key, or ?voice=gpt; ?voice=old keeps the old path.
+// Any failure falls back for good.
+let gpt = null, gptOn = false, gptBroken = /[?&]voice=old\b/.test(location.search) || !(caps.gpt || /[?&]voice=gpt\b/.test(location.search)), collect = null;
 let token = 0, lastLine = '', listening = false;
 // Hands-free (the lead's ask): after the first tap, the mic reopens each time Murmur has finished speaking.
 let handsFree = false, speaking = 0, busy = 0, printing = 0, rearmTimer = null;
