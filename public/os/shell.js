@@ -149,7 +149,10 @@ for (const app of registry.list()) {
   await app.seed();
 }
 // Plug-ins (sdk/plugin.js): added apps come back on boot and mount exactly like the built-in ones.
-const plug = { registry, host: appsEl, port, os: osFor };
+const plug = { registry, host: appsEl, port, os: osFor,
+  // a plug-in's own Remove button: the sheet asks (gate delete), then the app leaves the board
+  confirm: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true),
+  removed: (x) => { if (x.ok) { if (current === x.id) home(); delete roots[x.id]; delete kvs[x.id]; renderBoard(); } speak(x.say, personal.signal); } };
 const added = (r) => { roots[r.id] = r.root; kvs[r.id] = r.kv; return r; };
 for (const r of await restoreApps(plug)) added(r); // no renderBoard here: `day` is declared below (TDZ)
 async function install(name) { const r = await installByName(name, plug); if (r.root) { added(r); renderBoard(); } return r; }

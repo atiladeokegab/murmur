@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createBus, createRegistry, createCtx, appKv, mountApp, loadApps, runAction } from '../public/sdk/index.js';
-import { installApp, uninstallApp, restoreApps, installByName, availableApps, PLUGINS, INSTALL_APP } from '../public/sdk/plugin.js';
+import { installApp, uninstallApp, removeApp, restoreApps, installByName, availableApps, PLUGINS, INSTALL_APP } from '../public/sdk/plugin.js';
 import { browserKV } from '../public/ports/browser-kv.js';
 import appIds from '../public/apps/apps.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
@@ -201,4 +201,36 @@ test('grocer: a No at the pay gate orders nothing; a Yes hears the exact readbac
   assert.equal(yes.ok, true, yes.reason);
   assert.equal(p.registry.get('grocer').state().order.total, 570);
   assert.equal((await phone({ storage: p.storage })).registry.get('grocer').state().order.total, 570, 'the order survives a reload');
+});
+
+test('a person removes a plug-in with its own Remove button: asked first (delete), a No keeps it', async () => {
+  const p = await phone();
+  const answers = [false, true], asked = [];
+  let done;
+  const plug = { ...p.plug, confirm: async (q) => { asked.push(q); return answers.shift(); } };
+  plug.removed = (x) => done(x);
+  const r = p.add(await installApp(GROCER, plug));
+  const btn = r.root.querySelector('#app-grocer-remove');
+  assert.equal(btn.textContent, 'Remove Corner Grocer from your phone');
+  assert.equal(r.root.children.at(-1), btn, 'Remove is the last control in reading order');
+  const click = () => new Promise((res) => { done = res; btn.click(); });
+  const no = await click();
+  assert.deepEqual([no.ok, no.cancelled, no.say], [false, true, 'Kept it.']);
+  assert.deepEqual(asked[0], { app: 'grocer', gate: 'delete', readback: 'Remove Corner Grocer from your phone?' });
+  assert.ok(p.names().includes('grocer__order'), 'a No removes nothing');
+  const yes = await click();
+  assert.deepEqual([yes.ok, yes.say], [true, 'Removed Corner Grocer.']);
+  assert.ok(!p.names().some((n) => n.startsWith('grocer__')));
+  assert.deepEqual(await p.plug.port.getAll('app.grocer'), {});
+  assert.ok(!(await phone({ storage: p.storage })).names().includes('grocer__order'), 'still gone after a reload');
+});
+
+test('built-in apps cannot be removed, and are never asked about', async () => {
+  const p = await phone();
+  let asked = 0;
+  const x = await removeApp('hello', p.plug, async () => { asked++; return true; });
+  assert.deepEqual([x.ok, x.say, asked], [false, 'Hello came with the phone, so it stays.', 0]);
+  assert.ok(p.names().includes('hello__send'));
+  assert.equal((await removeApp('nope', p.plug, async () => true)).ok, false);
+  assert.equal((await installApp(GROCER, p.plug)).root.querySelector('#app-grocer-remove'), null, 'no confirm, no Remove button');
 });
