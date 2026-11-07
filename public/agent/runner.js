@@ -43,7 +43,8 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
   const history = [];   // finished tasks: [{ utterance, at, steps }], newest last; workflows read this
 
   const hooks = (task) => ({ bus: task.bus, ask: gates.ask, choose, signal: task.controller.signal,
-    speak: Object.assign((text, signal, o) => speak(text, signal, o), { records: true }) });
+    speak: Object.assign((text, signal, o) => { if (text) task.spoke = true; return speak(text, signal, o); }, { records: true }) });
+  const snap = (a) => { try { return JSON.stringify(a.state?.() ?? null); } catch { return ''; } };
   const say = async (task, text, o) => {
     if (!text) return;
     // speak puts a line on the record when it starts, so a held or dropped line is never on it
@@ -78,6 +79,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
     const task = current = { id, bus: tagged(bus, id), controller: new AbortController(), stopped: false, takenOver: false, nudge: null };
     const t0 = clock.now();
     const doneSteps = [];
+    const before = new Map(); // each app's state before its first step: no change, no "Done."
     const of = steps.length;
     let status = 'done', lastApp = null, gatedRan = null, line = '', reason = '', madeUndo = null, more = '';
     failed = null;
@@ -126,6 +128,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
         try { params = await x.resolve(params, ctxFor(a, hooks(task))); } catch { params = null; } // Stop rejects with AbortError
         if (!params || task.stopped) { status = task.stopped ? 'stopped' : 'cancelled'; line = reason = task.stopped ? '' : `Not ${PAST[x.gate] || 'done'}.`; break; }
       }
+      if (!before.has(a.id)) before.set(a.id, [a, snap(a)]);
       const r = mode === 'teach' && !x.gate
         ? await teachStep(task, a, x, step, { action: step.tool, app: a.id, n, of })
         : await runAction({ registry, name: step.tool, params, bus: task.bus, ctxFor: (app) => ctxFor(app, hooks(task)), n, of });
@@ -152,7 +155,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
       const x = last.app && lastApp.actions[last.action];
       // Short words: the app's own done line, else "Sent." or "Done." (the app already said what it read).
       line = typeof x?.done === 'function' ? x.done(lastApp.state(), last.params)
-        : gatedRan ? `${PAST[gatedRan][0].toUpperCase()}${PAST[gatedRan].slice(1)}.` : CHANGES(last.action) ? 'Done.' : '';
+        : gatedRan ? `${PAST[gatedRan][0].toUpperCase()}${PAST[gatedRan].slice(1)}.` : CHANGES(last.action) && !task.spoke && [...before.values()].some(([b, was]) => snap(b) !== was) ? 'Done.' : ''; // a refusal or a no-op is never "Done."
     }
     const ms = clock.now() - t0;
     // A read-only, refused or No'd task keeps the last change undoable, still 8 s from that change.

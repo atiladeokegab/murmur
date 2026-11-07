@@ -393,6 +393,20 @@ test('a read-only, refused or No\'d task keeps the last change undoable, still 8
   assert.equal(s.state('hello').draft, 'Lunch on Tuesday.', 'the 8 s run from the change, not from the read');
 });
 
+test('never "Done." after a refusal the app said, or a step that changed nothing; "Done." after a real change', async () => {
+  const s = await setup({ patch: { hello: () => ({
+    sorry: { describe: 'Say sorry', doing: 'Saying sorry', hint: 'Sorry', params: { type: 'object', properties: {} }, async run(p, ctx) { await ctx.say('I cannot get the weather right now.'); }, verify: () => true },
+    noop: { describe: 'Do nothing', doing: 'Doing nothing', hint: 'Nothing', params: { type: 'object', properties: {} }, async run() {}, verify: () => true },
+  }) } });
+  for (const action of ['sorry', 'noop']) {
+    const r = await s.agent.runner.run({ utterance: action, steps: [{ tool: `hello__${action}`, app: 'hello', action, params: {} }] });
+    assert.equal(r.line, '', action);
+    assert.ok(!s.spoken.includes('Done.'), `${action}: ${s.spoken.join(' | ')}`);
+  }
+  const r = await s.agent.runner.run({ utterance: 'write', steps: [{ tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Lunch.' } }] });
+  assert.notEqual(r.line, '', 'a real change still ends on its line');
+});
+
 test('a read-only task:done carries the live Undo with its own expiry, so the panel keeps the button', async () => {
   const s = await setup();
   await s.agent.runner.run({ utterance: 'write', steps: [{ tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Lunch.' } }] });
