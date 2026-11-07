@@ -20,10 +20,16 @@ export function payAttempt(fingerprint) {
 // The fingerprint, failing closed on both paths. A saved passkey is asked for; with none, making one IS the ask.
 // No authenticator, a cancel, or no answer in 20 s: nothing is paid. The spoken yes never stands alone.
 export async function checkFingerprint({ passkey, say, wait = sleep, ms = 20000 }) {
-  const can = passkey.has() || await passkey.available().catch(() => false);
-  if (!can) { say("This phone can't check a fingerprint, so I can't pay."); return false; }
+  const NONE = {};
+  // One deadline covers the availability check and the fingerprint, so a hung available() never stalls a pay.
   // shortcut: a timed-out WebAuthn prompt is not aborted (passkey.js takes no signal); the pay is refused either way
-  const ok = await Promise.race([passkey.confirm().then((v) => v === true, () => false), wait(ms).then(() => false)]);
+  const check = (async () => {
+    const can = passkey.has() || await passkey.available().catch(() => false);
+    if (!can) return NONE;
+    return passkey.confirm().then((v) => v === true, () => false);
+  })();
+  const ok = await Promise.race([check, wait(ms).then(() => false)]);
+  if (ok === NONE) { say("This phone can't check a fingerprint, so I can't pay."); return false; }
   if (!ok) say('No fingerprint, so nothing was paid.');
   return ok;
 }

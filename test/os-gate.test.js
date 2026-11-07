@@ -55,6 +55,13 @@ test('pay with a fingerprint that never answers times out and frees the agent', 
   assert.deepEqual(f.said, ['No fingerprint, so nothing was paid.']);
 });
 
+test('a hung availability check is inside the same deadline: nothing paid, no credential asked', async () => {
+  const f = fp({ available: () => new Promise(() => {}) });
+  assert.equal(await f.run({ wait: async () => {} }), false);
+  assert.equal(f.calls.confirm, 0);
+  assert.deepEqual(f.said, ['No fingerprint, so nothing was paid.']);
+});
+
 test('ctx.confirm records the fingerprint the host checked, and {result:false} is a no', async () => {
   for (const [a, result, fp] of [[true, true, undefined], [false, false, undefined], [{ result: true, fingerprint: true }, true, true], [{ result: false, fingerprint: true }, false, true]]) {
     const { bus, seen } = rec();

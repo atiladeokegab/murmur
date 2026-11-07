@@ -366,7 +366,7 @@ function sheetConfirm({ gate, readback, grace = true }) {
         show('Check your fingerprint.');
         const attempt = payAttempt(fingerprint);
         const mine = pending = { ...pending, answer: (w) => (w === true ? false : (attempt.cancel(), true)) }; // Stop or Back cancels; another yes waits
-        attempt.result.then((ok) => { if (pending === mine) pending = null; closeSheet(); resolve({ result: ok, fingerprint: ok }); });
+        attempt.result.then((ok) => { if (pending === mine) { pending = null; closeSheet(); } resolve({ result: ok, fingerprint: ok }); }); // never close a newer sheet
         return true;
       }
       pending = null;
