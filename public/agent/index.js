@@ -23,7 +23,7 @@ if (globalThis.window) installToken(); // /api/* carries the device token from h
  * @param {(choice|null)=>void} [o.onChoose]   show or hide the choice sheet: { question, choices }
  * @param {object} [o.librarian]     the toolkit Librarian (memory + skills)
  * @param {{ open?(id), current?(): string|null }} [o.os]  the shell: open an app, which one is open
- * @param {()=>Promise<boolean>} [o.fingerprint]  passkey.confirm
+ * @param {(signal)=>Promise<boolean>} [o.fingerprint]  passkey.confirm; the signal aborts when Stop or No withdraws the gate
  * @param {(step)=>'ask'|'just'|'teach'} [o.agency]
  * @param {()=>'short'|'detailed'} [o.answers]  Your look's Answers row: Detailed says a result's longer answer straight away
  * @param {(gate)=>boolean} [o.risky]  send/call need the fingerprint too (screen just locked, earphone out)

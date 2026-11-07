@@ -348,6 +348,21 @@ test('a travel hold (a pay gate that reads "held for 24 hours") asks "Hold?", a 
   assert.deepEqual(said, ['The 9:40 to Lisbon, £120, held for 24 hours. Hold?', 'Pay Sam £20. From Murmur Bank. Pay?']);
 });
 
+test('Stop or No while the fingerprint is up withdraws the prompt (its signal aborts), and a late match pays nothing', async () => {
+  let t = 10_000, sig = null, match;
+  const g = createGates({ clock: { now: () => t }, fingerprint: (signal) => { sig = signal; return new Promise((r) => { match = r; }); } });
+  const paid = g.ask({ gate: 'pay', readback: 'A taxi to the Station, £14.' }); t += 600;
+  const yes = g.yes(); await new Promise((r) => setTimeout(r, 0));
+  assert.ok(sig && !sig.aborted, 'the fingerprint gets a live signal');
+  g.cancel(); // what runner.stop() does on a said or typed Stop
+  assert.equal(sig.aborted, true, 'Stop withdraws the WebAuthn prompt');
+  match(true); // the finger lands late
+  assert.equal(await yes, false); assert.equal(await paid, false, 'nothing paid');
+  const g2 = createGates({ clock: { now: () => t }, fingerprint: (signal) => { sig = signal; return new Promise(() => {}); } });
+  g2.ask({ gate: 'pay', readback: 'Pay?' }); t += 600; g2.yes(); await new Promise((r) => setTimeout(r, 0));
+  g2.no(); assert.equal(sig.aborted, true, 'No withdraws it too');
+});
+
 test('a No to a hold says "Not held.", a No to a payment still says "Not paid."', async () => {
   const { runAction } = await import('../public/sdk/run.js');
   const no = async (readback) => {

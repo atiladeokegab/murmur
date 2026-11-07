@@ -209,8 +209,9 @@ export function createGates({ say = async () => {}, clock = { now: () => Date.no
       const question = gate === 'pay' && /\b(hold|held)\b/i.test(readback || '') ? 'Hold?'
         : { send: 'Send it?', pay: 'Pay?', call: 'Call?', delete: 'Delete it?' }[gate] || 'Do it?';
       return new Promise((resolve) => {
-        open = { gate, readback, openedAt: clock.now(), checking: false,
-          resolve: (r) => { open = null; onChange(null); resolve(r); } };
+        const o = { gate, readback, openedAt: clock.now(), checking: false, ctl: new AbortController(),
+          resolve: (r) => { o.ctl.abort(); open = null; onChange(null); resolve(r); } }; // Stop, No or a new ask withdraws the fingerprint prompt
+        open = o;
         onChange({ gate, readback, question });
         say(/\?$/.test(readback) ? readback : `${readback} ${question}`); // "Send 'I'm late' to Sam?" is its own question
       });
@@ -224,7 +225,7 @@ export function createGates({ say = async () => {}, clock = { now: () => Date.no
         g.checking = true;
         await say('Check your fingerprint.');
         let ok = false;
-        try { ok = !!(await fingerprint()); } catch { ok = false; }
+        try { ok = !g.ctl.signal.aborted && !!(await fingerprint(g.ctl.signal)); } catch { ok = false; }
         g.checking = false;
         if (open !== g) return false;
         if (!ok) { g.resolve(false); return false; } // fails closed: the step is cancelled and says "Not paid." 
