@@ -202,7 +202,7 @@
     },
     {
       "id": "how-to-without-executing", "app": "messages", "utterance": "How do I send a message to Samira?",
-      "expect": "The real planner returns a dry-run explanation using registered action hints, then offers doing or teaching; no action runs.",
+      "expect": "The real planner returns a voice-only dry-run explanation using registered action descriptions, then offers doing or teaching; no action runs.",
       "assertions": ["same(allStates(), beforeAll)"],
       "speech": { "matches": "reply|message|send" }, "dryRun": true, "dryRunActions": ["messages__openChat", "messages__reply", "messages__send"], "noGatedRuns": true
     },

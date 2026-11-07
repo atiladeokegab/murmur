@@ -12,22 +12,29 @@ import hello from '/apps/hello/index.js';
 const bus = createBus(), registry = createRegistry(); registry.register(hello);
 const taskBus = { on: (...args) => bus.on(...args), emit: (name, event = {}) => bus.emit(name, { task: 't-probe-sdk', ...event }) };
 const kv = appKv('hello'), cursor = createCursor(document);
-const root = await mountApp(hello, document.querySelector('#host'), { bus: taskBus, kv, say() {} });
+let approved = null;
+const appOs = { bus: taskBus, kv, say() {}, async confirm({ gate, readback }) {
+  const match = approved?.app === 'hello' && approved.gate === gate && approved.readback === readback;
+  approved = null;
+  return match;
+} };
+const root = await mountApp(hello, document.querySelector('#host'), appOs);
 await hello.reset();
 let pending = null;
 const host = { ask({ app, gate, readback }) { return new Promise((resolve) => {
+  approved = null;
   const dialog = document.createElement('dialog'); dialog.id = 'sheet';
   const line = document.createElement('p'); line.textContent = readback;
   dialog.append(line, ...['Send', 'No'].map((label, i) => { const button = document.createElement('button'); button.className = i ? 'choice no' : 'choice yes'; button.textContent = label; return button; }));
   document.body.append(dialog); pending = { kind: 'confirm', app, gate, readback };
-  dialog.querySelector('.yes').addEventListener('click', () => { dialog.close(); pending = null; resolve(true); });
-  dialog.querySelector('.no').addEventListener('click', () => { dialog.close(); pending = null; resolve(false); });
+  dialog.querySelector('.yes').addEventListener('click', () => { dialog.close(); pending = null; approved = { app, gate, readback }; resolve(true); });
+  dialog.querySelector('.no').addEventListener('click', () => { dialog.close(); pending = null; approved = null; resolve(false); });
   dialog.showModal();
 }); } };
 const ctxFor = (app) => createCtx({ app, root, bus: taskBus, kv, cursor, ask: (q) => host.ask(q) });
 const run = (name, params) => runAction({ registry, name, params, bus: taskBus, ctxFor });
 window.murmur = { bus, registry, host, sheet: { pending: () => pending }, ready: Promise.resolve(), agent: { hear: (text) => run('hello__write', { text }) } };
-window.probeAppOs = { bus: taskBus, kv, say() {} }; window.probeAppRoot = root;
+window.probeAppOs = appOs; window.probeAppRoot = root;
 window.evalRun = run;
 </script>`;
 
@@ -85,6 +92,9 @@ test('probe records real SDK action, delayed verification, new confirmation shee
     assert.deepEqual(checkTrace(first.trace, { requiresVerifiedStep: true }), []);
 
     await page.evaluate(() => window.__eval.clear());
+    await page.evaluate(() => document.querySelector('#hello-send').click());
+    assert.equal(await page.evaluate(() => window.murmur.registry.get('hello').state().lastSent), null, 'a direct tap has no transferred confirmation');
+    assert.equal(await page.evaluate(() => window.__eval.trace.filter(event => event.kind === 'readback').length), 0, 'an unscoped hand-tap readback cannot be attributed to another step');
     await page.evaluate(() => { window.pendingRun = window.evalRun('hello__send', {}); });
     await page.waitForFunction(() => document.querySelector('#sheet')?.open === true);
     await page.waitForTimeout(600);

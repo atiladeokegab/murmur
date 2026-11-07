@@ -87,7 +87,7 @@ export async function installProbe(page, { scopeOffset = 0 } = {}) {
       if (gate && originalReadback) action.readback = function (...args) {
         const invocation = matchingStep(name, args[1], 'readback');
         const step = steps.get(invocation.scope);
-        const captureEvidence = step && !step.runStarted && !step.readbackCaptured;
+        const captureEvidence = step?.action === name && step.app === app.id && step.gate && !step.runStarted && !step.readbackCaptured;
         if (!captureEvidence) return Reflect.apply(originalReadback, this, args);
         const state = clones(args[0]), observedState = safeState(app), params = clones(args[1]);
         const capture = (text) => {

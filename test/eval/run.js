@@ -250,15 +250,15 @@ async function runTask(task, url) {
     }
     if (task.dryRun) {
       const names = task.dryRunActions || [];
-      const hints = await page.evaluate(names => {
+      const descriptions = await page.evaluate(names => {
         const registry = (window.__murmur || window.murmur).registry;
         return names.map(name => {
           const resolved = registry.resolve(name);
-          return resolved?.action?.hint || null;
+          return resolved?.action?.describe || null;
         });
       }, names);
       if (!names.length) errors.push('The dry-run case has no expected registered actions.');
-      if (hints.length !== names.length || hints.some(hint => !hint || !speech.includes(hint))) errors.push('The dry run did not speak hints from its expected registered actions.');
+      if (descriptions.length !== names.length || descriptions.some(description => !description || !speech.includes(description))) errors.push('The dry run did not speak descriptions from its expected registered actions.');
       if (!/do it|walk you through|teach you/i.test(speech)) errors.push('The dry run did not offer to act or teach the person.');
       if (trace.some(e => e.kind === 'run')) errors.push('The dry run executed an action instead of explaining it.');
     }
