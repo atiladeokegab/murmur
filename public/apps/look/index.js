@@ -188,7 +188,7 @@ const undoable = (row, action) => ({
 // "Tell me more" after a change: every other row and where it is now, and how to change one.
 function moreLine(row, s) {
   const rows = [...Object.keys(STEPS), ...Object.keys(CHOICES)].filter((k) => k !== row)
-    .map((k) => `${(STEPS[k] || CHOICES[k]).label.toLowerCase()}, now ${STEPS[k] ? STEPS[k].words(s[k]) : CHOICES[k].options[s[k]].toLowerCase()}`);
+    .map((k) => `${(STEPS[k] || CHOICES[k]).label.toLowerCase()}, now ${STEPS[k] ? STEPS[k].words(s[k]) : (CHOICES[k].options[s[k]] || s[k] || 'not set').toLowerCase()}`);
   return `You can also change ${rows.slice(0, -1).join('; ')}; and ${rows.at(-1)}. Say "yellow on black", "voice faster" or "keep it short".`;
 }
 // The done line after a change says only that row ("Text 150 percent."): seconds count on stage.
@@ -266,7 +266,8 @@ const app = {
   read() {
     const parts = [`Text ${STEPS.size.words(look.size)}`, `colours ${CHOICES.theme.options[look.theme].toLowerCase()}`,
       `voice ${STEPS.rate.words(look.rate)}`, `${CHOICES.speaker.options[look.speaker].toLowerCase()} speaks`,
-      `how much: ${CHOICES.agency.options[look.agency].toLowerCase()}`, look.learning ? 'learning on' : 'learning stopped'];
+      `how much: ${CHOICES.agency.options[look.agency].toLowerCase()}`,
+      `answers: ${(CHOICES.answers.options[look.answers] || 'short').toLowerCase()}`, look.learning ? 'learning on' : 'learning stopped'];
     return `Your look. ${parts.join(', ')}.`;
   },
   place() {
