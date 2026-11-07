@@ -179,7 +179,15 @@ const undoable = (row, action) => ({
   ...action,
   async run(p, ctx) { before[row] = look[row]; await action.run(p, ctx); },
   async undo(ctx) { if (row in before) await pressTo(ctx, row, before[row]); },
+  done: (s) => rowLine(row, s),
 });
+// The done line after a change says only that row ("Text 150 percent."): seconds count on stage.
+function rowLine(row, s) {
+  if (STEPS[row]) return `${STEPS[row].label} ${STEPS[row].words(s[row])}.`;
+  if (row === 'learning') return s.learning ? 'Learning on.' : 'Learning stopped.';
+  const words = CHOICES[row].options[s[row]];
+  return row === 'speaker' ? `${words} speaks.` : `${CHOICES[row].label}: ${words.toLowerCase()}.`;
+}
 const stepper = (key, dir) => undoable(key, {
   describe: `Make the ${key === 'size' ? 'text' : 'voice'} ${STEPS[key][dir]}`,
   doing: `${key === 'size' ? 'Text' : 'Voice'} ${STEPS[key][dir]}`,

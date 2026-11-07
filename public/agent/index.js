@@ -27,16 +27,25 @@ if (globalThis.window) installToken(); // /api/* carries the device token from h
  * @param {(gate)=>boolean} [o.risky]  send/call need the fingerprint too (screen just locked, earphone out)
  */
 export const ACK = 'On it.';
-export const ACK_MS = 250;
 
 export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, fingerprint = async () => false,
   agency = () => 'ask', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
-  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {}, ackMs = ACK_MS }) {
+  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {} }) {
   const appsList = () => (Array.isArray(registry) ? registry : typeof registry?.list === 'function' ? registry.list() : Object.values(registry || {}));
   const app = (id) => (typeof registry?.get === 'function' ? registry.get(id) : appsList().find((a) => a.id === id));
-  let lastSaid = '', acking = null;
-  // Whatever is said next waits for the short ack to finish, so two lines never talk over each other.
-  const speak = async (text, signal) => { const a = acking; acking = null; if (a) await a; return rawSpeak(text, signal); };
+  let lastSaid = '';
+  // One voice, one line at a time: each line waits for the one before, so steps can act while a line is spoken.
+  // Stop empties the queue (gen moves on), so nothing queued is said after it.
+  let chain = Promise.resolve(), gen = 0, pending = 0;
+  const speak = (text, signal) => {
+    const g = gen;
+    const go = () => (g !== gen || signal?.aborted ? false : rawSpeak(text, signal));
+    const p = pending ? chain.then(go) : Promise.resolve(go()); // nothing being said: start now, not a tick later
+    pending++;
+    chain = p.catch(() => {}).finally(() => { pending--; });
+    return p;
+  };
+  const hush = () => { gen++; };
   const say = (text) => { if (!text) return Promise.resolve(); lastSaid = text; bus.emit('say', { text }); return Promise.resolve(speak(text)).catch(() => {}); };
   const describeStep = (s) => {
     const x = s.app && app(s.app)?.actions?.[s.action];
@@ -79,7 +88,8 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   async function builtin(step) {
     const p = step.params || {};
     switch (step.tool) {
-      case 'open_app': if (!app(p.app)) return false; await os.open?.(p.app); lastApp = p.app; return true;
+      case 'open_app': if (!app(p.app)) return true; // model noise ("the board"): nothing to open, nothing failed
+ await os.open?.(p.app); lastApp = p.app; return true;
       case 'read_screen': { const a = app(current()); await say(a ? a.read() : "You're on the board."); return true; }
       case 'where': await where(); return true;
       case 'say': await say(p.text); return true;
@@ -110,6 +120,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
       }
       case 'go_home': if (!os.home) return false; await os.home(); return true;
       case 'sound': if (!os.sound) return false; await os.sound(!!p.on); await say(p.on ? 'Sounds on.' : 'Sounds off.'); return true;
+      case 'install_app': { const r = await os.install?.(p.name); await say(r?.say || "I can't add apps here."); return !!r?.ok; }
       case 'run_workflow': return false; // handled in hear(): it becomes its own task
       default: return false;
     }
@@ -134,7 +145,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
 
   async function reservedWord(w) {
     switch (w.kind) {
-      case 'stop': choice?.resolve(null); runner.stop(); return;
+      case 'stop': hush(); choice?.resolve(null); runner.stop(); return;
       case 'take_over': choice?.resolve(null); runner.takeOver(); return;
       case 'where': await where(); return;
       case 'undo': await runner.undo(); return;
@@ -186,10 +197,9 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     }
     offer = null;
 
-    // The first sound within 300 ms of the last word: the shell's heard earcon, then "On it." if the plan is slow.
-    const ackT = ackMs >= 0 ? setTimeout(() => { bus.emit('say', { text: ACK }); acking = Promise.resolve(rawSpeak(ACK)).catch(() => {}); }, ackMs) : null;
-    let p;
-    try { p = await planFor(rest); } finally { clearTimeout(ackT); }
+    // The first sound within 300 ms of the last word: the shell's heard earcon, then "On it." while the plan runs.
+    say(ACK);
+    const p = await planFor(rest);
     if (!p.steps.length) { say(p.say || p.dropped.find((d) => d.say)?.say || "I can't do that one yet."); return { status: p.kind === 'refuse' ? 'refused' : 'unknown', say: p.say }; }
     const unsaid = p.dropped.find((d) => d.say);
     if (unsaid) say(unsaid.say);
@@ -229,11 +239,11 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   }
   /** At boot: wake the server and the model, and list the fixed lines the shell can turn into audio ahead of time. */
   async function warm() {
-    plan("What's on today", describeRegistry(appsList()), { app: null, workflows: [] }, planOpts).catch(() => {});
+    plan('warm up', describeRegistry(appsList()), { app: null, workflows: [] }, planOpts).catch(() => {});
     return fixedLines();
   }
   function fixedLines() {
-    const lines = new Set([ACK, 'Done.', 'Not sent.', 'Undone.', 'Nothing to undo.', 'Yes, or no?', 'Check your fingerprint.', 'Stopped.']);
+    const lines = new Set([ACK, 'Done.', 'Not sent.', 'Undone.', 'Nothing to undo.', 'Yes, or no?', 'Check your fingerprint.', 'Stopped.', 'Sent.', 'Not paid.', "I didn't catch how to do that."]);
     for (const a of appsList()) for (const x of Object.values(a.actions || {})) if (x.doing) lines.add(x.doing);
     return [...lines];
   }
