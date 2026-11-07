@@ -69,6 +69,8 @@ test('calendar: "Move lunch with Mum to Wednesday" is free, moved, verified, off
   assert.deepEqual(p.s().lastMoved, { id: 'lunch', from: 'Tuesday', to: 'Wednesday', time: '12:30' });
   assert.equal(p.last('step:verified').action, 'calendar__move');
   assert.equal(calendar.place().next, 'invite');
+  assert.equal(p.root.querySelector('#cal-day-Wednesday').getAttribute('aria-pressed'), 'true', 'the event\'s day stays pressed while it is open');
+  assert.equal(p.root.querySelector('mark').textContent, 'Wednesday');
   await calendar.actions.move.undo(p.ctxFor(calendar));
   assert.equal(ev(p.s(), 'lunch').day, 'Tuesday');
   // the verify is the app's truth: a state where it didn't move fails with a reason
