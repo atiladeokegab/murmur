@@ -5,6 +5,7 @@
 // It covers the demo script (spec §6) and the eval's utterances; anything else is said, never guessed.
 
 import { whoAmI, hereLine } from '../lib/profile.js';
+import { photoOf } from '../apps/gallery/photos.js';
 import { SEP } from './plan.js';
 
 const SYN = {
@@ -236,6 +237,22 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:run|start|do)\s+(.+)$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'run_workflow', params: { name: m[1] } }]);
   if (/what (?:do you|does murmur) (?:know|remember) about me|what murmur knows about me/i.test(t)) return task([{ tool: 'recall', params: {} }]);
 
+  // Gallery: "send Mum the photo from the beach" is the photo shown, then Messages' own draft and send (its gate asks once)
+  const PIC = '(?:photo|picture|pic|snap)';
+  if ((m = t.match(new RegExp(`^(?:send|share|text)\\s+(\\w+)\\s+(?:the|my|a|that)\\s+(?:${PIC}\\s+(?:from|of|at)\\s+(?:the\\s+)?(.+)|(.+?)\\s+${PIC}|last ${PIC}|${PIC})$`, 'i'))) ||
+      (m = t.match(new RegExp(`^(?:send|share)\\s+(?:the|my|a|that)\\s+(?:(.+?)\\s+)?${PIC}(?:\\s+(?:from|of)\\s+(?:the\\s+)?(.+?))?\\s+(?:to|with)\\s+(\\w+)$`, 'i')))) {
+    const [who, what] = m.length === 4 && /^(?:send|share)\s+(?:the|my|a|that)\s/i.test(t) ? [m[3], m[1] || m[2]] : [m[1], m[2] || m[3]];
+    const ph = photoOf(what);
+    return task([step('gallery', ['show'], { photo: ph.id }), step('messages', ['openChat', 'open'], { who: name(who) }),
+      step('messages', ['reply'], { text: `Photo: the ${ph.short} photo. ${ph.caption[0].toUpperCase()}${ph.caption.slice(1)}.` }), step('messages', ['send'])]);
+  }
+  if ((m = t.match(new RegExp(`^(?:show|open|find|pick|choose|get)\\s+(?:me\\s+)?(?:my|the|a)\\s+(?:(last|latest|newest|most recent)\\s+)?${PIC}(?:\\s+(?:from|of)\\s+(?:the\\s+)?(.+?))?(?:\\s+(?:from|in)\\s+(?:my|the)\\s+gallery)?$`, 'i')))) {
+    if (!m[1] && !m[2] && /^(?:pick|choose)/i.test(t)) return task([step('gallery', ['browse'])]);
+    return task([step('gallery', ['show'], { photo: m[2] || 'last' })]);
+  }
+  if (/^(?:open|show|go to)\s+(?:me\s+)?(?:my\s+(?:gallery|photos|pictures|camera roll)|(?:the\s+)?(?:photos|pictures))$/i.test(t)) // "open the Gallery app" stays open_app
+    return task([step('gallery', ['browse'])]);
+
   // The OS's own verbs. "Open <an app's name>" opens it, before any app's own words ("open bank" is not the balance).
   if ((m = t.match(/^(?:open|go to|show)\s+(?:the\s+|my\s+)?(.+?)(?:\s+app)?$/i))) {
     const app = apps.find((a) => [a.id, a.name.toLowerCase(), a.name.toLowerCase().replace(/^(?:the|your)\s+/, '')].includes(m[1].toLowerCase()));
@@ -321,6 +338,20 @@ function plan(said, apps, context, dry) {
     return task([step('writer', ['dictate', 'write'], { text: body(text) })]);
   }
   if (/^save(?: it| that| this| the (?:note|draft|post))?(?: for (?:me|later))?$/i.test(t)) return task([{ tool: 'say', params: { text: 'Saved.' } }]);
+  // Notifications: "Check my notifications", "Any notifications from Sam?", "What did Mum send me?" read the latest 1 to 3;
+  // then "open it" or "reply" goes to that one's chat (context.notified, from the agent).
+  if (apps.some((a) => a.id === 'notifications')) {
+    if ((m = t.match(/^(?:(?:check|read|show|open|see|go through|play)\s+(?:me\s+)?(?:my\s+|the\s+)?(?:new\s+|latest\s+|recent\s+)?notifications?|(?:do i have|have i got|are there|got|is there)?\s*any\s+(?:new\s+)?notifications?|what(?:'s| is| are)?\s+(?:in\s+)?my\s+notifications?|(?:my\s+)?notifications?)(?:\s+from\s+(?:my\s+)?(.+?))?$/i)) ||
+        (m = t.match(/^what (?:did|has)\s+(?:my\s+)?(\w+)\s+(?:sent|send)(?:\s+me)?$/i))) return task([step('notifications', ['check'], m[1] ? { who: name(m[1]) } : {})]);
+    const r = context.notified?.app === 'messages' && t.match(/^(?:reply|answer|respond)(?:\s+to\s+(?:it|that|this|them|him|her))?[,:]?\s+(?!to\b)(.{2,})$/i);
+    if (r) { const n = context.notified; return task([step('messages', ['openChat', 'open'], n.id ? { id: n.id } : { who: n.who }), step('messages', ['reply', 'draft', 'write'], { text: body(r[1]) }), step('messages', ['send'])]); } // "Reply" asked "What should it say?": the answer comes back as "reply <words>"
+    const n = context.app === 'notifications' && context.notified;
+    if (n && /^(?:open|show|go to)\s+(?:it|that|this|that one|this one|the chat)$|^(?:reply|answer|respond)(?:\s+to\s+(?:it|that|this|them|him|her))?$/i.test(t)) {
+      if (n.app !== 'messages') return task([{ tool: 'open_app', params: { app: n.app } }]);
+      const open = step('messages', ['openChat', 'open'], n.id ? { id: n.id } : { who: n.who }); // the id: Sam's note never asks "Sam or Samira?"
+      return /^(?:reply|answer|respond)/i.test(t) ? { ...task([open, { tool: 'ask', params: { question: 'What should it say?' } }]), asked: 'reply' } : task([open]);
+    }
+  }
   if ((m = raw.match(/^draft\s+(?:a\s+)?(?:message|text|reply|note)\s+(?:to|for)\s+(\w+)[:,]?\s+([\s\S]+)$/i))) return msg(m[1], m[2], false);
   if ((m = raw.match(/^(?:tell|message|text)\s+(\w+)[:]\s+([\s\S]+)$/i))) return msg(m[1], m[2], true);
   if ((m = t.match(/^(?:send|text)\s+(\w+)\s+a\s+(?:message|text|note)\s+(?:saying|that|to say)?\s*(.+)$/i)) ||

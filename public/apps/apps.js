@@ -13,6 +13,7 @@ export default [
   'uber',
   'deliveroo',
   'maps',
+  'gallery',
   'places',
   'weather',
   'clock',
@@ -23,4 +24,5 @@ export default [
   'sounds',
   'netflix',
   'youtube',
+  'notifications',
 ];

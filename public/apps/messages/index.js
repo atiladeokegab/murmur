@@ -127,7 +127,7 @@ const app = {
       params: { type: 'object', properties: {} },
       gate: 'send',
       hint: 'Send is the button right after the reply box',
-      readback: (st) => `Send '${String(st.draft || 'nothing yet').trim().replace(/[.!]+$/, '')}' to ${M.chatOf(st)?.name || 'no one'}?`,
+      readback: (st) => { const ph = /^Photo: (the .+? photo)\./.exec(st.draft || ''); return ph ? `Send ${ph[1]} to ${M.chatOf(st)?.name || 'no one'}?` : `Send '${String(st.draft || 'nothing yet').trim().replace(/[.!]+$/, '')}' to ${M.chatOf(st)?.name || 'no one'}?`; }, // a photo from Gallery
       done: () => (s.lastSent ? `Sent to ${M.chatOf(s, s.lastSent.to)?.name}.` : M.read(s)),
       async run(p, ctx) { await ctx.tap(q('#msg-send')); await sending; },
       verify: (st) => (!!st.draft && st.lastSent?.text === st.draft && st.lastSent.to === st.currentChat) || 'It did not send.',
