@@ -20,7 +20,7 @@ const PLACES = [
     route: ['left out of the door', 'walk to the corner', 'the door is on your right'], open: '07:30', close: '17:00' },
 ];
 
-let root = null, places = [], open = null, view = 'list';
+let root = null, osSay = null, places = [], open = null, view = 'list';
 
 // ---------- plain helpers (pure: verify and more use them on state) ----------
 const cap = (s) => s.replace(/^./, (c) => c.toUpperCase());
@@ -42,7 +42,7 @@ const dist = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1).replace(/\.0$/, '')} k
 const nearest = (list) => list.slice().sort((a, b) => a.metres - b.metres).slice(0, 3);
 
 export function farLine(p) {
-  return `A ${p.walk}-minute walk${p.walk > 20 && p.bus ? `, or ${p.bus.mins} minutes on bus ${p.bus.n}` : ''}.`;
+  return `${/^(8|11|18)$|^8\d$/.test(String(p.walk)) ? 'An' : 'A'} ${p.walk}-minute walk${p.walk > 20 && p.bus ? `, or ${p.bus.mins} minutes on bus ${p.bus.n}` : ''}.`;
 }
 export const routeLine = (p) => `${cap(p.route.join(', '))}.`;
 export function hoursLine(p, now = NOW) {
@@ -70,13 +70,15 @@ function el(tag, props = {}, ...kids) {
 }
 const $ = (id) => root.querySelector(`#${id}`);
 function btn(id, text, onClick, why) {
-  const b = el('button', { type: 'button', id, className: 'app-btn' }, el('span', { className: 'app-title', textContent: text }));
-  if (why) b.append(el('span', { className: 'app-why', textContent: why }));
+  // 4vw side padding: "Opening hours" stays on one line at 400%, as in Messages.
+  const b = el('button', { type: 'button', id, className: 'app-btn', style: 'padding-inline: clamp(0.25rem, 4vw, 1rem)' }, el('span', { className: 'app-title', textContent: text }));
+  if (why) { b.append(el('span', { className: 'app-why', textContent: why })); b.setAttribute('aria-label', `${text}. ${why}`); } // else the name runs together
   b.addEventListener('click', onClick);
   return b;
 }
 const cur = () => places.find((p) => p.id === open) ?? null;
-const go = (id, v) => { open = id; view = v; render(); };
+// A person's own tap hears the answer too; the agent's taps are said through ctx.say.
+const go = (id, v, e) => { open = id; view = v; render(); if (e?.isTrusted) osSay?.(app.read()); };
 const items = (lines) => el('ul', { className: 'app-list' }, ...lines.map((t) => el('li', { className: 'app-place', textContent: t })));
 
 function render() {
@@ -87,16 +89,18 @@ function render() {
       : view === 'hours' ? items([hoursLine(p), p.open ? `${spoken(p.open)} to ${spoken(p.close)}, every day.` : 'Ring first.'])
         : items([farLine(p), `${cap(dist(p.metres))}.`, p.bus ? `Bus ${p.bus.n}: ${p.bus.mins} minutes, every ${p.bus.every} minutes.` : 'No bus needed.']);
     body = [el('h3', { id: 'places-place-h', className: 'app-h', tabIndex: -1, textContent: cap(p.name) }), facts,
-      btn('places-far', 'How far', () => go(p.id, 'far')),
-      btn('places-way', 'Route', () => go(p.id, 'route')),
-      btn('places-hours', 'Opening hours', () => go(p.id, 'hours')),
-      btn('places-back', 'All places', () => go(null, 'list'))];
+      btn('places-far', 'How far', (e) => go(p.id, 'far', e)),
+      btn('places-way', 'Route', (e) => go(p.id, 'route', e)),
+      btn('places-hours', 'Opening hours', (e) => go(p.id, 'hours', e)),
+      btn('places-back', 'All places', (e) => go(null, 'list', e))];
   } else {
     const list = view === 'nearby' ? nearest(places) : places;
     body = [el('h3', { id: 'places-list-h', className: 'app-h3', tabIndex: -1, textContent: view === 'nearby' ? 'Nearest three' : 'All places' }),
-      el('ul', { id: 'places-list', className: 'app-list' }, ...list.map((x) => el('li', {}, btn(`places-${x.id}`, cap(x.name), () => go(x.id, 'far'), farLine(x)))))];
+      el('ul', { id: 'places-list', className: 'app-list' }, ...list.map((x) => el('li', {}, btn(`places-${x.id}`, cap(x.name), (e) => go(x.id, 'far', e), farLine(x)))))];
   }
+  const had = root.contains(root.ownerDocument.activeElement); // keep a screen reader's place when the body is replaced
   $('places-body').replaceChildren(...body);
+  if (had) $(p ? 'places-place-h' : 'places-list-h').focus?.();
 }
 
 // ---------- the app ----------
@@ -122,10 +126,10 @@ const app = {
   id: 'places',
   name: 'Places',
 
-  async mount(r) {
-    root = r;
+  async mount(r, os) {
+    root = r; osSay = os?.say || null;
     root.append(el('h2', { id: 'places-h', textContent: 'Places' }),
-      btn('places-nearby', "What's nearby", () => go(null, 'nearby')),
+      btn('places-nearby', "What's nearby", (e) => go(null, 'nearby', e)),
       el('div', { id: 'places-body', className: 'app-body' }));
     places = PLACES.map((p) => ({ ...p }));
     render();
