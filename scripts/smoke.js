@@ -54,7 +54,7 @@ try {
   for (let i = 0; ; i++) {
     try { await get('/health'); break; } catch { if (i > 50) throw new Error('server did not start'); await new Promise((r) => setTimeout(r, 100)); }
   }
-  assert.deepEqual(await (await get('/health')).json(), { ok: true, provider: 'demo', live: false, tts: false });
+  assert.deepEqual(await (await get('/health')).json(), { ok: true, provider: 'demo', live: false, tts: false, gpt: false });
   assert.equal((await post('/api/live-token', {})).status, 503, 'no live without a key');
   assert.equal((await post('/api/tts', { text: 'hi' })).status, 503, 'no tts without a key');
   const menu = await (await post('/api/menu', { part: 'evening', top: 'Read my notes', moved: ['Order beans'] })).json();
