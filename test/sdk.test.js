@@ -83,6 +83,7 @@ test('hello mounts with a focusable heading, a labelled box and named controls',
   assert.equal(controlName(root.querySelector('#hello-send')), 'Send to Sam');
   // the house field, whose min-height (4.5em) keeps the box well over 44 px; a bare textarea was 36 px
   assert.equal(root.querySelector('#hello-box').className, 'app-field');
+  assert.equal(root.querySelector('#hello-send').className, 'app-btn primary', 'the house button, 64 px; a bare one was 29 px');
   const css = readFileSync(new URL('../public/app.css', import.meta.url), 'utf8');
   assert.match(css, /\.app-field \{[^}]*min-height: 4\.5em/);
 });
