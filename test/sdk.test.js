@@ -142,6 +142,21 @@ test('bad params, unknown tools and Stop all fail cleanly', async () => {
   assert.deepEqual([r.ok, r.stopped, r.reason], [false, true, 'Stopped.']);
 });
 
+test('ctx.choose returns the chosen object and records it; ctx.say waits for the voice and stops on Stop', async () => {
+  const bus = createBus(); const doc = fakeDocument(); const root = doc.createElement('section'); doc.body.append(root);
+  const spoken = [];
+  const controller = new AbortController();
+  const ctx = createCtx({ app: { id: 'x', name: 'X' }, root, bus, kv: null, cursor: null, ask: async () => false, signal: controller.signal,
+    choose: async ({ choices }) => choices.indexOf('Samira'),
+    speak: async (text) => { spoken.push(text); if (spoken.length === 2) controller.abort(); } });
+  const picked = await ctx.choose('Sam or Samira?', [{ label: 'Sam', id: 'sam' }, { label: 'Samira', id: 'samira' }]);
+  assert.deepEqual(picked, { label: 'Samira', id: 'samira' });
+  assert.deepEqual(bus.log.at(-1), { name: 'ask', app: 'x', question: 'Sam or Samira?', choices: ['Sam', 'Samira'], result: 'Samira', t: bus.log.at(-1).t });
+  const read = async () => { for (const s of ['One.', 'Two.', 'Three.']) await ctx.say(s); };
+  await assert.rejects(read(), { name: 'AbortError' });
+  assert.deepEqual(spoken, ['One.', 'Two.']);
+});
+
 test('ctx refuses controls outside the app and things that are not controls', async () => {
   const { ctxFor, registry, doc, roots } = await phone();
   const ctx = ctxFor(registry.get('hello'));

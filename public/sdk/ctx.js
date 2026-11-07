@@ -21,9 +21,11 @@ const stopped = () => Object.assign(new Error('Stopped'), { name: 'AbortError' }
  * @param {object} o.kv       from appKv(app.id)
  * @param {object} o.cursor   { moveTo(el, name): Promise, hide() } from createCursor()
  * @param {function} o.ask    host's ask-first sheet: ({app, gate, readback}) => Promise<boolean>
+ * @param {function} [o.choose] host's choice sheet: ({app, question, choices: [label]}) => Promise<index | null>
+ * @param {function} [o.speak]  the voice: (text, signal) => Promise that settles when the sentence has been said
  * @param {AbortSignal} [o.signal] Stop aborts it; every ctx call after that throws AbortError
  */
-export function createCtx({ app, root, bus, kv, cursor, ask, signal }) {
+export function createCtx({ app, root, bus, kv, cursor, ask, choose = async () => null, speak = async () => {}, signal }) {
   const live = () => { if (signal && signal.aborted) throw stopped(); };
   const own = (el, what) => {
     if (!el || !root.contains(el)) throw new Error(`${app.name}: the ${what} isn't on screen.`);
@@ -47,7 +49,25 @@ export function createCtx({ app, root, bus, kv, cursor, ask, signal }) {
       el.value = String(text);
       el.dispatchEvent(new Event('input', { bubbles: true }));
     },
-    say(text) { bus.emit('say', { app: app.id, text: String(text) }); },
+    /** Says one sentence and settles when it has been said; rejects with AbortError on Stop. */
+    async say(text) {
+      live();
+      bus.emit('say', { app: app.id, text: String(text) });
+      await speak(String(text), signal);
+      live();
+    },
+    /**
+     * Ask the person to pick one ("Sam or Samira?"). choices: [{ label, ...anything }].
+     * Resolves to the chosen choice object, or null when they said no or none.
+     */
+    async choose(question, choices) {
+      live();
+      const i = await choose({ app: app.id, question, choices: choices.map((c) => c.label) });
+      const picked = Number.isInteger(i) && choices[i] ? choices[i] : null;
+      bus.emit('ask', { app: app.id, question, choices: choices.map((c) => c.label), result: picked ? picked.label : null });
+      live();
+      return picked;
+    },
     /** The ask-first sheet. The runner uses this for every gate; an app may use it for its own choices. */
     async confirm(gate, readback) {
       live();

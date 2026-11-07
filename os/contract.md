@@ -64,13 +64,14 @@ and verify, plus a gate from the list.
 
 ## 3. ctx: the agent's hands
 
-`createCtx({ app, root, bus, kv, cursor, ask, signal })`. The agent builds one per step. Apps only receive it.
+`createCtx({ app, root, bus, kv, cursor, ask, choose, speak, signal })`. The agent builds one per step. Apps only receive it.
 
 | Call | Does |
 |---|---|
 | `await ctx.tap(el, name?)` | Refuses anything outside this app's root, anything that is not a control, and anything disabled. Emits `tap {app, control}`, moves the amber ring onto the control (220 ms glide, 0 with reduced motion) and clicks it. `name` defaults to the control's accessible name |
-| `await ctx.type(el, text)` | Into a textarea or input inside the root: focus, set the value, fire `input`. Call `tap` first so the ring shows where |
-| `ctx.say(text)` | Emits `say {app, text}`. The voice layer decides who speaks it (Murmur or the screen reader) |
+| `await ctx.type(el, text)` | Into a textarea or input inside the root: focus, set `el.value`, dispatch a bubbling `input` event (so apps listen to `input`). Call `tap` first so the ring shows where |
+| `await ctx.say(text)` | Emits `say {app, text}` (the record: status region, Inside), then awaits the host's `speak(text, signal)`, which settles when the sentence has been said. Rejects with `AbortError` on Stop, so a sentence-by-sentence read loop stops by itself |
+| `await ctx.choose(question, choices)` | Ambiguity ("Sam or Samira?"). `choices` is `[{ label, ...yourData }]`. Resolves to the chosen object, or `null` if none. Emits `ask {app, question, choices, result}`. On `null`, throw an Error with the reason ("No one chosen.") so the step fails in words |
 | `await ctx.confirm(gate, readback)` | The ask-first sheet. Resolves true or false and emits `confirm {app, gate, readback, result}`. The runner calls it for every gate. An app calls it only for its own choice inside an action |
 | `ctx.kv` | This app's storage: `get(k)`, `set(k, v)` (undefined deletes), `all()`, all async. Area `app.<id>` on the browser-kv port (localStorage key `murmur:app.<id>:<k>`) |
 | `ctx.root`, `ctx.signal` | The app's section, and the Stop signal. After Stop, every ctx call throws `AbortError` |
@@ -134,6 +135,7 @@ plain JSON.
 | `step:verified` | `{ task?, action, app, n, of, ms }` | runAction |
 | `step:failed` | `{ task?, action, app?, n, of, reason, cancelled?, stopped? }` | runAction, agent |
 | `confirm` | `{ app, gate, readback, result }` | ctx.confirm |
+| `ask` | `{ app?, question, choices?, result }` | ctx.choose, agent (OS tool `ask`) |
 | `say` | `{ app?, text }` | ctx.say, agent |
 | `place` | `{ app, where, item?, n?, of?, next? }` | runAction, agent (`where`, open_app) |
 | `memory` | `{ observation }` \| `{ proposal }` \| `{ workflow }` | agent (Librarian) |
@@ -169,6 +171,11 @@ comes from `task:done.ms`, measured from the offer, or from the utterance for a 
     line per app keeps merges trivial.
 
 Also decided:
+- **Speech is a call and the bus is the record** (rev 2, 12:55). Whoever wants a sentence heard calls the voice's
+  `speak(text, signal)`, through `ctx.say` for apps and directly for the agent. The `say` event only records it.
+  The voice layer never speaks because it heard a `say` event, so nothing is said twice.
+- **Ambiguity is resolved inside `run` with `ctx.choose`** (rev 2). It is not a special return value, so
+  `runAction` still verifies every step.
 - Ids have no underscores.
 - `seed()` is idempotent, and `reset()` wipes and then calls seed.
 - A person's own tap on a gated control (for example Send) is their yes. The gate applies to the agent.
