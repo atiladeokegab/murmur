@@ -102,7 +102,7 @@ export async function removeApp(id, o, confirm = o.confirm) {
   const app = o.registry.get(id);
   if (!app) return { ok: false, id, say: "That app isn't on your phone." };
   if (!(await installed(o)).some((x) => x.id === id)) return { ok: false, id, say: `${app.name} came with the phone, so it stays.` };
-  if (!(await confirm({ app: id, gate: 'delete', readback: `Remove ${app.name} from your phone?` }))) return { ok: false, id, cancelled: true, say: 'Kept it.' };
+  if ((await confirm({ app: id, gate: 'delete', readback: `Remove ${app.name} from your phone?` })) !== true) return { ok: false, id, cancelled: true, say: 'Kept it.' };
   await uninstallApp(id, o);
   return { ok: true, id, say: `Removed ${app.name}.` };
 }
