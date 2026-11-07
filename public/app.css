@@ -441,7 +441,8 @@ body:has(dialog[open]) .agent-cursor { visibility: hidden; }
   .done .undo { min-height: 64px; }
   .work:has(.done:not([hidden])) .slot-a { padding: 0.5rem 0.6rem 0; }
   .work .done-line { -webkit-line-clamp: 4; }
-  .work, #apps { --fs-step: 1rem; --fs-place: 0.75rem; --fs-title: 0.875rem; --fs-sheet: 0.75rem; --fs-why: 0.625rem; --fs-h1: 1rem; --fs-sheet-h: 1rem; padding-inline: 6px; }
+  .work { position: static; } /* big text: the panel scrolls with the page, so the app below it can be reached */
+  .work, #apps { --fs-step: 1rem; --fs-place: 0.75rem; --fs-title: 0.875rem; --fs-sheet: 0.75rem; --fs-why: 0.625rem; --fs-h1: min(1rem, 16cqi); --fs-sheet-h: 1rem; padding-inline: 6px; }
   .app-btn.primary, .done .undo { min-height: 64px; }
 }
 
@@ -450,10 +451,10 @@ body:has(dialog[open]) .agent-cursor { visibility: hidden; }
 @media (prefers-reduced-motion: no-preference) {
   dialog[open] { transition: translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 140ms ease-out; }
   @starting-style { dialog[open] { translate: 0 2.5rem; opacity: 0; } }
-  .app:not([hidden]), #board-view:not([hidden]) { transition: translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease-out; }
-  @starting-style { .app:not([hidden]), #board-view:not([hidden]) { translate: 0 0.75rem; opacity: 0.4; } }
+  .app:not([hidden]), #board-view:not([hidden]) { transition: translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  @starting-style { .app:not([hidden]), #board-view:not([hidden]) { translate: 0 0.75rem; } } /* slide only: a fade from 0.4 reads as a black frame on the dark page */
 }
 @media (prefers-reduced-motion: reduce) {
-  dialog[open], .app:not([hidden]) { transition: opacity 120ms linear; }
-  @starting-style { dialog[open], .app:not([hidden]) { opacity: 0.4; } }
+  dialog[open] { transition: opacity 120ms linear; }
+  @starting-style { dialog[open] { opacity: 0.4; } }
 }
