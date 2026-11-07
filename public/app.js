@@ -8,6 +8,7 @@ import { sentences, whereAmI, replaceWord } from './lib/notes.js';
 import { createLive, playPcm, stopAudio, audioOut } from './live.js';
 import * as passkey from './passkey.js';
 import { SIZES, THEMES, readLook, writeLook, applyLook } from './look.js';
+import { recogniser } from './lib/gestures.js';
 
 const $ = (s) => document.querySelector(s);
 function el(tag, props = {}, ...kids) {
@@ -408,6 +409,7 @@ export function act({ say = '', action } = {}) {
 // ---------- keys: 1 to 6 press tiles, Space held is talk ----------
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && dialog.open) { e.preventDefault(); closeSheet(); return; }
+  if (e.key === 'Escape' && look.nolook) { e.preventDefault(); setNoLook(false); return; }
   if (e.target.closest('input, textarea, dialog')) return;
   if (e.code === 'Space' && !e.repeat && e.target === document.body) { e.preventDefault(); hold(true); }
   const n = Number(e.key);
@@ -458,6 +460,8 @@ async function openLook(focusKey) {
       btn('voice', "Murmur's voice", () => { look.voice = !look.voice; store.set('look', look);
         status.textContent = look.voice ? "Murmur's voice is on." : "Murmur's voice is off. I'll show my lines here.";
         if (look.voice) speak(status.textContent); openLook('voice'); }, look.voice)),
+    group('Without looking',
+      btn('nolook', 'No-look mode', () => { closeSheet(); setNoLook(true); }, !!look.nolook)),
     group('Learning',
       btn('learn', paused ? 'Start learning again' : 'Stop learning', async () => {
         try { await librarian.setMemoryPaused(!paused); } catch { /* stub */ }
@@ -489,6 +493,68 @@ function resetDayOne() {
 }
 $('#look-link').addEventListener('click', (e) => { e.preventDefault(); openLook(); });
 
+// ---------- no-look mode (screen reader off): tap = Now, swipe = next, double tap = do it, hold = talk ----------
+const nl = $('#nolook');
+let cursor = 0;
+function earcon(kind) {
+  try {
+    const ctx = audioOut(), t = ctx.currentTime;
+    const notes = { move: [660], do: [523, 784], hold: [330], edge: [220], end: [784, 523] }[kind];
+    notes.forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t + i * 0.09); g.gain.exponentialRampToValueAtTime(0.25, t + i * 0.09 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.09 + 0.08);
+      o.start(t + i * 0.09); o.stop(t + i * 0.09 + 0.09);
+    });
+  } catch { /* no audio: speech still carries it */ }
+  if (navigator.vibrate) navigator.vibrate({ move: 10, do: [20, 40, 20], hold: 30, edge: [10, 30, 10, 30, 10], end: 15 }[kind]);
+}
+function point(i) {
+  const tiles = [...menuEl.querySelectorAll('.tile')];
+  menuEl.querySelector('.tile.cursor')?.classList.remove('cursor');
+  cursor = Math.max(0, Math.min(tiles.length - 1, i));
+  tiles[cursor].classList.add('cursor');
+  tiles[cursor].scrollIntoView({ block: 'center' });
+  const t = byId(tiles[cursor].dataset.id);
+  const why = tiles[cursor].querySelector('.why')?.textContent || '';
+  speak(cursor === 0 ? `Now: ${t.title}. ${why}. Double tap to do it.` : `${t.title}. ${why}.`);
+}
+const gestures = recogniser({
+  tap() { if (dialog.open) { earcon('move'); speak(status.textContent); } else { earcon('move'); point(0); } },
+  swipe(dir) {
+    if (dialog.open) { earcon('end'); closeSheet(); speak('Closed. Tap for Now.'); return; }
+    const step = dir === 'right' || dir === 'down' ? 1 : -1;
+    const last = menuEl.querySelectorAll('.tile').length - 1;
+    if (cursor + step < 0 || cursor + step > last) { earcon('edge'); speak(step > 0 ? "That's the last one." : "That's Now, the first one."); return; }
+    earcon('move'); point(cursor + step);
+  },
+  doubleTap() {
+    earcon('do');
+    if (dialog.open) { const y = body.querySelector('.choice.yes'); if (y) y.click(); else speak(status.textContent); return; }
+    const tile = menuEl.querySelectorAll('.tile')[cursor];
+    if (tile) runTile(tile.dataset.id, tile, 'nolook');
+  },
+  holdStart() { earcon('hold'); hold(true); },
+  holdEnd() { hold(false); },
+});
+nl.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('button')) return;
+  e.preventDefault(); audioOut(); nl.setPointerCapture(e.pointerId); gestures.down(e.clientX, e.clientY, e.timeStamp);
+});
+nl.addEventListener('pointermove', (e) => gestures.move(e.clientX, e.clientY));
+nl.addEventListener('pointerup', (e) => gestures.up(e.clientX, e.clientY));
+nl.addEventListener('pointercancel', () => gestures.cancel());
+nl.addEventListener('contextmenu', (e) => e.preventDefault()); // a long press is talk, not a menu
+function setNoLook(on) {
+  look.nolook = on; store.set('look', look);
+  nl.hidden = !on;
+  document.documentElement.classList.toggle('no-look', on);
+  if (on) { cursor = 0; earcon('do'); speak('No-look mode. Tap anywhere for Now, swipe for the next, double tap to do it, hold to talk.'); }
+  else { menuEl.querySelector('.tile.cursor')?.classList.remove('cursor'); speak('No-look mode is off.'); menuEl.querySelector('.tile')?.focus(); }
+}
+$('#nolook-exit').addEventListener('click', () => setNoLook(false));
+
 // ---------- demo control: a week of use (Your look calls this) ----------
 export async function loadWeek() {
   const before = { day: 'seed', order: TILES.filter((t) => t.start).map((t) => t.id) };
@@ -508,7 +574,8 @@ export async function loadWeek() {
 new ResizeObserver(([e]) => document.documentElement.style.setProperty('--footer-h', `${Math.ceil(e.borderBoxSize[0].blockSize)}px`))
   .observe(document.querySelector('footer'));
 await rerank();
-window.murmur = { act, ask, loadWeek, runTile, speak, librarian, look };
+window.murmur = { act, ask, loadWeek, runTile, speak, librarian, look, setNoLook };
+if (look.nolook) { nl.hidden = false; document.documentElement.classList.add('no-look'); }
 try {
   const r = await fetch('/api/menu', { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ part: daypart(new Date()), top: byId(order[0]).title, moved: [...menuEl.querySelectorAll('.moved .title')].map((n) => n.textContent) }) });

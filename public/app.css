@@ -57,6 +57,7 @@
   --h-talk: 88px;
   --h-btn: 96px;
   --h-link: 64px;
+  --nl-room: 40svh;         /* no-look: room so the band never hides the pointed tile */
   --w-column: 720px;
   --r-now: 6px;
   --r-cell: 3px;
@@ -275,3 +276,24 @@ dialog { container: sheet / inline-size; }
   .sheet .row { flex-direction: column; gap: 6px; }
   .sheet textarea { padding: 4px 6px; }
 }
+
+/* ---------- no-look mode ---------- */
+.nolook {
+  position: fixed; inset: 0 0 var(--footer-h, 160px) 0; z-index: 6; touch-action: none; user-select: none; -webkit-user-select: none;
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+.nolook[hidden] { display: none; }
+.nl-band {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.5rem var(--gutter);
+  background: var(--c-bar); border-top: var(--bw-talk) solid var(--c-accent);
+}
+.nl-help { flex: 1 1 12rem; margin: 0; font-size: var(--fs-why); color: var(--c-ink); }
+.nl-band .choice { flex: 0 1 auto; }
+.no-look main { padding-bottom: var(--nl-room); }
+.nolook { container: nl / inline-size; }
+@container nl (max-width: 15em) {
+  .nl-help { display: none; }
+  .nl-band { padding: 4px 8px; }
+  .nl-band .choice { flex: 1 1 100%; min-height: 64px; font-size: 0.75rem; padding: 2px 6px; }
+}
+.tile.cursor { outline: var(--ring) solid var(--c-focus); outline-offset: calc(var(--ring) * -1); background: var(--c-board-press); }
