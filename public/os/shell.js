@@ -331,6 +331,7 @@ function answerSheet(value) {
   return pending.answer(value) !== false;
 }
 function showSheet(kind, q, answer) {
+  if (pending) pending.answer(pending.kind === 'confirm' ? false : null); // a sheet replaced before its answer is a no, so a waiting pay is cancelled
   pending = { kind, ...q, at: performance.now(), answer };
   ding('gate');
   if (kind === 'confirm') {
