@@ -43,7 +43,11 @@ for (const cancel of ['Stop', 'Back']) {
       await page.waitForTimeout(550); // the agent-style confirm ignores a yes during its first 0.5 seconds
       await page.locator('#sheet-yes').click();
       await page.waitForFunction(() => typeof window.finishAuthentication === 'function');
-      if (cancel === 'Stop') await page.evaluate(() => murmur.host.verbs.stop());
+      if (cancel === 'Stop') await page.evaluate(() => {
+        murmur.host.verbs.stop();
+        const app = murmur.registry.list()[0];
+        murmur.host.ctxFor(app).confirm('send', 'Keep this new confirmation open.').catch(() => {});
+      });
       else {
         await page.goBack();
         await page.waitForFunction(() => !document.querySelector('#sheet').open);
@@ -59,10 +63,8 @@ for (const cancel of ['Stop', 'Back']) {
       });
       await page.waitForFunction(() => window.approval !== 'pending');
       assert.equal(await page.evaluate(() => window.approval), false);
-      if (cancel === 'Back') {
-        assert.ok(await page.locator('#sheet').isVisible());
-        assert.equal(await page.locator('#sheet-readback').textContent(), 'Keep this new confirmation open.');
-      }
+      assert.ok(await page.locator('#sheet').isVisible());
+      assert.equal(await page.locator('#sheet-readback').textContent(), 'Keep this new confirmation open.');
     } finally { await page.close(); }
   });
 }
