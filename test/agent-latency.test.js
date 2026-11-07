@@ -18,12 +18,14 @@ async function setup(o = {}) {
     planOpts: { offline: true }, speak: async (t) => { spoken.push(t); }, ...o });
   return { ...p, agent, spoken };
 }
-test('"On it." is the first thing said on every task, and the steps act while it is spoken', async () => {
+test('"On it." is the first thing said within 300 ms when no question comes first, and the steps act while it is spoken', async () => {
   let release;
   const slowSpeech = [];
   const s = await setup({ speak: (t) => { slowSpeech.push(t); return t === ACK ? new Promise((r) => { release = r; }) : Promise.resolve(); } });
+  const t0 = Date.now();
   const done = s.agent.hear('Make the text bigger');
-  await new Promise((r) => setTimeout(r, 20));
+  await until(() => slowSpeech.length);
+  assert.ok(Date.now() - t0 < 300, 'within 300 ms');
   assert.equal(slowSpeech[0], ACK);
   assert.equal(s.state('look').size, 150, 'the step ran while "On it." was still being said');
   assert.equal(slowSpeech.length, 1, 'the next line waits its turn');
@@ -36,7 +38,7 @@ test('Stop empties the speech queue', async () => {
   const heard = [];
   const s = await setup({ speak: (t) => { heard.push(t); return new Promise((r) => { release = r; }); } });
   s.agent.hear('Make the text bigger');
-  await new Promise((r) => setTimeout(r, 20));
+  await until(() => heard.length);
   await s.agent.hear('stop');
   release(false); await new Promise((r) => setTimeout(r, 20));
   assert.deepEqual(heard, [ACK], 'nothing queued is said after Stop');
@@ -122,7 +124,10 @@ test('a line that has started always finishes: later lines queue behind it, only
     signal?.addEventListener('abort', () => { clearTimeout(timer); fin(false); }, { once: true });
   });
   const s = await setup({ agency: () => 'ask', speak: voice });
+  const t0 = Date.now();
   const p = s.agent.hear("Text Sam I'm ten minutes late");
+  await until(() => started.length);
+  assert.ok(Date.now() - t0 < 300, 'the first sound within 300 ms');
   await until(() => started.some((t) => / or .+\?$/.test(t)));
   await s.agent.hear('Sam');
   await until(() => s.agent.gates.current);
@@ -130,7 +135,7 @@ test('a line that has started always finishes: later lines queue behind it, only
   await until(() => active === 0);
   assert.equal(most, 1, 'never two lines at once');
   assert.deepEqual(cut, [], 'no started line was cut');
-  assert.equal(started[0], ACK, '"On it." is always said, first');
-  assert.ok(started.indexOf(ACK) < started.findIndex((t) => / or .+\?$/.test(t)));
+  assert.match(started[0], / or .+\?$/, 'the question is the ack: "On it." is not said before it');
+  assert.ok(!started.includes(ACK));
   assert.equal(s.state('messages').lastSent?.to, 'sam'); // Stop emptying the queue: 'Stop empties the speech queue' above
 });
