@@ -89,3 +89,21 @@ test('TTS lines are fetched once, and a failed one is fetched again', async () =
   assert.deepEqual(await cachedTts('Done!', { fetch }), { audio: 'x', rate: 24000 });
   assert.equal(n, 3);
 });
+
+test('ctx.type types letter by letter in a browser, instantly under reduced motion', async () => {
+  const { createCtx } = await import('../public/sdk/ctx.js');
+  const seen = [];
+  const el = { value: '', readOnly: false, getAttribute: () => null, closest: () => null, matches: () => false, focus() {}, dispatchEvent() { seen.push(this.value); } };
+  const ctx = createCtx({ app: { id: 'x', name: 'X' }, root: { contains: () => true }, bus: { emit() {} }, kv: {}, cursor: {} });
+  let reduce = false;
+  globalThis.matchMedia = () => ({ matches: reduce });
+  try {
+    const t0 = Date.now();
+    await ctx.type(el, 'Hi Sam');
+    assert.deepEqual(seen, ['H', 'Hi', 'Hi ', 'Hi S', 'Hi Sa', 'Hi Sam']);
+    assert.ok(Date.now() - t0 >= 100, 'about 25 ms a letter');
+    seen.length = 0; reduce = true;
+    await ctx.type(el, 'Hi Sam');
+    assert.deepEqual(seen, ['Hi Sam']);
+  } finally { delete globalThis.matchMedia; }
+});
