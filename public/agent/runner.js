@@ -3,7 +3,7 @@
 // the task: its id, the pacing between steps, Stop, undo, the done line and task:done.
 import { runAction } from '../sdk/run.js';
 
-const CHANGES = (name) => !/^(read|open|show|list|next|whats|find|track|where|search|today)/i.test(name);
+const CHANGES = (name) => !/^(read|open|show|list|next|whats|find|track|where|search|today|balance|recent)/i.test(name);
 const DOUBLE = new Set(['stop', 'get', 'run', 'set', 'put', 'shop', 'plan', 'drop', 'swap']);
 
 /** "Open a chat" -> "Opening a chat"; for apps that left out `doing`. */
