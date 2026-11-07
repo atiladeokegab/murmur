@@ -27,6 +27,10 @@ test('"what can I do", "what can I say", "help" and "options" are reserved; insi
   }
 });
 
+test('Hello with no draft invites, it does not report an empty message', () => {
+  assert.equal(hello.read(), 'Say hello to Sam.');
+});
+
 test('every app offers at most four of its own actions, in its own order, as a person would say them', () => {
   for (const app of APPS) {
     const line = offerLine(APPS, app.id);
