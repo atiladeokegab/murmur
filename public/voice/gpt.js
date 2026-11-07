@@ -32,8 +32,8 @@ export function createGpt(hooks) {
     pc.addTrack(mic.getTracks()[0]);
     hooks.onStream?.('mic', mic);
     dc = pc.createDataChannel('oai-events');
-    let chain = Promise.resolve();
-    dc.onmessage = (e) => { chain = chain.then(async () => { for (const m of await handleEvent(JSON.parse(e.data), hooks)) send(m); }).catch(() => {}); };
+    // Each event runs on its own: a gate's tool call waits for a yes, so a queue would block that yes behind it (Prometheus)
+    dc.onmessage = (e) => { handleEvent(JSON.parse(e.data), hooks).then((ms) => ms.forEach(send)).catch(() => {}); };
     const opened = new Promise((res, rej) => { dc.onopen = res; setTimeout(() => rej(new Error('gpt open timeout')), 8000); });
     await pc.setLocalDescription(await pc.createOffer());
     const sdp = await fetch(CALLS, { method: 'POST', body: pc.localDescription.sdp, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/sdp' } });

@@ -448,8 +448,10 @@ async function startGpt() {
     onTool: async (name, args) => { // the apps run through the agent, so /stage shows them; its lines come back for GPT to say
       const said = toUtterance(name, args);
       if (!said) return { say: "Done. I've set that up for you." };
-      const lines = collect = [];
-      try { await Promise.race([hear(said, 'voice'), new Promise((r) => setTimeout(r, 5000))]); } // a gate waits for a yes: return its question
+      const lines = []; let early, quiet;
+      const asked = new Promise((r) => { early = r; }); // a gate's question goes back to GPT at once, so the person hears it and can say yes (Prometheus)
+      collect = { push: (t) => { lines.push(t); if (t && t !== 'On it.') { clearTimeout(quiet); quiet = setTimeout(early, 600); } } };
+      try { await Promise.race([hear(said, 'voice'), asked, new Promise((r) => setTimeout(r, 5000))]); } // a gate waits for a yes: return its question
       finally { collect = null; }
       return { say: lines.filter((t) => t && t !== 'On it.').join(' ') || 'Done.' };
     },
