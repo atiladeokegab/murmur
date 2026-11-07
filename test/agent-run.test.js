@@ -168,7 +168,7 @@ test('undo works for 8 seconds after a change, then is gone', async () => {
 test('the race, then "save that as Reply to Mum", then run it', async () => {
   const s = await setup();
   await s.agent.hear("Read Mum's message");
-  assert.ok(s.spoken.includes('Lunch on Tuesday?'));
+  assert.ok(s.spoken.includes('Mum: Lunch on Tuesday?'));
   await s.agent.hear("Reply: Tuesday's fine.");
   await s.agent.hear('Change Tuesday to Wednesday');
   assert.equal(s.state('messages').draft, "Wednesday's fine.");
@@ -319,12 +319,12 @@ test("narration and who speaks: Murmur's voice or the status region, never both"
 
   const s = await setup({ agency: () => 'ask' });
   await s.agent.hear("Read Mum's message");
-  assert.deepEqual(s.spoken.slice(0, 3), ['On it.', 'Reading', 'Lunch on Tuesday?'], '"Opening the chat" is dropped: its step was done before its turn');
+  assert.deepEqual(s.spoken.slice(0, 3), ['On it.', 'Reading', 'Mum: Lunch on Tuesday?'], '"Opening the chat" is dropped: its step was done before its turn');
   const quick = await setup(); // Just do it: the step earcons carry the steps; the voice says the result
   await quick.agent.hear("Read Mum's message");
   assert.ok(!quick.spoken.includes('Opening the chat'));
-  assert.equal(quick.spoken.at(-1), 'Lunch on Tuesday?');
-  assert.equal(s.spoken.at(-1), 'Lunch on Tuesday?', 'a read ends on what was read, not a summary of the screen');
+  assert.equal(quick.spoken.at(-1), 'Mum: Lunch on Tuesday?');
+  assert.equal(s.spoken.at(-1), 'Mum: Lunch on Tuesday?', 'a read ends on what was read, not a summary of the screen');
   assert.deepEqual(s.ev('say').map((e) => e.text), s.spoken, 'every sentence heard is on the record, once');
   assert.equal(gerund('Change a word'), 'Changing a word');
   assert.equal(gerund('Stop the timer'), 'Stopping the timer');

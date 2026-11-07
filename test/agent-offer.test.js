@@ -27,7 +27,11 @@ test('"what can I do", "what can I say", "help" and "options" are reserved; insi
   }
 });
 
-test('every app offers at most four of its own actions, in its own order, in its own words', () => {
+test('Hello with no draft invites, it does not report an empty message', () => {
+  assert.equal(hello.read(), 'Say hello to Sam.');
+});
+
+test('every app offers at most four of its own actions, in its own order, as a person would say them', () => {
   for (const app of APPS) {
     let st; try { st = app.state?.(); } catch { /* not mounted: say falls back */ }
     const said = Object.values(app.actions).map((x) => spokenAs(x, st)).filter(Boolean);
