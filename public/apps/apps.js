@@ -2,4 +2,7 @@
 export default [
   'hello',
   'calendar',
+  'messages',
+  'writer',
+  'mine',
 ];
