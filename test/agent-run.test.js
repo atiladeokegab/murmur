@@ -220,7 +220,7 @@ test('"how do I…" is a dry run that speaks the hints, then does it on request'
   const before = JSON.stringify(s.state('calendar'));
   const out = await s.agent.hear('How do I move a meeting?');
   assert.equal(out.status, 'taught');
-  assert.equal(s.spoken.at(-1), `Open Calendar, then ${s.registry.get('calendar').actions.move.hint}. Shall I do it, or walk you through?`);
+  assert.equal(s.spoken.at(-1), `Open Calendar, then ${s.registry.get('calendar').actions.move.describe}. Shall I do it?`);
   assert.equal(JSON.stringify(s.state('calendar')), before);
   assert.ok(!s.ev('task:start').length);
   await s.agent.hear('do it');

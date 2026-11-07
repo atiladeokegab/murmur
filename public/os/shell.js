@@ -514,7 +514,7 @@ function where() {
   const app = current && registry.get(current);
   if (!app) { const t = tilesNow()[0]; return speak(`The board. Now: ${oneStop(t.line.title || t.app.name)}`, personal.signal); }
   const p = app.place();
-  return speak(`${oneStop([p.where, p.item, p.n && p.of ? `${p.n} of ${p.of}` : ''].filter(Boolean).join(', '))}${p.next ? ` Next: ${oneStop(p.next)}` : ''}`, personal.signal);
+  return speak(`${oneStop([p.where, p.item, p.n && p.of ? `${p.n} of ${p.of}` : ''].filter(Boolean).join(', '))}`, personal.signal);
 }
 const again = () => speak(lastLine, personal.signal);
 function takeOver() {
@@ -548,7 +548,7 @@ function setNoLook(on) {
   look.nolook = on; saveLook();
   nl.hidden = !on;
   document.documentElement.classList.toggle('no-look', on);
-  if (on) speak(handsFree ? 'No-look mode. Just tell me what you need. Say stop, or swipe down, to stop.' : 'No-look mode. Tap anywhere and tell me what you need. Swipe down to stop.', personal.signal);
+  if (on) speak('No-look mode. Just tell me what you need. Say stop to stop.', personal.signal);
   else { speak('No-look mode is off.', personal.signal); $('#board .tile')?.focus(); }
 }
 $('#nolook-exit').addEventListener('click', () => setNoLook(false));

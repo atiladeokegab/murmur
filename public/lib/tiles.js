@@ -9,34 +9,34 @@ export const CONTACTS = {
 export const TILES = [
   {
     id: 'notes', title: 'Read my notes', start: true, starter: 'Your notes, read aloud',
-    tap: 'Tap to hear them', action: { type: 'notes' },
+    tap: 'Hear them', action: { type: 'notes' },
   },
   {
     id: 'mum', title: 'Message Mum', start: true, starter: 'Read and reply',
-    tap: 'Tap to hear her message', action: { type: 'draft', to: 'mum' },
+    tap: 'Hear her message', action: { type: 'draft', to: 'mum' },
   },
   {
     id: 'bus', title: 'Bus to work', start: true, starter: 'Directions on Google Maps',
-    tap: 'Tap for the next bus', action: { type: 'link', kind: 'transit', place: 'UCL East, Stratford, London' },
+    tap: 'Next bus', action: { type: 'link', kind: 'transit', place: 'UCL East, Stratford, London' },
     say: 'Opening directions to work. The 25 leaves from the stop by the library.',
   },
   {
     id: 'ride', title: 'Ride home', start: true, starter: 'Uber, from where you are',
-    tap: 'Tap to book a ride', action: { type: 'link', kind: 'uber', place: 'Stratford, London' },
+    tap: 'Book a ride', action: { type: 'link', kind: 'uber', place: 'Stratford, London' },
     say: 'Opening Uber with home filled in. You choose the car.',
   },
   {
     id: 'beans', title: 'Order beans', start: true, starter: 'Your usual, from Hill Street Roasters',
-    tap: 'Tap to order, I ask first', action: { type: 'pay', item: 'beans' },
+    tap: 'Order, I ask first', action: { type: 'pay', item: 'beans' },
   },
   {
     id: 'sam', title: 'Call Sam', start: false, starter: 'Phone call',
-    tap: 'Tap to call', action: { type: 'link', kind: 'tel', to: 'sam' },
+    tap: 'Call', action: { type: 'link', kind: 'tel', to: 'sam' },
     say: 'Calling Sam.', habit: 'call Sam',
   },
   {
     id: 'weather', title: 'Weather', start: false, starter: 'Today, in one line',
-    tap: 'Tap to hear it', action: { type: 'say' },
+    tap: 'Hear it', action: { type: 'say' },
     say: 'Dry until two, then light rain. Eleven degrees. Take the thin coat.', habit: 'ask for the weather',
   },
 ];

@@ -274,9 +274,9 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     if (unsaid) say(unsaid.say);
 
     if (p.kind === 'teach') {
-      const lines = p.steps.map((s) => { const x = s.app && app(s.app)?.actions?.[s.action]; return x?.hint || (x ? x.describe : s.tool); });
+      const lines = p.steps.map((s) => { const x = s.app && app(s.app)?.actions?.[s.action]; return x ? x.describe : s.tool; }); // never where a button is: the person can't see it (the lead, 7 Nov)
       const apps = [...new Set(p.steps.filter((s) => s.app).map((s) => app(s.app)?.name))];
-      await say(`${['Open ' + apps.join(' and '), ...lines].join(', then ')}. Shall I do it, or walk you through?`);
+      await say(`${['Open ' + apps.join(' and '), ...lines].join(', then ')}. Shall I do it?`);
       const reg = describeRegistry(appsList());
       offer = { utterance: rest, steps: p.steps.map((s) => ({ ...s, complete: isComplete(s, reg) })) };
       return { status: 'taught', hints: lines };
