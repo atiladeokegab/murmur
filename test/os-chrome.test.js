@@ -25,7 +25,14 @@ test('every board tile gets an icon and keeps its label', async () => {
   assert.match(css, /\.tile\[data-app="calendar"\] \.what::before \{\s*content: var\(--today/);
 });
 
+test('tiles have a 2px edge from a token in every theme, and 28px titles', async () => {
+  const css = await read('os/phone-chrome.css');
+  assert.match(css, /\.tile \{ box-shadow: inset 0 0 0 var\(--bw-now\) var\(--c-edge\)/);
+  for (const theme of ['light', 'yellow']) assert.match(css, new RegExp(`:root\\[data-theme="${theme}"\\] \\{ --c-edge:`), theme);
+  assert.match(css, /--fs-tile-title: 1\.75rem/);
+});
+
 test('phone chrome uses colour tokens only', async () => {
-  const css = (await read('os/phone-chrome.css')).replace(/url\("data:[^"]*"\)/g, '');
+  const css = (await read('os/phone-chrome.css')).replace(/url\("data:[^"]*"\)/g, '').replace(/--c-[\w-]+: #[0-9A-Fa-f]{6};/g, '');
   assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|\b(black|white)\b/i);
 });
