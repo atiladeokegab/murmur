@@ -5,6 +5,7 @@
 // It covers the demo script (spec §6) and the eval's utterances; anything else is said, never guessed.
 
 import { whoAmI, hereLine } from '../lib/profile.js';
+import { photoOf } from '../apps/gallery/photos.js';
 import { SEP } from './plan.js';
 
 const SYN = {
@@ -235,6 +236,22 @@ function plan(said, apps, context, dry) {
   }
   if ((m = t.match(/^(?:run|start|do)\s+(.+)$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'run_workflow', params: { name: m[1] } }]);
   if (/what (?:do you|does murmur) (?:know|remember) about me|what murmur knows about me/i.test(t)) return task([{ tool: 'recall', params: {} }]);
+
+  // Gallery: "send Mum the photo from the beach" is the photo shown, then Messages' own draft and send (its gate asks once)
+  const PIC = '(?:photo|picture|pic|snap)';
+  if ((m = t.match(new RegExp(`^(?:send|share|text)\\s+(\\w+)\\s+(?:the|my|a|that)\\s+(?:${PIC}\\s+(?:from|of|at)\\s+(?:the\\s+)?(.+)|(.+?)\\s+${PIC}|last ${PIC}|${PIC})$`, 'i'))) ||
+      (m = t.match(new RegExp(`^(?:send|share)\\s+(?:the|my|a|that)\\s+(?:(.+?)\\s+)?${PIC}(?:\\s+(?:from|of)\\s+(?:the\\s+)?(.+?))?\\s+(?:to|with)\\s+(\\w+)$`, 'i')))) {
+    const [who, what] = m.length === 4 && /^(?:send|share)\s+(?:the|my|a|that)\s/i.test(t) ? [m[3], m[1] || m[2]] : [m[1], m[2] || m[3]];
+    const ph = photoOf(what);
+    return task([step('gallery', ['show'], { photo: ph.id }), step('messages', ['openChat', 'open'], { who: name(who) }),
+      step('messages', ['reply'], { text: `Photo: the ${ph.short} photo. ${ph.caption[0].toUpperCase()}${ph.caption.slice(1)}.` }), step('messages', ['send'])]);
+  }
+  if ((m = t.match(new RegExp(`^(?:show|open|find|pick|choose|get)\\s+(?:me\\s+)?(?:my|the|a)\\s+(?:(last|latest|newest|most recent)\\s+)?${PIC}(?:\\s+(?:from|of)\\s+(?:the\\s+)?(.+?))?(?:\\s+(?:from|in)\\s+(?:my|the)\\s+gallery)?$`, 'i')))) {
+    if (!m[1] && !m[2] && /^(?:pick|choose)/i.test(t)) return task([step('gallery', ['browse'])]);
+    return task([step('gallery', ['show'], { photo: m[2] || 'last' })]);
+  }
+  if (/^(?:open|show|go to)\s+(?:me\s+)?(?:my\s+(?:gallery|photos|pictures|camera roll)|(?:the\s+)?(?:photos|pictures))$/i.test(t)) // "open the Gallery app" stays open_app
+    return task([step('gallery', ['browse'])]);
 
   // The OS's own verbs. "Open <an app's name>" opens it, before any app's own words ("open bank" is not the balance).
   if ((m = t.match(/^(?:open|go to|show)\s+(?:the\s+|my\s+)?(.+?)(?:\s+app)?$/i))) {

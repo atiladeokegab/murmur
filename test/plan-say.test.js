@@ -236,3 +236,19 @@ test('"remind me to water the plants at 7 a.m." and friends add a calendar remin
     assert.deepEqual([x.params.title, x.params.time, x.params.day, x.params.remind], ['Water the plants', time, day, true], s);
   }
 });
+
+test('gallery routes: open, pick, last photo, and send Mum the beach photo through Messages', async () => {
+  const tools = (s) => demoPlan(s, reg, { app: null, workflows: [] }).plan.map((x) => x.tool + (x.params?.photo ? `:${x.params.photo}` : '') + (x.params?.who ? `:${x.params.who}` : '')).join(' ');
+  assert.equal(tools('Open my gallery'), 'gallery__browse');
+  assert.equal(tools('show me my last photo'), 'gallery__show:last');
+  assert.match(tools('pick a photo from my gallery'), /^gallery__(?:browse|show)/);
+  for (const s of ['send Mum the photo from the beach', 'Send the beach photo to Mum', 'share the photo from Brighton with Mum'])
+    assert.equal(tools(s), 'gallery__show:beach messages__openChat:Mum messages__reply messages__send', s);
+  const reply = demoPlan('send Mum the photo from the beach', reg, { app: null, workflows: [] }).plan[2].params.text;
+  const M = await import('../public/apps/messages/model.js');
+  const st = M.fresh(); M.open(st, 'mum'); M.setDraft(st, reply);
+  assert.equal(apps.find((a) => a.id === 'messages').actions.send.readback(st), 'Send the beach photo to Mum?');
+  const { lineOf, photoOf, PHOTOS } = await import('../public/apps/gallery/photos.js');
+  assert.equal(lineOf(photoOf('last')), 'Your photo from Saturday: you and Sam on the beach at Brighton.');
+  assert.ok(PHOTOS.length >= 6 && PHOTOS.length <= 8);
+});
