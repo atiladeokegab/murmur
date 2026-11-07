@@ -57,8 +57,19 @@ test('a trusted Call tap asks first; Yes starts the call with Hang up focus and 
   const page = await shellPage();
   try {
     await page.evaluate(async () => { await murmur.open('calls'); });
+    const before = await page.evaluate(() => ({
+      state: murmur.registry.get('calls').state(), history: murmur.agent.runner.history.length,
+    }));
     await page.locator('[data-call="mum"]').click(); // real trusted app-control activation
     const dialog = page.getByRole('dialog');
+    await dialog.waitFor();
+    assert.equal(await dialog.locator('#sheet-readback').textContent(), 'Call Mum?');
+    await dialog.locator('#sheet-no').click();
+    await page.waitForFunction(() => !document.querySelector('#sheet').open);
+    assert.deepEqual(await page.evaluate(() => ({
+      state: murmur.registry.get('calls').state(), history: murmur.agent.runner.history.length,
+    })), before, 'a hand No leaves state and history unchanged');
+    await page.locator('[data-call="mum"]').click();
     await dialog.waitFor();
     assert.equal(await dialog.locator('#sheet-readback').textContent(), 'Call Mum?');
     assert.equal(await page.evaluate(() => murmur.registry.get('calls').state().status), 'idle', 'a tap does not call before Yes');
