@@ -1,8 +1,8 @@
 // /stage: the real phone (/) and Inside (/inside) on one projector screen, plus one line that follows the task.
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
-const room = qs.get('room');
-const pass = room ? `?room=${encodeURIComponent(room)}` : ''; // Hermes' opt-in room, passed through when given
+const room = qs.get('room') || 'stage'; // a phone with no room forwards nothing, so the stage always has one
+const pass = `?room=${encodeURIComponent(room)}`;
 $('phone-frame').src = `/${pass}`;
 const inside = $('inside-frame');
 inside.src = `/inside${pass}`;
@@ -30,8 +30,8 @@ const line = (label, text) => { now.replaceChildren(Object.assign(document.creat
 const token = (() => { try { return qs.get('code') || localStorage.getItem('murmur.token'); } catch { return null; } })();
 const q = new URLSearchParams();
 if (token) q.set('t', token);
-if (room) q.set('room', room);
-const src = new EventSource(`/api/bus/stream${q.size ? `?${q}` : ''}`);
+q.set('room', room);
+const src = new EventSource(`/api/bus/stream?${q}`);
 let heard = '';
 src.onmessage = (m) => {
   let e; try { e = JSON.parse(m.data); } catch { return; }
