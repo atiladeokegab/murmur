@@ -20,7 +20,7 @@ const app = {
 
   async mount(r, os) {
     root = r; kv = os.kv;
-    box = el('textarea', { id: 'hello-box' });
+    box = el('textarea', { id: 'hello-box', className: 'app-field' });   // the house field: at least 44 px to touch at 400%
     box.addEventListener('input', () => { draft = box.value; });
     sendBtn = el('button', { type: 'button', id: 'hello-send', textContent: 'Send to Sam' });
     sendBtn.addEventListener('click', async () => {   // a person's tap is their own yes; the agent is gated by the runner

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBus, createRegistry, validate, createCtx, controlName, appKv, mountApp, loadApps, runAction, EVENTS } from '../public/sdk/index.js';
@@ -80,6 +81,10 @@ test('hello mounts with a focusable heading, a labelled box and named controls',
   assert.equal(root.querySelector('h2').tabIndex, -1);
   assert.equal(controlName(root.querySelector('#hello-box')), 'Your message to Sam');
   assert.equal(controlName(root.querySelector('#hello-send')), 'Send to Sam');
+  // the house field, whose min-height (4.5em) keeps the box well over 44 px; a bare textarea was 36 px
+  assert.equal(root.querySelector('#hello-box').className, 'app-field');
+  const css = readFileSync(new URL('../public/app.css', import.meta.url), 'utf8');
+  assert.match(css, /\.app-field \{[^}]*min-height: 4\.5em/);
 });
 
 test('a step runs through the cursor and is verified by the app, then says where you are', async () => {
