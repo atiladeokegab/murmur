@@ -15,6 +15,7 @@ import { installToken } from '../agent/token.js';
 import { play, buzz, mute, unmute, isMuted, EARCON_NAMES } from '../sound/index.js';
 import { cachedTts, warmTts } from '../voice/tts-cache.js';
 import { createPhone } from './phone.js';
+import { talkAnywhere } from './talk.js';
 installToken(); // wraps fetch before any /api call
 
 const $ = (s) => document.querySelector(s);
@@ -51,7 +52,8 @@ const status = $('#say');
 const caps = QUIET ? {} : await fetch('/health').then((r) => r.json()).catch(() => ({}));
 let token = 0, lastLine = '';
 const readerSpeaks = () => look.speaker === 'reader';
-function applySpeaker() { status.setAttribute('aria-live', readerSpeaks() ? 'polite' : 'off'); }
+// Screen reader mode: TalkBack and VoiceOver take the taps, so a Talk button comes first in the reading order.
+function applySpeaker() { status.setAttribute('aria-live', readerSpeaks() ? 'polite' : 'off'); $('#talk-first').hidden = !readerSpeaks(); }
 function show(text) { status.textContent = text; if (text) lastLine = text; }
 function hush() { token++; stopAudio(); try { speechSynthesis.cancel(); } catch { /* no speech */ } }
 const wait = (ms, signal) => new Promise((res) => {
@@ -378,12 +380,12 @@ function sheetChoose({ question, choices }) {
 const agentGate = (s) => (s ? showSheet('confirm', s, (v) => { if (v === true) agent.yes(); else agent.no(); }) : hideSheet('confirm'));
 const agentChoose = (c) => (c ? showSheet('choose', c, (v) => { agent.pick(Number.isInteger(v) ? v : null); }) : hideSheet('choose'));
 
-// ---------- tap to talk (never hold: TalkBack's double tap cannot hold) ----------
+// ---------- talk anywhere: a tap on blank space or a long press anywhere (os/talk.js), the bar, or Space ----------
 const talk = $('#talk'), talkLabel = $('#talk-label'), typed = $('#typed');
 const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, listening = false, heard = '', silence = null, still = null;
 function showTyped(reason) { typed.hidden = false; if (reason) talkLabel.textContent = reason; $('#typed-text').focus(); }
-function setListening(on) { listening = on; talk.setAttribute('aria-pressed', String(on)); talkLabel.textContent = on ? 'Listening. Tap to finish' : 'Tap to talk'; }
+function setListening(on) { listening = on; talk.setAttribute('aria-pressed', String(on)); talkLabel.textContent = on ? 'Listening. Tap anywhere to finish' : 'Tap anywhere to talk'; }
 function summon() {
   if (listening) { endTalk(); return; }
   hush(); audioOut(); ding('summon');
@@ -402,6 +404,8 @@ function summon() {
 }
 function endTalk() { clearTimeout(silence); try { rec?.stop(); } catch { /* already stopped */ } }
 talk.addEventListener('click', summon);
+$('#talk-first').addEventListener('click', summon);
+talkAnywhere({ start: summon, listening: () => listening });
 typed.addEventListener('submit', (e) => { e.preventDefault(); const i = $('#typed-text'); const t = i.value.trim(); i.value = ''; if (t) hear(t, 'typed'); });
 addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); if (stack.length) history.back(); else if (look.nolook) setNoLook(false); return; }
@@ -485,8 +489,6 @@ function setNoLook(on) {
   else { speak('No-look mode is off.', personal.signal); $('#board .tile')?.focus(); }
 }
 $('#nolook-exit').addEventListener('click', () => setNoLook(false));
-// Summon on the board: a tap on empty space (not a tile or a control) opens the mic.
-$('#board-view').addEventListener('click', (e) => { if (!e.target.closest('button, a, input, textarea')) summon(); });
 
 // ---------- Your look is an app (public/apps/look/); the demo panel and first open come from wire.js ----------
 $('#look-link').addEventListener('click', (e) => { e.preventDefault(); open('look'); });
