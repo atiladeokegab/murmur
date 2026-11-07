@@ -229,7 +229,7 @@ export async function runTile(id, btn, via) {
       speak(t.say);
     }
   } catch (e) {
-    speak(`${t.title} didn't open. Tap again, or hold to talk.`);
+    speak(`${t.title} didn't open. Say it again, or tap it.`);
   }
   btn && btn.focus();
 }
