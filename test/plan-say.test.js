@@ -86,7 +86,10 @@ test('"add a dentist appointment on Friday at three" is a calendar add at 3pm', 
   assert.equal(tool('Add a dentist appointment on Friday at three'), 'calendar__add{"title":"Dentist appointment","day":"Friday","time":"3pm"}');
   assert.equal(tool('add coffee with Ana on Monday at 10am'), 'calendar__add{"title":"Coffee with Ana","day":"Monday","time":"10am"}');
 });
-test('"take me home" goes home', () => { for (const u of ['Take me home', 'go home', 'take me back home']) assert.equal(tool(u), 'go_home{}', u); });
+test('"go home" goes to the board; "take me home" is the way to Joy\'s home (the profile)', () => {
+  for (const u of ['go home', 'home']) assert.equal(tool(u), 'go_home{}', u);
+  for (const u of ['Take me home', 'take me back home']) assert.equal(tool(u), 'transit__directions{"place":"Home"}', u);
+});
 test('"reply to that message" asks what to say, and the answer is the reply', () => {
   assert.equal(tool('Reply to that message'), 'ask{"question":"What should I say?"}');
   assert.equal(demoPlan('Reply to that message', reg, { app: null, workflows: [] }).asked, 'reply');
@@ -130,7 +133,7 @@ test('blind 60 misses, round 2: remind, this afternoon, a new note, a lot bigger
   for (const u of ['I want to write something', 'Start a new note']) assert.equal(tool(u), 'open_app{"app":"writer"} > ask{"question":"What should I write?"}', u);
   assert.equal(tool('Buy milk', 'writer', { asked: 'write' }), 'writer__dictate{"text":"Buy milk"}');
   assert.equal(tool('Make it a lot bigger'), 'look__textBigger{}');
-  for (const u of ['Hello', 'Hi, is anyone there', "I can't see the screen, how do I start"]) assert.match(tool(u), /^say\{"text":"Hello, I'm Murmur\./, u);
+  for (const u of ['Hello', 'Hi, is anyone there', "I can't see the screen, how do I start"]) assert.match(tool(u), /^say\{"text":"Good (?:morning|afternoon|evening), Joy\. I'm Murmur\./, u);
   assert.equal(tool('Who is my latest message from'), 'messages__read{"new":true}');
 });
 
@@ -170,7 +173,7 @@ test('the lead 15:50: "what can I do" is everything, "who am I" describes the pe
   const said = (s) => demoPlan(s, reg, { app: null, workflows: [] }).plan.map((x) => x.params.text).join(' ');
   for (const s of ['what can you do', 'What can I do for me']) assert.equal(said(s), 'Everything. Just tell me what you need.', s);
   const who = said('Who am I?');
-  assert.match(who, /Mum and Sam/); assert.match(who, /book club/i);
+  assert.match(who, /Mum, Sam and Priya/); assert.match(who, /book club/i);
   assert.doesNotMatch(who, /you (?:asked|did|moved|sent)|I (?:did|moved|sent)/i, 'about the person, never what Murmur did');
   for (const s of ['How can I find friends?', 'how can I make friends', 'how do I meet new friends']) {
     const a = said(s); assert.match(a, /Book club/, s); assert.doesNotMatch(a, /can'?t/i, s);

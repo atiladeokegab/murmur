@@ -8,6 +8,7 @@ const ROUTES = {
   8: { stop: 'market', toward: 'Elm Park', first: 9, every: 20 },
 };
 const PLACES = {
+  home: { name: 'Home', route: 25, walk: 4, stops: 6, ride: 14, off: 'Larkspur Road', end: 'Home is 14 Larkspur Mews, the second door on the left.' }, // the profile's invented home
   work: { name: 'Work', route: 25, walk: 3, stops: 6, ride: 14, off: 'Station Road', end: 'Work is a minute from the stop.' },
   mum: { name: "Mum's", route: 8, walk: 5, stops: 9, ride: 22, off: 'Elm Park', end: "Mum's is the blue door opposite." },
   library: { name: 'The library', route: null, walk: 6, end: 'Walk down Hill Street; the library is on your left.' },

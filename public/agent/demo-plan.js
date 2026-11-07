@@ -4,6 +4,7 @@
 //   { kind: 'task' | 'teach' | 'refuse' | 'unknown', plan: [{ tool, params }], say? }
 // It covers the demo script (spec §6) and the eval's utterances; anything else is said, never guessed.
 
+import { whoAmI, greeting, PROFILE } from '../lib/profile.js';
 import { SEP } from './plan.js';
 
 const SYN = {
@@ -144,7 +145,6 @@ function planOrWords(said, apps, context, dry) {
 
 export const EVERYTHING = 'Everything. Just tell me what you need.';
 // What the phone can infer (the seeded chats, calendar and tiles), never a readback of what Murmur did.
-const WHO_AM_I = "You keep in touch: you talk most with Mum and Sam. You start your day with your My morning tile, and Thursday evenings are book club.";
 const FRIENDS = "Book club on Thursday is a good start: say hello to someone new there. You could ask Sam to meet up this week, or look for a local group near you, like a walking group or a library talk.";
 const MISS = "I can't do that one yet.", NO_APP = "I don't have";
 const STOP = new Set('my the a an to of for in at it is me please and with from your some what usual'.split(' ')); // "order my usual": the usual one; "on" counts, so "hold on" is no hold
@@ -238,6 +238,8 @@ function plan(said, apps, context, dry) {
   if (/^(?:(?:clear|empty|wipe)(?: out)? (?:the |my )?(?:whole )?(?:calendar|diary)|(?:delete|remove|cancel|clear) (?:everything|all (?:of )?(?:my |the )?(?:events|plans|appointments))(?: (?:from|in|on) (?:the |my )?(?:calendar|diary))?)$/i.test(t)) return task([step('calendar', ['clear'])]);
   if ((m = t.match(/^(?:remove|delete|forget)\s+(?:the\s+|my\s+)?(.+?)(?:\s+(?:tile|routine|workflow))?$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'remove_workflow', params: { name: m[1] } }]);
   if ((m = t.match(/^(?:remove|delete|uninstall|get rid of)\s+(?:the\s+|my\s+)?(.+?)(?:\s+app)?$/i)) && apps.some((a) => a.name.toLowerCase() === m[1].toLowerCase() || a.id === m[1].toLowerCase())) return task([{ tool: 'remove_app', params: { name: m[1] } }]);
+  // "Take me home" is the way to Joy's home (the profile); "go home" and "home" stay the board
+  if (/^(?:take me|get me|get|bring me|walk me|guide me|directions|how do i get) (?:back )?home$/i.test(t) && apps.some((a) => a.id === 'transit')) return task([step('transit', ['directions', 'route'], { place: 'Home' })]);
   if (/^(?:go |take me |get me |bring me )?(?:back )?(?:home|back to (?:the )?(?:board|home))$|^(?:show|open) (?:the )?(?:board|home)$/i.test(t)) return task([{ tool: 'go_home', params: {} }]);
   if ((m = t.match(/^(?:turn |switch )?(?:the )?(?:sounds?|haptics|vibrations?|sounds? and (?:haptics|vibrations?))\s+(on|off)$/i)) ||
       (m = t.match(/^(?:turn|switch)\s+(on|off)\s+(?:the )?(?:sounds?|haptics|vibrations?)/i))) return task([{ tool: 'sound', params: { on: m[1].toLowerCase() === 'on' } }]);
@@ -370,9 +372,9 @@ function plan(said, apps, context, dry) {
   }
   if (/^who(?:'?s| is| was)? (?:my )?(?:latest|last|newest|new) message (?:from|by)$|^who (?:has |just )?(?:messaged|texted|written to|wrote to) me$/i.test(t)) return task([step('messages', ['read'], { new: true })]);
   if (/^what (?:can|could) (?:i|you) do(?: for me| here)?$|^what (?:are|is) you(?: for)?$/i.test(t)) return task([{ tool: 'say', params: { text: EVERYTHING } }]);
-  if (/^who am i$|^what (?:do you|does murmur) know about who i am$/i.test(t)) return task([{ tool: 'say', params: { text: WHO_AM_I } }]);
+  if (/^who am i$|^what (?:do you|does murmur) know about who i am$/i.test(t)) return task([{ tool: 'say', params: { text: whoAmI() } }]);
   if (/^(?:(?:hello|hi|hey)(?: there| murmur)?[,.!]?\s*)?(?:is (?:any ?one|somebody|someone) there)?$|^(?:i can'?t see the screen[,.]?\s*)?how (?:do i|can i) (?:start|begin|use (?:this|it|murmur))$|^i can'?t see the screen$/i.test(t) && t) {
-    return task([{ tool: 'say', params: { text: "Hello, I'm Murmur. Just say what you'd like, like \"read my messages\" or \"what's on today\". Say \"what can I do\" to hear more, and \"stop\" any time." } }]);
+    return task([{ tool: 'say', params: { text: `${greeting()}. I'm Murmur. Just say what you'd like, like \"read my messages\" or \"what's on today\". Say "what can I do" to hear more, and "stop" any time.` } }]);
   }
 
   if (/^read (?:me )?(?:the )?next (?:one|message)$/i.test(t)) return task([step('messages', ['read'], { new: true })]);

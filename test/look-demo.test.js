@@ -37,7 +37,7 @@ test('first open says one sentence, only once, and reset re-arms it', async () =
   assert.equal(await firstOpen({ kv, say }), false);
   assert.deepEqual(said, [FIRST_WORDS], 'the what-can-I-do hint is not said at open');
   assert.ok(FIRST_WIN.includes(OFFER_HINT.replace(/\.$/, '')), 'it is step 2, said once after the first success');
-  assert.equal(FIRST_WORDS, "Hi, I'm Murmur. I run this phone for you by voice. Tap anywhere and speak. Try saying: read Mum's message.");
+  assert.match(FIRST_WORDS, /^Good (?:morning|afternoon|evening), Joy\. I'm Murmur\. /); assert.equal(FIRST_WORDS.replace(/^[^.]+\. /, ''), "I'm Murmur. I run this phone for you by voice. Tap anywhere and speak. Try saying: read Mum's message.");
   await rearm({ kv });
   assert.equal(await firstOpen({ kv, say }), true);
 });
