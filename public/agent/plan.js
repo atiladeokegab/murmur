@@ -114,7 +114,7 @@ export function validatePlan(plan, apps, { dryRun = false } = {}) {
       const [id, name] = tool.split(SEP);
       app = apps.find((a) => a.id === id);
       const x = app?.actions.find((y) => y.name === name);
-      if (!app) { dropped.push({ tool, reason: 'unknown app', say: "That app isn't on this phone." }); continue; }
+      if (!app) { dropped.push({ tool, reason: 'unknown app', say: "That app isn't here yet. I'm starting to bring it over from your phone now." }); continue; }
       if (!x) { dropped.push({ tool, reason: 'unknown action', say: cantLine(app) }); continue; }
       spec = x; action = name;
     }
