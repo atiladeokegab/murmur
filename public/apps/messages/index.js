@@ -34,6 +34,7 @@ const app = {
   state: () => structuredClone(s),
   read: () => M.read(s),
   place: () => M.place(s),
+  now: () => { const c = s?.chats.find((x) => x.unread); return c ? { why: `Read ${c.name}'s message.`, say: M.read(s) } : null; }, // the board's Now tile: the first unread chat is the top real thing
 
   actions: {
     openChat: {

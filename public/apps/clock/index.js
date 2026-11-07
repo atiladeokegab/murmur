@@ -172,7 +172,7 @@ function render() {
   const had = root.contains(root.ownerDocument.activeElement) && root.ownerDocument.activeElement.id;
   const keep = { length: q('#clock-length')?.value || '', at: q('#clock-at')?.value || '' };
   body.replaceChildren(el('div', {},
-    el('p', { className: 'app-done', role: 'status' }, s.note),
+    el('p', { className: 'app-done' }, s.note),
     button('What time is it', { id: 'clock-now', onclick: (e) => { s.said = 'time'; tell(e, nowWords()); } }),
     el('h3', { className: 'app-h3' }, 'Timer'),
     s.timer ? el('p', { className: 'app-why' }, `${adj(s.timer.label)} timer running.`) : null,

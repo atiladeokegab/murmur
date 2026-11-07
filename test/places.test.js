@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBus, createRegistry, createCtx, appKv, mountApp, runAction } from '../public/sdk/index.js';
+import { createBus, createRegistry, createCtx, appKv, mountApp, runAction, controlName } from '../public/sdk/index.js';
 import { browserKV } from '../public/ports/browser-kv.js';
 import places, { findPlace } from '../public/apps/places/index.js';
 import calendar from '../public/apps/calendar/index.js';
@@ -109,4 +109,21 @@ test('places: every say phrase plans to its own places__ tool', () => {
   // Transit keeps "directions to" when it is on the phone.
   const withTransit = describeRegistry([places, { id: 'transit', name: 'Transit', actions: { directions: { params: { type: 'object', properties: { place: { type: 'string' } } } } } }]);
   assert.equal(demoPlan('Directions to the station', withTransit).plan[0].tool, 'transit__directions');
+});
+
+test("places: a person's own tap keeps focus in the app and hears the answer; names don't run together", async () => {
+  const doc = fakeDocument(), bus = createBus();
+  const heard = [];
+  const kv = appKv('places', browserKV({ storage: fakeStorage(), prefix: 'murmur' }));
+  const root = await mountApp(places, doc.body, { kv, bus, say: (t) => heard.push(t) });
+  await places.reset();
+  const lib = root.querySelector('#places-library');
+  assert.equal(controlName(lib), 'The library. An 8-minute walk.');
+  lib.focus();
+  lib.dispatchEvent({ type: 'click', isTrusted: true });
+  assert.equal(doc.activeElement?.id, 'places-place-h', 'focus moves to the place heading, not the body');
+  assert.equal(heard.at(-1), 'The library. An 8-minute walk.');
+  root.querySelector('#places-back').click(); // a script's click: no isTrusted, so nothing is said
+  assert.equal(heard.length, 1);
+  assert.equal(doc.activeElement?.id, 'places-list-h');
 });
