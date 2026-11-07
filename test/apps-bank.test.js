@@ -169,6 +169,38 @@ test('resolve for a split: each ambiguous name asked once, one confirm with ever
   assert.deepEqual(s().lastPaid.to, ['sam', 'mum']);
 });
 
+test('a stale hand selection never leaks in: the agent pays exactly what it read back (Atlas P1)', async () => {
+  const split = await phone({ answers: [true] });
+  await split.press('Split a bill');
+  await split.press('Mum');
+  const r = await split.run('splitBill', { who: ['Landlord'], total: 100 });
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual(split.asked.map((a) => a.readback), ['Pay Landlord £100. From Murmur Bank.']);
+  assert.deepEqual(split.s().lastPaid.to, ['landlord']);
+  assert.deepEqual(split.s().lastPaid.pence, [10000]);
+  assert.equal(split.s().balance, 124050 - 10000);
+
+  const pay = await phone({ answers: [true] });
+  await pay.press('Pay someone');
+  await pay.press('Landlord');
+  const note = pay.root.querySelector('#bank-note');
+  note.value = 'Old note'; note.dispatchEvent(new Event('input', { bubbles: true }));
+  assert.equal((await pay.run('payPerson', { who: 'Mum', amount: 5 })).ok, true);
+  assert.deepEqual(pay.s().lastPaid.to, ['mum']);
+  assert.equal(pay.s().transactions.at(-1).note, '', 'no stale note');
+});
+
+test('Pay is pressed only when the form moves exactly the readback: "Mum and Mum" stops before any money moves', async () => {
+  const { run, asked, s, taps } = await phone({ answers: [true] });
+  const r = await run('splitBill', { who: ['Mum', 'Mum'], total: 100 });
+  assert.deepEqual(asked.map((a) => a.readback), ['Pay Mum £50 and Mum £50. From Murmur Bank.']);
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "That isn't what you agreed to, so nothing was paid.");
+  assert.equal(s().balance, 124050);
+  assert.equal(s().lastPaid, null);
+  assert.ok(!taps.some((x) => /^Pay Mum/.test(x)), 'Pay never pressed');
+});
+
 test('split £61.01 between Mum and Landlord: one gate, odd penny to the first', async () => {
   const { run, asked, s } = await phone({ answers: [true] });
   const r = await run('splitBill', { who: ['Mum', 'Landlord'], total: 61.01 });

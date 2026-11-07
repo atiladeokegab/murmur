@@ -10,8 +10,9 @@ const save = () => os?.kv?.set('state', s);
 const pence = (amount) => Math.round(Number(amount) * 100);
 const typed = (p) => (p % 100 ? (p / 100).toFixed(2) : String(p / 100));
 
-async function toScreen(ctx, screen, opener) {
-  if (s.screen === screen) return;
+// fresh: reopen even when already there, so a form starts empty (a person's half-made selection never leaks in).
+async function toScreen(ctx, screen, opener, fresh = false) {
+  if (s.screen === screen && !fresh) return;
   if (s.screen !== 'home') await ctx.tap(q('#bank-back'));
   if (opener) await ctx.tap(q(opener));
 }
@@ -33,14 +34,24 @@ async function whoIs(ctx, whos, settled = []) {
   return { ids, asked };
 }
 
-/** Fill the open form and press Pay. When a name was only settled after the gate, ask again with the exact words. */
-async function fillAndPay(ctx, { ids, asked }, total, note) {
-  const d = { mode: s.screen, to: ids, amount: typed(total) };
-  if (asked && !(await ctx.confirm('pay', M.readback(M.planOf(s, d))))) throw new Error('Not paid.');
+/**
+ * Open a fresh form, fill it and press Pay. `agreed` is the readback the person said yes to; Pay is pressed only
+ * when the form would move exactly that. When a name was only settled after the gate, ask again with the exact words.
+ */
+async function fillAndPay(ctx, mode, opener, { ids, asked }, total, note, agreed) {
+  const d = { mode, to: ids, amount: typed(total), note: note || '' };
+  if (asked) {
+    agreed = M.readback(M.planOf(s, d));
+    if (!(await ctx.confirm('pay', agreed))) throw new Error('Not paid.');
+  }
+  await toScreen(ctx, mode, opener, true);
   for (const id of ids) if (!s.draft.to.includes(id)) await ctx.tap(q(`[data-payee="${id}"]`));
   const amount = q('#bank-amount');
   await ctx.tap(amount); await ctx.type(amount, d.amount);
   if (note) { const n = q('#bank-note'); await ctx.tap(n); await ctx.type(n, note); }
+  if (M.readback(M.planOf(s)) !== agreed || (mode === 'pay' && s.draft.note !== d.note)) {
+    throw new Error("That isn't what you agreed to, so nothing was paid.");
+  }
   await ctx.tap(q('#bank-pay'));
   const why = await paying; // the click's handler awaits os.confirm; settle it before the runner verifies
   if (why) throw new Error(why);
@@ -127,8 +138,7 @@ const app = {
       async run(p, ctx) {
         if (!(pence(p.amount) > 0)) throw new Error('The amount must be more than nothing.');
         const who = await whoIs(ctx, [p.who], [p.id]);
-        await toScreen(ctx, 'pay', '#bank-pay-open');
-        await fillAndPay(ctx, who, pence(p.amount), p.note);
+        await fillAndPay(ctx, 'pay', '#bank-pay-open', who, pence(p.amount), p.note, app.actions.payPerson.readback(s, p));
       },
       verify: (st, p) => (paidTo(st, [p.who], [p.id]) && st.lastPaid.total === pence(p.amount)) || 'It did not pay.',
     },
@@ -148,8 +158,7 @@ const app = {
         if (!p.who.length) throw new Error('Say who shares the bill.');
         if (!(pence(p.total) > 0)) throw new Error('The total must be more than nothing.');
         const who = await whoIs(ctx, p.who, p.ids);
-        await toScreen(ctx, 'split', '#bank-split-open');
-        await fillAndPay(ctx, who, pence(p.total), '');
+        await fillAndPay(ctx, 'split', '#bank-split-open', who, pence(p.total), '', app.actions.splitBill.readback(s, p));
       },
       verify: (st, p) => (paidTo(st, p.who, p.ids) && st.lastPaid.total === pence(p.total)) || 'It did not pay everyone.',
     },
