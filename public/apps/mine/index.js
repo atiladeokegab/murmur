@@ -1,6 +1,6 @@
 // Mine on the Murmur SDK (os/contract.md; spec §3.5): your workflows, each read in plain words; run, explain, delete.
 // The store is the agent's (public/agent/workflows.js, saved as toolkit skills). The shell hands it over as
-// os.workflows { all(), remove(name) } and os.hear(text). Without them (tests, before wiring) Mine keeps its seed.
+// os.workflows { all(), remove(name) } and os.agent.runWorkflow(name) (os.hear(text) as a fallback). Without them (tests, before wiring) Mine keeps its seed.
 import * as Mi from './model.js';
 
 let s = Mi.fresh();
@@ -120,16 +120,21 @@ function render() {
       button(`Run ${w.name}`, { 'data-run': w.name, className: 'app-btn primary', onclick: (e) => {
         s.selected = s.lastRun = w.name; render();
         // A person's tap hands it to the agent as its own task, gates included; the agent's own tap must not nest one.
-        if (e.isTrusted) os?.hear?.(`run ${w.name}`);
+        if (e.isTrusted) (os?.agent?.runWorkflow ? os.agent.runWorkflow(w.name) : os?.hear?.(`run ${w.name}`))?.catch?.(() => {});
       } }),
       button(`Delete ${w.name}`, { 'data-delete': w.name, onclick: () => { removing = remove(w); } }),
     )),
   ].filter(Boolean));
 }
 
-// A person's own tap on Delete is their yes (contract §7); the agent is gated by the runner before it taps.
+// Delete always asks, a person's own tap too; the shell's confirm says yes at once for the agent's press.
+// shortcut: with no os.confirm (agent test fixtures) only the runner's gate applies; fail closed once every fixture passes confirm.
 async function remove(w) {
-  if (os?.workflows?.remove) { try { await os.workflows.remove(w.name); } catch { return; } }
+  if (os?.confirm && !(await os.confirm({ gate: 'delete', readback: app.actions.delete.readback(s, { name: w.name }) }))) return;
+  if (os?.workflows?.remove) {
+    try { await os.workflows.remove(w.name); } catch { return; } // a store that failed keeps the tile
+    return refresh(); // the store is the truth; remove() is false when it was already gone
+  }
   Mi.remove(s, w.name);
   render();
 }
