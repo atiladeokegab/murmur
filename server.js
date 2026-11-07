@@ -69,27 +69,31 @@ const api = {
 // Each line is synthesised once per instance; repeated fixed lines cost nothing.
 const said = new Map();
 let elevenDay = '', elevenChars = 0;
-function speakLine(text) {
+function speakLine(text, o) {
   if (!said.has(text)) {
-    const p = synth(text);
+    const p = synth(text, o);
     p.catch(() => said.delete(text)); // a failed line is tried again next time
     said.set(text, p);
     if (said.size > 300) said.delete(said.keys().next().value); // shortcut: oldest-first eviction, ~40 MB of audio at most
   }
   return said.get(text);
 }
-async function synth(text) {
+// A provider that says quota or auth (401, 402, 429) rests a minute, so the phone's own voice starts at once.
+const resting = { elevenlabs: 0, gemini: 0 };
+const rest = (name, e) => { if (/\b(401|402|429)\b/.test(e.message)) resting[name] = Date.now() + 60000; };
+async function synth(text, { warm = false } = {}) {
   const today = new Date().toISOString().slice(0, 10);
   if (today !== elevenDay) { elevenDay = today; elevenChars = 0; }
   // shortcut: the cap is per instance and resets on a restart; a shared counter if Murmur ever runs many instances
-  if (ELEVEN && text && elevenChars + text.length <= ELEVEN_DAILY_CHARS) {
+  if (ELEVEN && text && Date.now() >= resting.elevenlabs && elevenChars + text.length <= ELEVEN_DAILY_CHARS) {
     elevenChars += text.length;
     try { return { ...(await eleven.tts(ELEVEN, text)), provider: 'elevenlabs' }; }
-    catch (e) { console.warn(`[tts] elevenlabs failed (${String(e.message).slice(0, 40)})`); }
+    catch (e) { rest('elevenlabs', e); console.warn(`[tts] elevenlabs failed (${String(e.message).slice(0, 40)})`); }
   }
-  if (KEY && text) {
+  // The warm never spends Gemini: its free tier allows 10 TTS requests a day, fewer than the fixed lines.
+  if (KEY && text && !warm && Date.now() >= resting.gemini) {
     try { return { ...(await gemini.tts(KEY, text)), provider: 'gemini' }; }
-    catch (e) { console.warn(`[tts] gemini failed (${String(e.message).slice(0, 40)})`); }
+    catch (e) { rest('gemini', e); console.warn(`[tts] gemini failed (${String(e.message).slice(0, 40)})`); }
   }
   throw Object.assign(new Error('tts unavailable'), { status: 503 });
 }
@@ -100,7 +104,7 @@ export async function warmTts() {
   const apps = (await Promise.all(names.map((n) => import(`./public/apps/${n}/index.js`).then((m) => m.default, () => null)))).filter(Boolean);
   const { createAgent } = await import('./public/agent/index.js');
   const lines = createAgent({ registry: apps, bus: { on() {}, emit() {} } }).fixedLines();
-  for (const l of lines) await speakLine(l).catch(() => {});
+  for (const l of lines) await speakLine(l, { warm: true }).catch(() => {});
   return lines;
 }
 

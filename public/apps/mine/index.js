@@ -53,6 +53,7 @@ const app = {
         await ctx.say(Mi.explain(w));
       },
       verify: (st, p) => (!!Mi.find(st, p.name) && st.explained === Mi.find(st, p.name).name) || `Nothing saved as ${p.name}.`,
+      done: () => '', // it just said the steps
     },
     run: {
       describe: 'Run a saved workflow, step by step; its sends still ask first',
@@ -67,6 +68,7 @@ const app = {
         await ctx.tap(q(`[data-run="${w.name}"]`));
       },
       verify: (st, p) => (!!Mi.find(st, p.name) && st.lastRun === Mi.find(st, p.name).name) || `${p.name} didn't start.`,
+      done: (st, p) => `${Mi.find(st, p.name)?.name || p.name} started.`,
     },
     delete: {
       describe: 'Delete a saved workflow and its tile',
@@ -74,7 +76,7 @@ const app = {
       params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
       gate: 'delete',
       hint: 'Delete is the last button after the steps; I ask first',
-      readback: (st, p = {}) => { const w = Mi.find(st, p.name); return w ? `Delete ${w.name}? ${Mi.explain(w)}` : `Delete ${p.name}?`; },
+      readback: (st, p = {}) => `Delete '${Mi.find(st, p.name)?.name || p.name}'?`,
       async run(p, ctx) {
         await refresh();
         const w = named(p);
