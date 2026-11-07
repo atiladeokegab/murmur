@@ -6,3 +6,18 @@ footer { position: fixed !important; inset: 0 !important; display: flex !importa
 .talk { order: 1 !important; width: min(68vw, 16rem) !important; height: min(68vw, 16rem) !important; min-height: 0 !important; border-radius: 50% !important; padding: 0 !important; justify-content: center !important; flex-direction: column !important; gap: 0.5rem !important; }
 .talk svg { width: 38% !important; height: 38% !important; }
 .talk .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* The orb (the lead, 7 Nov): the talk button as a full-screen voice orb. --level and data-orb come from os/orb.js. */
+footer { cursor: pointer; height: 100dvh !important; max-height: none !important; }
+.talk { --level: 0; --orb-hi: #E9E3FF; --orb: #7B61FF; --orb-deep: #24135F; --orb-glow: rgb(123 97 255 / 0.45);
+  position: relative !important; flex: none !important; width: min(78vw, 58vh, 22rem) !important; height: auto !important; aspect-ratio: 1 / 1 !important; border: 0 !important;
+  background: radial-gradient(circle at 34% 28%, var(--orb-hi) 0%, var(--orb) 40%, var(--orb-deep) 100%) !important;
+  color: transparent !important; scale: calc(1 + var(--level) * 0.3); transition: scale 90ms linear, box-shadow 90ms linear;
+  box-shadow: 0 0 calc(2rem + var(--level) * 7rem) var(--orb-glow), inset 0 -1.5rem 3rem rgb(0 0 0 / 0.3) !important; }
+.talk svg { display: none !important; }
+.talk:focus-visible { outline: var(--ring) solid var(--c-focus) !important; outline-offset: 0.75rem !important; }
+.talk[data-orb="idle"] { animation: orb-breathe 4.5s ease-in-out infinite; }
+.talk[data-orb="listening"] { animation: orb-breathe 1.6s ease-in-out infinite; }
+.talk[data-orb="speaking"] { animation: orb-speak 0.7s ease-in-out infinite; }
+@keyframes orb-breathe { 50% { transform: scale(1.05); filter: brightness(1.08); } }
+@keyframes orb-speak { 50% { transform: scale(1.03); filter: brightness(1.15); } }
+@media (prefers-reduced-motion: reduce) { .talk { animation: none !important; transition: none !important; } }
