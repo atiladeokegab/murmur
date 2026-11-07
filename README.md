@@ -66,6 +66,7 @@ decide.
 | **Routines by voice** | Do something once, then say *"save that as my morning"*. It becomes a tile on your board. |
 | **Teaches "how do I"** | Ask *"how do I…"* and Murmur speaks the steps in the app's own words, then offers to do it or walk you through it until you can do it alone. |
 | **Shows its work** | The work panel names each step as it happens and ticks it when the app confirms it. |
+| **Every app is an MCP server** | The adapter turns each app's on-screen controls into MCP tools, with the same yes-and-fingerprint gates. A call presses the real buttons on the phone you name; send, pay, call and delete still ask the person on the phone, and come back declined or timed out without their yes. |
 | **Your look** | Text up to 400% that reflows instead of scrolling sideways; dark, light or yellow-on-black colours; large targets. |
 
 <p align="center">
@@ -76,6 +77,26 @@ decide.
   <img src="docs/readme/sent.png" alt="Sent to Sam, with three ticks, one for each checked step. The reply I'm ten minutes late sits under Sam's message." width="240">
 </p>
 <p align="center"><sub>The board · ask first, with the readback · sent, every step ticked</sub></p>
+
+### Use it from Claude or Cursor
+
+Every action an app registers becomes a tool named `app__action` (for example `spotify__play` or `messages__send`), with the app's own JSON schema plus a `room` argument that picks the phone. Open the phone with `/?room=demo`, run the server, then add Murmur to your client:
+
+```json
+{
+  "mcpServers": {
+    "murmur": {
+      "command": "node",
+      "args": ["/path/to/murmur/mcp/server.js"],
+      "env": { "MURMUR_URL": "http://127.0.0.1:8080" }
+    }
+  }
+}
+```
+
+To watch it, open the phone at `/?room=mcp-demo` and run `node scripts/mcp-demo.mjs`: an MCP client opens Mum's chat, writes "I'll be home by six" and sends it, and the send waits on the phone's "Send it?" until you tap yes.
+
+That goes in Claude Desktop's `claude_desktop_config.json` or Cursor's `.cursor/mcp.json`. With Claude Code: `claude mcp add murmur -- node mcp/server.js`. Clients that speak streamable HTTP can use `POST /mcp` on the server directly. It answers this machine only, or anyone sending `MURMUR_TOKEN` as `x-murmur-token` or a Bearer token when that is set.
 
 ## Why not computer use?
 

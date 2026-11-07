@@ -127,6 +127,19 @@ export async function warmTts() {
 
 const guard = createGuard();
 
+// The GUI-to-MCP adapter (mcp/server.js). It drives phones, so it fails closed: MURMUR_TOKEN when set, else this machine only.
+let mcpTools = null;
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+async function mcpRoute(req, res) {
+  const token = process.env.MURMUR_TOKEN || '';
+  const given = req.headers['x-murmur-token'] || String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (token ? given !== token : !LOOPBACK.has(req.socket.remoteAddress)) return send(res, 403, { error: 'forbidden' });
+  if (req.method !== 'POST') return send(res, 405, { error: 'POST only (stateless streamable HTTP)' });
+  const mcp = await import('./mcp/server.js');
+  mcpTools ||= mcp.toolsFrom(await mcp.loadRegistry());
+  return mcp.handleHttp(req, res, await readJson(req), { tools: mcpTools, call: mcp.relayCall(relay) });
+}
+
 export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
@@ -135,6 +148,7 @@ export const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/bus/stream' && req.method === 'GET') return relay.stream(req, res, relay.roomOf(url) || 'stage');
     // The phone forwards every bus event: same-origin checked above, no model behind it, so it skips the rate limit and the daily cap.
     if (url.pathname === '/api/bus' && req.method === 'POST') return send(res, 200, await relay.api['POST /api/bus'](await readJson(req, 256 * 1024), relay.roomOf(url)) /* a mirror frame is up to 200 KB */);
+    if (url.pathname === '/mcp') return mcpRoute(req, res);
     const handler = api[`${req.method} ${url.pathname}`];
     if (url.pathname.startsWith('/api/')) {
       const no = guard(req, { model: !!KEY || !!ELEVEN }); // every /api route may spend a key once one is set

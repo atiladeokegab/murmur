@@ -502,6 +502,12 @@ import('../inside/forward.js').then(({ roomFrom }) => {
   new EventSource(`/api/bus/stream?${q}`).onmessage = (m) => {
     let e; try { e = JSON.parse(m.data); } catch { return; }
     if (e.type === 'remote:hear' && e.text) hear(String(e.text).slice(0, 300), 'typed');
+    if (e.type === 'remote:run' && e.id && agent) { // the MCP adapter: press the app's controls here, gates and all
+      import('./remote-run.js').then(({ createRemoteRun }) => createRemoteRun({ agent, registry })(e))
+        .catch((x) => ({ id: e.id, ok: false, status: 'failed', reason: String(x?.message || x).slice(0, 200) }))
+        .then((r) => fetch(`/api/bus?room=${encodeURIComponent(room)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'remote:result', ...r, id: e.id }) }))
+        .catch(() => {});
+    }
   };
 }).catch(() => {});
 talk.addEventListener('click', summon);
