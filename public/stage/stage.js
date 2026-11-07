@@ -131,11 +131,15 @@ const BEAT = { glide: 380, press: 420, open: 520 }; // ms: the ring lands, the p
 const queue = [];
 let playing = false, shownApp = 'home', lastAt = null, home = null; // home: the last home-screen frame
 function tap() { cursor.classList.remove('tap'); void cursor.offsetWidth; cursor.classList.add('tap'); }
-function center() { const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(cursor.style.transform) || [0, 0, 0]; return `${Number(m[1]) + cursor.offsetWidth / 2}px ${Number(m[2]) + cursor.offsetHeight / 2}px`; }
 function open(el) { // the app grows out of the icon that was tapped
   if (still.matches) return;
-  el.style.transformOrigin = center();
-  el.animate([{ transform: 'scale(0.2)', opacity: 0.3, borderRadius: '30%' }, { transform: 'scale(1)', opacity: 1 }], { duration: BEAT.open, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+  // The frame is already scale(--s) from its top left (stage.css), so the zoom composes onto that, about the ring's
+  // centre in the phone's own pixels; replacing the transform or its origin would draw the phone at full size.
+  const k = Number(phone.style.getPropertyValue('--s')) || 1;
+  const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(cursor.style.transform) || [0, 0, 0];
+  const ox = (Number(m[1]) + cursor.offsetWidth / 2) / k - BEZEL, oy = (Number(m[2]) + cursor.offsetHeight / 2) / k - BEZEL;
+  const at = (z) => `scale(${k}) translate(${ox}px, ${oy}px) scale(${z}) translate(${-ox}px, ${-oy}px)`;
+  el.animate([{ transform: at(0.2), opacity: 0.3 }, { transform: at(1), opacity: 1 }], { duration: BEAT.open, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
 }
 async function iconTap(doc, app) { // ring onto the home icon, press it; false when there is no icon to show
   const r = doc?.querySelector(`#board .tile[data-app="${CSS.escape(app)}"] .what`)?.getBoundingClientRect();
