@@ -20,7 +20,9 @@ try {
   for (let i = 0; ; i++) {
     try { await get('/health'); break; } catch { if (i > 50) throw new Error('server did not start'); await new Promise((r) => setTimeout(r, 100)); }
   }
-  assert.deepEqual(await (await get('/health')).json(), { ok: true, provider: 'demo' });
+  assert.deepEqual(await (await get('/health')).json(), { ok: true, provider: 'demo', live: false, tts: false });
+  assert.equal((await post('/api/live-token', {})).status, 503, 'no live without a key');
+  assert.equal((await post('/api/tts', { text: 'hi' })).status, 503, 'no tts without a key');
   const menu = await (await post('/api/menu', { part: 'evening', top: 'Read my notes', moved: ['Order beans'] })).json();
   assert.match(menu.say, /^Evening\. Order beans moved up/);
   const chat = await (await post('/api/chat', { text: 'order my usual beans' })).json();
@@ -29,7 +31,10 @@ try {
   const page = await get('/');
   assert.equal(page.status, 200);
   assert.match(await page.text(), /Hold to talk/);
-  for (const p of ['/app.js', '/app.css', '/ports/browser-kv.js', '/vendor/toolkit/index.js', '/fonts/martian-mono.woff2']) {
+  const race = await get('/race');
+  assert.equal(race.status, 200);
+  assert.match(await race.text(), /Start both/);
+  for (const p of ['/app.js', '/app.css', '/race.js', '/lib/race.js', '/lib/gestures.js', '/look.js', '/ports/browser-kv.js', '/vendor/toolkit/index.js', '/fonts/martian-mono.woff2']) {
     assert.equal((await get(p)).status, 200, p);
   }
   assert.equal((await get('/../server.js')).status !== 200, true, 'no path traversal');

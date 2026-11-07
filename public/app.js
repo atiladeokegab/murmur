@@ -5,6 +5,10 @@ import { TILES, CONTACTS, SHOP, MUM_MESSAGE, MUM_DRAFT, NOTE, byId } from './lib
 import { daypart, dailyMenu, usualTime, reason, proposals, seedWeek, dayKey } from './lib/menu.js';
 import { buildLink } from './lib/links.js';
 import { sentences, whereAmI, replaceWord } from './lib/notes.js';
+import { createLive, playPcm, stopAudio, audioOut } from './live.js';
+import * as passkey from './passkey.js';
+import { SIZES, THEMES, readLook, writeLook, applyLook } from './look.js';
+import { recogniser } from './lib/gestures.js';
 
 const $ = (s) => document.querySelector(s);
 function el(tag, props = {}, ...kids) {
@@ -23,7 +27,7 @@ prefs.menuIds ||= TILES.filter((t) => t.start).map((t) => t.id);
 prefs.declined ||= [];
 prefs.snoozed ||= {};
 const savePrefs = () => store.set('prefs', prefs);
-export const look = Object.assign({ voice: true, rate: 1 }, store.get('look', {}));
+export const look = Object.assign({ voice: true, rate: 1, size: 100, theme: 'dark' }, store.get('look', {}));
 
 // ---------- the Librarian (event toolkit) on a localStorage port ----------
 let clockShift = null; // set only while seeding a past week
@@ -39,18 +43,40 @@ try {
     async setMemoryPaused() {}, async getAbilityModel() { return {}; } };
   datastore = { async get() { return { entries: log }; } };
 }
+// Your look lives in the toolkit's ability profile; first run seeds it with dark, the default.
+try {
+  if (!(await librarian.getProfile())?.fields?.needs?.length) await writeLook(librarian, look);
+  Object.assign(look, await readLook(librarian));
+} catch { /* stub Librarian: keep the stored look */ }
+if (!/[?&]zoom=/.test(location.search)) applyLook(look);
+store.set('look', look);
 const entries = async () => ((await datastore.get('mine.episodicLog'))?.entries || []).filter((e) => e.data && e.data.tile);
 const logTap = (tile, via) => librarian.logObservation({ type: 'saved-action', data: { tile, via }, text: byId(tile)?.title || tile })
   .catch(() => {});
 
-// ---------- speaking ----------
+// ---------- speaking: Gemini Live, else Gemini TTS, else the browser's voice ----------
 const status = $('#say');
+const caps = await fetch('/health').then((r) => r.json()).catch(() => ({}));
 let speechToken = 0;
+let liveQuiet = false, lastLine = '', live = null, liveBroken = !caps.live;
 function voices() { return speechSynthesis.getVoices().filter((v) => /^en/i.test(v.lang)); }
-export function speak(text, { show = true, onend } = {}) {
+export function speak(text, { show = true, onend, local = false } = {}) {
   if (show) status.textContent = text;
+  if (liveQuiet && !local) { lastLine = text; if (onend) live.afterTurn(onend); return; } // Live says it in its own voice
   const token = ++speechToken;
-  if (!look.voice || !('speechSynthesis' in window) || !text) { onend && setTimeout(() => token === speechToken && onend(), 0); return; }
+  if (!look.voice || !text) { onend && setTimeout(() => token === speechToken && onend(), 0); return; }
+  if (caps.tts && !local) {
+    fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('tts'))))
+      .then((a) => token === speechToken && playPcm(a.audio, a.rate))
+      .then(() => token === speechToken && onend && onend())
+      .catch(() => token === speechToken && browserSpeak(text, token, onend));
+    return;
+  }
+  browserSpeak(text, token, onend);
+}
+function browserSpeak(text, token, onend) {
+  if (!('speechSynthesis' in window)) { onend && onend(); return; }
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'en-GB'; u.rate = look.rate;
@@ -58,7 +84,7 @@ export function speak(text, { show = true, onend } = {}) {
   u.onend = () => token === speechToken && onend && onend();
   speechSynthesis.speak(u);
 }
-function hush() { speechToken++; if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+function hush() { speechToken++; stopAudio(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
 
 // ---------- the menu ----------
 const menuEl = $('#menu');
@@ -178,13 +204,14 @@ function readFrom(i) {
   const all = sentences(reader.text);
   if (i >= all.length) { reader.reading = false; speak('That was the last one.'); return; }
   reader.index = i; reader.reading = true; renderDoc();
-  speak(all[i], { show: false, onend: () => reader.reading && readFrom(i + 1) });
+  speak(all[i], { show: false, local: true, onend: () => reader.reading && readFrom(i + 1) });
 }
 
 // ---------- tiles ----------
 export async function runTile(id, btn, via) {
   const t = byId(id);
   if (!t) return;
+  if (caps.tts && via === 'tile') audioOut(); // unlock audio inside the tap (iOS)
   logTap(id, via);
   const a = t.action;
   try {
@@ -235,9 +262,22 @@ function openPay() {
     yes: `Yes, pay ${price}`, onYes: () => pay(item) });
   speak(`Your usual beans from Hill Street Roasters, ${price}, arriving ${item.arrives}. Shall I pay?`);
 }
-async function pay(item) {
-  // Step 4 puts the passkey check here.
+async function pay(item, again = false) {
+  if (!(await passkey.available())) {
+    closeSheet();
+    return speak("This phone can't check your face here, so I haven't paid.");
+  }
+  let ok = false;
+  try { ok = await passkey.confirm(); }
+  catch (e) {
+    if (e.name === 'NotAllowedError' && !again) {
+      // A spoken "yes" may arrive without a tap, and Face ID needs one: offer the one big button.
+      openSheet({ title: "Check it's you", lines: ['Use Face ID or your fingerprint to pay.'], yes: 'Check with Face ID', onYes: () => pay(item, true) });
+      return speak("Tap the big button and I'll check it's you.");
+    }
+  }
   closeSheet();
+  if (!ok) return speak("That didn't check out, so I haven't paid.");
   speak(`Paid. Your beans arrive ${item.arrives}.`);
 }
 
@@ -259,6 +299,7 @@ function hold(on) {
   talk.setAttribute('aria-pressed', String(on));
   if (on) {
     hush();
+    if (!liveBroken) { startLive(); return; }
     if (!Rec) { held = false; talk.setAttribute('aria-pressed', 'false'); showTyped(); return; }
     heard = '';
     rec = new Rec(); rec.lang = 'en-GB'; rec.interimResults = true; rec.continuous = true;
@@ -271,8 +312,45 @@ function hold(on) {
     talkLabel.textContent = 'Listening';
     status.textContent = 'Listening';
   } else {
+    if (live && live.connected && !liveBroken) { live.stop(); talkLabel.textContent = 'Heard you'; return; }
     if (rec) rec.stop();
     talkLabel.textContent = 'Heard you';
+  }
+}
+
+// ---------- Gemini Live ----------
+const TOOL_ACTIONS = {
+  open_tile: (a) => ({ type: 'open', tile: a.tile }),
+  read_note: () => (dialog.open && (reader.docEl || reader.area) ? { type: 'read' } : { type: 'open', tile: 'notes' }),
+  where_am_i: () => ({ type: 'where' }), stop_reading: () => ({ type: 'stop' }), carry_on: () => ({ type: 'resume' }),
+  edit_text: (a) => ({ type: 'edit', from: String(a.from || ''), to: String(a.to ?? '') }),
+  draft_message: (a) => ({ type: 'draft', to: 'mum', text: a.text || '' }),
+  send: () => ({ type: 'send' }), cancel: () => ({ type: 'no' }), start_pay: () => ({ type: 'pay', item: 'beans' }),
+};
+async function onTool(name, args) {
+  const make = TOOL_ACTIONS[name];
+  if (!make) return { error: 'unknown tool' };
+  liveQuiet = true; lastLine = '';
+  try { await act({ action: make(args) }); } finally { liveQuiet = false; }
+  return { say: lastLine || 'Done.' };
+}
+async function startLive() {
+  live ||= createLive({
+    onTool,
+    onCaption: (text) => { status.textContent = text; },
+    onHeard: (text) => { talkLabel.textContent = text; },
+    onTurnEnd: () => { if (!held) talkLabel.textContent = 'Hold to talk'; },
+  });
+  talkLabel.textContent = 'Listening';
+  status.textContent = 'Listening';
+  try {
+    await live.start();
+    if (!held) live.stop(); // let go before the line opened
+  } catch (e) {
+    console.warn('Live unavailable, using the browser voice', e.message);
+    liveBroken = true;
+    // Same hold, simpler ears: switch to the browser's speech recognition at once.
+    if (held) { held = false; hold(true); } else { talk.setAttribute('aria-pressed', 'false'); talkLabel.textContent = 'Hold to talk'; }
   }
 }
 talk.addEventListener('pointerdown', (e) => { e.preventDefault(); hold(true); });
@@ -299,9 +377,16 @@ export function act({ say = '', action } = {}) {
   const inDoc = dialog.open && (reader.docEl || reader.area);
   switch (a.type) {
     case 'open': return byId(a.tile) ? runTile(a.tile, null, 'talk') : speak(say);
-    case 'draft': return openDraft(a.text);
+    case 'draft': return openDraft(a.text || undefined);
     case 'pay': return openPay();
-    case 'yes': case 'send': return sheet && sheet.yes ? sheet.yes() : speak("There's nothing to send right now.");
+    case 'send':
+      // Said "send" over a draft: read it back and ask first. "Yes" (or "send" again) sends.
+      if (reader.area && sheet && !sheet.confirming) {
+        sheet.confirming = true;
+        return speak(`Send this to Mum: ${reader.area.value} Yes?`);
+      }
+      return sheet && sheet.yes ? sheet.yes() : speak("There's nothing to send right now.");
+    case 'yes': return sheet && sheet.yes ? sheet.yes() : speak("There's nothing to say yes to right now.");
     case 'no': if (dialog.open) closeSheet(); return speak(say || 'Okay, I left it.');
     case 'stop': hush(); reader.reading = false; return speak('Stopped.', { show: true });
     case 'read': return inDoc ? readFrom(0) : speak('Open a note or a message first.');
@@ -312,6 +397,7 @@ export function act({ say = '', action } = {}) {
       const r = replaceWord(reader.text, a.from, a.to, reader.index);
       if (!r.changed) return speak(`I couldn't find ${a.from}.`);
       reader.text = r.text; reader.index = r.index;
+      if (sheet) sheet.confirming = false;
       if (reader.area) reader.area.value = r.text;
       renderDoc();
       return speak(`Changed. ${sentences(r.text)[r.index]}`);
@@ -323,6 +409,7 @@ export function act({ say = '', action } = {}) {
 // ---------- keys: 1 to 6 press tiles, Space held is talk ----------
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && dialog.open) { e.preventDefault(); closeSheet(); return; }
+  if (e.key === 'Escape' && look.nolook) { e.preventDefault(); setNoLook(false); return; }
   if (e.target.closest('input, textarea, dialog')) return;
   if (e.code === 'Space' && !e.repeat && e.target === document.body) { e.preventDefault(); hold(true); }
   const n = Number(e.key);
@@ -330,6 +417,143 @@ document.addEventListener('keydown', (e) => {
   if (n >= 1 && n <= tiles.length && !e.metaKey && !e.ctrlKey && !e.altKey) tiles[n - 1].click();
 });
 document.addEventListener('keyup', (e) => { if (e.code === 'Space' && e.target === document.body) hold(false); });
+
+// ---------- Your look: text, colours, voice, and the demo controls ----------
+const RATES = [[0.75, 'slow'], [1, 'normal'], [1.25, 'quick'], [1.5, 'fast']];
+const rateName = (r) => (RATES.find(([v]) => v === r) || [0, 'normal'])[1];
+async function setLook(change, line) {
+  Object.assign(look, change);
+  try { Object.assign(look, await writeLook(librarian, look)); } catch { /* stub Librarian */ }
+  applyLook(look); store.set('look', look);
+  speak(line(look));
+}
+async function openLook(focusKey) {
+  if (!dialog.open) opener = document.activeElement;
+  hush(); reader.reading = false; reader.docEl = null; reader.area = null;
+  let paused = false;
+  try { paused = !!(await librarian.getProfile()).memoryPaused; } catch { /* stub */ }
+  const btn = (k, text, on, pressed) => {
+    const b = el('button', { className: 'choice', type: 'button', textContent: text });
+    b.dataset.k = k;
+    if (pressed != null) b.setAttribute('aria-pressed', String(pressed));
+    b.addEventListener('click', on);
+    return b;
+  };
+  const group = (title, ...kids) => el('section', { className: 'group' }, el('h3', { textContent: title }), el('div', { className: 'choices' }, ...kids));
+  const i = SIZES.indexOf(look.size), r = RATES.findIndex(([v]) => v === look.rate);
+  const refresh = (k) => () => openLook(k);
+  const kids = [
+    el('h2', { id: 'sheet-title', textContent: 'Your look' }),
+    el('p', { className: 'quiet', textContent: `Saved in your ability profile on this phone: text ${look.size} percent, ${THEMES[look.theme].toLowerCase()}, voice ${rateName(look.rate)}.` }),
+    group(`Text, now ${look.size}%`,
+      btn('smaller', 'Smaller', () => i <= 0 ? speak('Text is as small as it goes.') :
+        setLook({ size: SIZES[i - 1] }, (l) => `Text: smaller. Now ${l.size} percent.`).then(refresh('smaller'))),
+      btn('bigger', 'Bigger', () => i >= SIZES.length - 1 ? speak('Text is as big as it goes, 400 percent.') :
+        setLook({ size: SIZES[i + 1] }, (l) => `Text: bigger. Now ${l.size} percent.`).then(refresh('bigger')))),
+    group('Colours', ...Object.entries(THEMES).map(([t, name]) =>
+      btn(`theme-${t}`, name, () => setLook({ theme: t }, () => `Colours: ${name.toLowerCase()}.`).then(refresh(`theme-${t}`)), look.theme === t))),
+    group(`Voice, ${rateName(look.rate)}`,
+      btn('slower', 'Slower', () => r <= 0 ? speak('That is the slowest.') :
+        setLook({ rate: RATES[r - 1][0] }, (l) => `Voice: slower. This is ${rateName(l.rate)}.`).then(refresh('slower'))),
+      btn('faster', 'Faster', () => r >= RATES.length - 1 ? speak('That is the fastest.') :
+        setLook({ rate: RATES[r + 1][0] }, (l) => `Voice: faster. This is ${rateName(l.rate)}.`).then(refresh('faster'))),
+      btn('voice', "Murmur's voice", () => { look.voice = !look.voice; store.set('look', look);
+        status.textContent = look.voice ? "Murmur's voice is on." : "Murmur's voice is off. I'll show my lines here.";
+        if (look.voice) speak(status.textContent); openLook('voice'); }, look.voice)),
+    group('Without looking',
+      btn('nolook', 'No-look mode', () => { closeSheet(); setNoLook(true); }, !!look.nolook)),
+    group('Learning',
+      btn('learn', paused ? 'Start learning again' : 'Stop learning', async () => {
+        try { await librarian.setMemoryPaused(!paused); } catch { /* stub */ }
+        speak(paused ? "Learning is on. I'll notice what you do most." : "Learning is off. I won't note what you tap.");
+        openLook('learn'); }),
+      btn('week', 'Load a week of use', () => { closeSheet(); loadWeek(); }),
+      btn('reset', 'Start again as day 1', resetDayOne)),
+  ];
+  if (await passkey.available() && !passkey.hasPasskey()) {
+    kids.push(group('Paying', btn('passkey', 'Set up Face ID for paying', async () => {
+      try { await passkey.setup(); speak("Face ID is set. I'll ask for it before I pay."); openLook(); }
+      catch { speak("That didn't work, so nothing changed."); }
+    })));
+  }
+  const done = el('button', { className: 'choice yes', type: 'button', textContent: 'Done' });
+  done.addEventListener('click', closeSheet);
+  kids.push(el('div', { className: 'row' }, done));
+  body.replaceChildren(...kids);
+  sheet = null;
+  if (!dialog.open) { dialog.show(); $('main').inert = true; }
+  (focusKey && body.querySelector(`[data-k="${focusKey}"]`) || body.querySelector('button')).focus();
+}
+function resetDayOne() {
+  // Forget the learned log and menu; keep Your look and the passkey.
+  try {
+    for (const k of Object.keys(localStorage)) if (/^aat:.*aa\.mine\.(episodicLog|proposals)/.test(k) || k === 'murmur:prefs' || k === 'murmur:stublog') localStorage.removeItem(k);
+  } catch { /* nothing stored */ }
+  location.reload();
+}
+$('#look-link').addEventListener('click', (e) => { e.preventDefault(); openLook(); });
+
+// ---------- no-look mode (screen reader off): tap = Now, swipe = next, double tap = do it, hold = talk ----------
+const nl = $('#nolook');
+let cursor = 0;
+function earcon(kind) {
+  try {
+    const ctx = audioOut(), t = ctx.currentTime;
+    const notes = { move: [660], do: [523, 784], hold: [330], edge: [220], end: [784, 523] }[kind];
+    notes.forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t + i * 0.09); g.gain.exponentialRampToValueAtTime(0.25, t + i * 0.09 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.09 + 0.08);
+      o.start(t + i * 0.09); o.stop(t + i * 0.09 + 0.09);
+    });
+  } catch { /* no audio: speech still carries it */ }
+  if (navigator.vibrate) navigator.vibrate({ move: 10, do: [20, 40, 20], hold: 30, edge: [10, 30, 10, 30, 10], end: 15 }[kind]);
+}
+function point(i) {
+  const tiles = [...menuEl.querySelectorAll('.tile')];
+  menuEl.querySelector('.tile.cursor')?.classList.remove('cursor');
+  cursor = Math.max(0, Math.min(tiles.length - 1, i));
+  tiles[cursor].classList.add('cursor');
+  tiles[cursor].scrollIntoView({ block: 'center' });
+  const t = byId(tiles[cursor].dataset.id);
+  const why = tiles[cursor].querySelector('.why')?.textContent || '';
+  speak(cursor === 0 ? `Now: ${t.title}. ${why}. Double tap to do it.` : `${t.title}. ${why}.`);
+}
+const gestures = recogniser({
+  tap() { if (dialog.open) { earcon('move'); speak(status.textContent); } else { earcon('move'); point(0); } },
+  swipe(dir) {
+    if (dialog.open) { earcon('end'); closeSheet(); speak('Closed. Tap for Now.'); return; }
+    const step = dir === 'right' || dir === 'down' ? 1 : -1;
+    const last = menuEl.querySelectorAll('.tile').length - 1;
+    if (cursor + step < 0 || cursor + step > last) { earcon('edge'); speak(step > 0 ? "That's the last one." : "That's Now, the first one."); return; }
+    earcon('move'); point(cursor + step);
+  },
+  doubleTap() {
+    earcon('do');
+    if (dialog.open) { const y = body.querySelector('.choice.yes'); if (y) y.click(); else speak(status.textContent); return; }
+    const tile = menuEl.querySelectorAll('.tile')[cursor];
+    if (tile) runTile(tile.dataset.id, tile, 'nolook');
+  },
+  holdStart() { earcon('hold'); hold(true); },
+  holdEnd() { hold(false); },
+});
+nl.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('button')) return;
+  e.preventDefault(); audioOut(); nl.setPointerCapture(e.pointerId); gestures.down(e.clientX, e.clientY, e.timeStamp);
+});
+nl.addEventListener('pointermove', (e) => gestures.move(e.clientX, e.clientY));
+nl.addEventListener('pointerup', (e) => gestures.up(e.clientX, e.clientY));
+nl.addEventListener('pointercancel', () => gestures.cancel());
+nl.addEventListener('contextmenu', (e) => e.preventDefault()); // a long press is talk, not a menu
+function setNoLook(on) {
+  look.nolook = on; store.set('look', look);
+  nl.hidden = !on;
+  document.documentElement.classList.toggle('no-look', on);
+  if (on) { cursor = 0; earcon('do'); speak('No-look mode. Tap anywhere for Now, swipe for the next, double tap to do it, hold to talk.'); }
+  else { menuEl.querySelector('.tile.cursor')?.classList.remove('cursor'); speak('No-look mode is off.'); menuEl.querySelector('.tile')?.focus(); }
+}
+$('#nolook-exit').addEventListener('click', () => setNoLook(false));
 
 // ---------- demo control: a week of use (Your look calls this) ----------
 export async function loadWeek() {
@@ -350,7 +574,8 @@ export async function loadWeek() {
 new ResizeObserver(([e]) => document.documentElement.style.setProperty('--footer-h', `${Math.ceil(e.borderBoxSize[0].blockSize)}px`))
   .observe(document.querySelector('footer'));
 await rerank();
-window.murmur = { act, ask, loadWeek, runTile, speak, librarian };
+window.murmur = { act, ask, loadWeek, runTile, speak, librarian, look, setNoLook };
+if (look.nolook) { nl.hidden = false; document.documentElement.classList.add('no-look'); }
 try {
   const r = await fetch('/api/menu', { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ part: daypart(new Date()), top: byId(order[0]).title, moved: [...menuEl.querySelectorAll('.moved .title')].map((n) => n.textContent) }) });

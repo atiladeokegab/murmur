@@ -1,6 +1,6 @@
 // Travel: find flights, pick one, hold it (gate: pay, simulated; nothing is charged). Invented airlines.
 // shortcut: offline results for London to Lisbon only; swap findFlights' source for Gemini grounded search when the key lands.
-import { btn, esc, find, money, style, wire } from '../shop/ui.js';
+import { controls, h, money, style } from '../shop/ui.js';
 
 const ROUTES = {
   'london-lisbon': { from: 'London', to: 'Lisbon', flights: [
@@ -26,12 +26,12 @@ function pickOf(q, flights) {
 }
 
 export function createTravel() {
-  let root = null, os = {}, armed = false, s = {};
+  let root = null, body = null, doc = null, ui = null, s = {};
   const fresh = () => ({ view: 'search', query: null, results: [], selected: null, held: null });
-  const render = () => { if (root) root.innerHTML = html(); };
   const sel = () => s.results.find((f) => f.id === s.selected);
 
-  const handlers = {
+  // A person's own tap on Hold is their yes (contract §7); the agent's tap comes after the runner's gate.
+  const on = {
     search(key) {
       const [route, day] = key.split('|');
       s.query = { from: ROUTES[route].from, to: ROUTES[route].to, day };
@@ -39,29 +39,33 @@ export function createTravel() {
       s.selected = null; s.view = 'results'; render();
     },
     pick(id) { s.selected = id; s.view = 'flight'; render(); },
-    async hold() {
-      if (!sel()) return;
-      if (!armed) { const ok = await os.confirm?.({ gate: 'pay', readback: app.actions.hold.readback(s) }); if (!ok) return; }
-      armed = false;
-      s.held = { ...sel(), day: s.query.day, ref: `MUR-${sel().id}` };
-      s.view = 'held'; render();
-    },
-    back() { s.view = s.results.length ? 'results' : 'search'; s.selected = null; render(); },
+    hold() { if (!sel()) return; s.held = { ...sel(), day: s.query.day, ref: `MUR-${sel().id}` }; s.view = 'held'; render(); },
+    back() { s.view = s.results.length ? 'results' : 'search'; s.selected = s.view === 'results' ? null : s.selected; render(); },
+    newSearch() { s.view = 'search'; render(); },
   };
 
-  function html() {
-    let body;
-    if (s.view === 'search') body = `<p>Flights from London to Lisbon.</p><ul>${DAYS.slice(4).map((d) => `<li><span>${cap(d)}</span>${btn('search', `Find flights on ${cap(d)}`, `london-lisbon|${d}`)}</li>`).join('')}</ul>`;
-    else if (s.view === 'results') body = `<ul>${s.results.map((f) => `<li><span>${esc(sentence(f))}</span>${btn('pick', `Pick the ${f.time}`, f.id)}</li>`).join('')}</ul>`;
-    else if (s.view === 'flight') body = `<p>${esc(sentence(sel()))}</p><button type="button" class="m-app-btn" data-act="hold" data-main>Hold this flight</button>${btn('back', 'Back to the flights')}`;
-    else body = `<p role="status">${esc(app.read())}</p>${btn('back', 'Back to the flights')}`;
-    return `<section class="m-app" aria-labelledby="travel-h"><h1 id="travel-h" tabindex="-1">Travel</h1>
-      <p class="m-app-place">${esc(app.place().where)}</p>${body}</section>`;
+  function render() {
+    if (!root) return;
+    ui.clear();
+    const E = (t, p, ...k) => h(doc, t, p, ...k);
+    const kids = [E('p', { className: 'm-app-place' }, app.place().where)];
+    if (s.view === 'search') kids.push(E('p', {}, 'Flights from London to Lisbon.'),
+      E('ul', {}, DAYS.slice(4).map((d) => E('li', {}, E('span', {}, cap(d)), ui.btn('search', `Find flights on ${cap(d)}`, on.search, { arg: `london-lisbon|${d}` })))));
+    else if (s.view === 'results') kids.push(E('ul', {}, s.results.map((f) => E('li', {}, E('span', {}, sentence(f)), ui.btn('pick', `Pick the ${f.time}`, on.pick, { arg: f.id })))),
+      ui.btn('newSearch', 'New search', on.newSearch));
+    else if (s.view === 'flight') kids.push(E('p', {}, sentence(sel())), ui.btn('hold', 'Hold this flight', on.hold, { main: true }), ui.btn('back', 'Back to the flights', on.back));
+    else kids.push(E('p', {}, app.read()), ui.btn('back', 'Back to the flights', on.back));
+    body.replaceChildren(...kids);
   }
 
   const app = {
     id: 'travel', name: 'Travel',
-    mount(el, theOs = {}) { root = el; os = theOs; style(el.ownerDocument); wire(root, handlers); render(); },
+    async mount(el) {
+      root = el; doc = el.ownerDocument; ui = controls(doc); style(doc);
+      body = h(doc, 'div', { className: 'm-app-body' });
+      root.append(h(doc, 'h2', { id: 'travel-h', textContent: 'Travel' }), body);
+      render();
+    },
     read() {
       if (s.view === 'held') return `Held: ${s.held.airline}, ${cap(s.held.day)} at ${s.held.spoken}, for 24 hours. Nothing is charged.`;
       if (s.view === 'flight') return sentence(sel());
@@ -75,11 +79,11 @@ export function createTravel() {
       return { where: 'Travel', item: 'search', n: 1, of: 1, next: 'findFlights' };
     },
     state() { return structuredClone(s); },
-    seed() { s = fresh(); armed = false; render(); },
-    reset() { app.seed(); },
+    async seed() { s = fresh(); render(); },
+    async reset() { await app.seed(); },
     actions: {
       findFlights: {
-        describe: 'Find flights',
+        describe: 'Find flights', doing: 'Finding flights',
         params: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' }, day: { type: 'string' } }, required: ['to'] },
         gate: null,
         hint: 'Each day has a Find flights button',
@@ -88,13 +92,14 @@ export function createTravel() {
           const day = DAYS.find((d) => norm(p.day || 'friday').includes(d));
           if (!from.includes('london') || !to.includes('lisbon')) throw new Error('I can only find flights from London to Lisbon today.');
           if (!day || DAYS.indexOf(day) < 4) throw new Error('I have Friday, Saturday and Sunday. Which day?');
-          if (s.view !== 'search') { s.view = 'search'; render(); } // shortcut: no visible "new search" button yet; add one if Atlas asks
-          await ctx.tap(find(root, 'search', `london-lisbon|${day}`));
+          if (s.view === 'flight' || s.view === 'held') await ctx.tap(ui.find('back'));
+          if (s.view === 'results') await ctx.tap(ui.find('newSearch'));
+          await ctx.tap(ui.find('search', `london-lisbon|${day}`));
         },
-        verify(st, p) { return st.view === 'results' && st.results.length === 3 && norm(p.day || 'friday').includes(st.query.day); },
+        verify(st, p) { return (st.view === 'results' && st.results.length === 3 && norm(p.day || 'friday').includes(st.query.day)) || 'The flights are not showing.'; },
       },
       pick: {
-        describe: 'Pick a flight',
+        describe: 'Pick one of the flights found', doing: 'Picking the flight',
         params: { type: 'object', properties: { flight: { type: 'string' } }, required: ['flight'] },
         gate: null,
         hint: 'Each flight has a Pick button after its price',
@@ -102,23 +107,22 @@ export function createTravel() {
           if (!s.results.length) throw new Error('Find the flights first.');
           const f = pickOf(p.flight, s.results);
           if (!f) throw new Error(`There's no ${p.flight}. There's the ${s.results.map((x) => x.time).join(', the ')}.`);
-          if (s.view !== 'results') await ctx.tap(find(root, 'back'));
-          await ctx.tap(find(root, 'pick', f.id));
+          if (s.view !== 'results') await ctx.tap(ui.find('back'));
+          await ctx.tap(ui.find('pick', f.id));
         },
-        verify(st, p) { const f = pickOf(p.flight, st.results); return !!f && st.selected === f.id && st.view === 'flight'; },
+        verify(st, p) { const f = pickOf(p.flight, st.results); return (!!f && st.selected === f.id && st.view === 'flight') || 'That flight is not open.'; },
       },
       hold: {
-        describe: 'Hold the flight',
+        describe: 'Hold the picked flight for 24 hours', doing: 'Holding the flight',
         params: { type: 'object', properties: {} },
         gate: 'pay',
         hint: 'Hold this flight is the large button under the flight',
-        readback(st = s) { const f = st.results.find((x) => x.id === st.selected); return `${f.airline}, ${cap(st.query.day)} at ${f.spoken} from ${f.airport} to ${st.query.to}, ${money(f.price)}, held for 24 hours.`; },
+        readback(st) { const f = st.results.find((x) => x.id === st.selected); return `${f.airline}, ${cap(st.query.day)} at ${f.spoken} from ${f.airport} to ${st.query.to}, ${money(f.price)}, held for 24 hours.`; },
         async run(p, ctx) {
           if (!sel()) throw new Error('Pick a flight first.');
-          armed = true;
-          try { await ctx.tap(find(root, 'hold')); } finally { armed = false; }
+          await ctx.tap(ui.find('hold'));
         },
-        verify(st) { return st.view === 'held' && !!st.held && st.held.id === st.selected; },
+        verify(st) { return (st.view === 'held' && !!st.held && st.held.id === st.selected) || 'The flight is not held.'; },
       },
     },
   };

@@ -1,6 +1,6 @@
 // Shop: order your usual, reorder, add to basket, pay (gate: pay, fingerprint), track.
 // Simulated shops, invented names. No card data anywhere: paying is a fingerprint plus a record.
-import { btn, esc, find, memKV, money, spokenTime, style, wire } from './ui.js';
+import { controls, h, memKV, money, spokenTime, style } from './ui.js';
 
 const SHOPS = {
   'demo-cafe': { name: 'Demo Café', menu: {
@@ -39,15 +39,11 @@ function findItem(q, inShop) {
 }
 
 export function createShop({ now = () => Date.now() } = {}) {
-  let root = null, os = {}, kv = memKV(), armed = false;
-  let s = {};
+  let root = null, body = null, doc = null, ui = null, kv = memKV(), s = {};
 
-  const fresh = () => ({ view: 'shop', shop: 'demo-cafe', basket: [], usual: structuredClone(USUAL),
-    orders: structuredClone(PAST), lastSaid: '' });
-  const save = () => kv.set('shop', 'usual', s.usual).catch(() => {}); // only ids and counts; never prices or payment
-  const render = () => { if (root) { root.innerHTML = html(); } };
+  const fresh = () => ({ view: 'shop', shop: 'demo-cafe', basket: [], usual: structuredClone(USUAL), orders: structuredClone(PAST) });
+  const save = () => kv.set('usual', s.usual).catch(() => {}); // only ids and counts; never prices or payment
   const lastOrder = () => s.orders.at(-1);
-  const toShop = async (ctx) => { if (s.view !== 'shop') await ctx.tap(find(root, 'back')); };
 
   function addLines(lines) {
     for (const l of lines) {
@@ -60,7 +56,8 @@ export function createShop({ now = () => Date.now() } = {}) {
     render();
   }
 
-  function doPay() {
+  // A person's own tap on Pay is their yes (contract §7); the agent's tap comes after the runner's gate.
+  function pay() {
     if (!s.basket.length) return;
     const t = new Date(now() + PREP_MIN * 60e3);
     t.setSeconds(0, 0); t.setMinutes(Math.ceil(t.getMinutes() / 5) * 5);
@@ -75,63 +72,56 @@ export function createShop({ now = () => Date.now() } = {}) {
     render();
   }
 
-  const handlers = {
+  const on = {
     usual(shop) { const u = s.usual[shop]; if (u) { s.basket = []; addLines(structuredClone(u.items)); } },
     reorder() { const o = lastOrder(); if (o) addLines(structuredClone(o.items)); },
     add(key) { const [shop, id] = key.split('/'); addLines([{ shop, id, qty: 1 }]); },
     remove(id) { s.basket = s.basket.filter((l) => l.id !== id); render(); },
-    // By hand the OS asks first; when the agent taps Pay the runner has already asked (armed).
-    async pay() {
-      if (!s.basket.length) return;
-      if (!armed) {
-        const ok = await os.confirm?.({ gate: 'pay', readback: app.actions.pay.readback(s) });
-        if (!ok) return;
-      }
-      armed = false;
-      doPay();
-    },
-    track() { s.view = 'track'; render(); },
-    back() { s.view = 'shop'; render(); },
+    pay, track() { s.view = 'track'; render(); }, back() { s.view = 'shop'; render(); },
   };
-
-  function html() {
-    const o = lastOrder();
-    if (s.view === 'track' && o) {
-      return `<section class="m-app" aria-labelledby="shop-h"><h1 id="shop-h" tabindex="-1">Your order</h1>
-        <p class="m-app-place">${esc(app.place().where)}</p>
-        <p>${esc(say(o.items))}.</p><p role="status">${esc(trackLine(o))}</p>${btn('back', 'Back to the shops')}</section>`;
-    }
-    const shops = Object.entries(SHOPS).map(([id, sh]) => {
-      const u = s.usual[id];
-      return `<h2>${esc(sh.name)}</h2>${u ? `<p>${btn('usual', `Your usual: ${say(u.items)}`, id)}</p>` : ''}
-        <ul>${Object.entries(sh.menu).map(([iid, it]) => `<li><span>${esc(it.name)}, ${money(it.price)}</span>${btn('add', `Add ${it.name}`, `${id}/${iid}`)}</li>`).join('')}</ul>`;
-    }).join('');
-    const basket = s.basket.length
-      ? `<ul>${s.basket.map((l) => `<li><span>${l.qty} × ${esc(item(l).name)}</span>${btn('remove', `Remove ${item(l).name}`, l.id)}</li>`).join('')}</ul>
-         <p class="m-app-total">Total ${money(total(s.basket))}</p>
-         <button type="button" class="m-app-btn" data-act="pay" data-main>Pay ${money(total(s.basket))} with your fingerprint</button>`
-      : '<p>Your basket is empty.</p>';
-    return `<section class="m-app" aria-labelledby="shop-h"><h1 id="shop-h" tabindex="-1">Shop</h1>
-      <p class="m-app-place">${esc(app.place().where)}</p>
-      <h2>Basket</h2>${basket}
-      ${o ? `<p>${btn('reorder', `Reorder last: ${say(o.items)}`)}</p>` : ''}
-      ${o && o.status === 'preparing' ? `<p>${btn('track', 'Track your order')}</p>` : ''}
-      ${shops}</section>`;
-  }
 
   function trackLine(o) {
     if (o.status !== 'preparing') return 'Collected.';
-    const ready = new Date(o.readyAt);
-    return now() >= o.readyAt ? 'Ready now.' : `Ready at ${spokenTime(ready)}.`;
+    return now() >= o.readyAt ? 'Ready now.' : `Ready at ${spokenTime(new Date(o.readyAt))}.`;
   }
+
+  function render() {
+    if (!root) return;
+    ui.clear();
+    const E = (t, p, ...k) => h(doc, t, p, ...k), o = lastOrder();
+    const kids = [E('p', { className: 'm-app-place' }, app.place().where)];
+    if (s.view === 'track' && o) {
+      kids.push(E('p', {}, `${say(o.items)}.`), E('p', {}, trackLine(o)), ui.btn('back', 'Back to the shops', on.back));
+    } else {
+      kids.push(E('h3', {}, 'Basket'));
+      if (s.basket.length) {
+        kids.push(E('ul', {}, s.basket.map((l) => E('li', {}, E('span', {}, `${l.qty} × ${item(l).name}`), ui.btn('remove', `Remove ${item(l).name}`, on.remove, { arg: l.id })))),
+          E('p', { className: 'm-app-total' }, `Total ${money(total(s.basket))}`),
+          ui.btn('pay', `Pay ${money(total(s.basket))} with your fingerprint`, on.pay, { main: true }));
+      } else kids.push(E('p', {}, 'Your basket is empty.'));
+      if (o) kids.push(E('p', {}, ui.btn('reorder', `Reorder last: ${say(o.items)}`, on.reorder)));
+      if (o?.status === 'preparing') kids.push(E('p', {}, ui.btn('track', 'Track your order', on.track)));
+      for (const [id, sh] of Object.entries(SHOPS)) {
+        const u = s.usual[id];
+        kids.push(E('h3', {}, sh.name), u && E('p', {}, ui.btn('usual', `Your usual: ${say(u.items)}`, on.usual, { arg: id })),
+          E('ul', {}, Object.entries(sh.menu).map(([iid, it]) => E('li', {}, E('span', {}, `${it.name}, ${money(it.price)}`), ui.btn('add', `Add ${it.name}`, on.add, { arg: `${id}/${iid}` })))));
+      }
+    }
+    body.replaceChildren(...kids.filter(Boolean)); // the h2 stays put, so focus on it survives a re-render
+  }
+
+  const tap = (ctx, act, arg) => ctx.tap(ui.find(act, arg));
+  const toShop = async (ctx) => { if (s.view !== 'shop') await tap(ctx, 'back'); };
 
   const app = {
     id: 'shop', name: 'Shop',
-    mount(el, theOs = {}) {
-      root = el; os = theOs; kv = theOs.kv || kv;
-      style(el.ownerDocument);
-      wire(root, handlers);
-      kv.get('shop', 'usual').then((u) => { if (u) { s.usual = u; render(); } }).catch(() => {});
+    async mount(el, os = {}) {
+      root = el; doc = el.ownerDocument; ui = controls(doc); kv = os.kv || kv;
+      style(doc);
+      body = h(doc, 'div', { className: 'm-app-body' });
+      root.append(h(doc, 'h2', { id: 'shop-h', textContent: 'Shop' }), body);
+      const u = await kv.get('usual').catch(() => null);
+      if (u) s.usual = u;
       render();
     },
     read() {
@@ -147,12 +137,12 @@ export function createShop({ now = () => Date.now() } = {}) {
       return { where: 'Shop', item: 'the shops', n: 1, of: Object.keys(SHOPS).length, next: 'orderUsual' };
     },
     state() { return structuredClone({ ...s, basketTotal: total(s.basket) }); },
-    seed() { s = fresh(); armed = false; return save().then(render); },
-    reset() { return app.seed(); },
+    async seed() { s = fresh(); await save(); render(); },
+    async reset() { await kv.set('usual', undefined).catch(() => {}); await app.seed(); },
     actions: {
       orderUsual: {
-        describe: 'Order your usual',
-        params: { type: 'object', properties: { shop: { type: 'string' } } },
+        describe: 'Order your usual', doing: 'Ordering your usual',
+        params: { type: 'object', properties: { shop: { type: 'string', description: 'Demo Café or Hill Street Roasters' } } },
         gate: null,
         hint: 'Your usual is the first button under each shop name',
         async run(p, ctx) {
@@ -160,24 +150,24 @@ export function createShop({ now = () => Date.now() } = {}) {
           if (!shop) throw new Error(`I don't know that shop. There's ${Object.values(SHOPS).map((x) => x.name).join(' and ')}.`);
           if (!s.usual[shop]) throw new Error(`You don't have a usual at ${SHOPS[shop].name} yet.`);
           await toShop(ctx);
-          await ctx.tap(find(root, 'usual', shop));
+          await tap(ctx, 'usual', shop);
         },
-        verify(st, p) { const shop = shopOf(p.shop); return !!shop && same(st.basket, st.usual[shop]?.items || [{}]); },
+        verify(st, p) { const shop = shopOf(p.shop); return (!!shop && same(st.basket, st.usual[shop]?.items || [{}])) || 'Your usual is not in the basket.'; },
       },
       reorderLast: {
-        describe: 'Reorder your last order',
+        describe: 'Reorder your last order', doing: 'Reordering your last order',
         params: { type: 'object', properties: {} },
         gate: null,
         hint: 'Reorder last is under the basket',
         async run(p, ctx) {
           if (!lastOrder()) throw new Error('There is no last order yet.');
           await toShop(ctx);
-          await ctx.tap(find(root, 'reorder'));
+          await tap(ctx, 'reorder');
         },
-        verify(st) { return st.basket.length > 0 && same(st.basket, st.orders.at(-1).items); },
+        verify(st) { return (st.basket.length > 0 && same(st.basket, st.orders.at(-1).items)) || 'The last order is not in the basket.'; },
       },
       addToBasket: {
-        describe: 'Add to your basket',
+        describe: 'Add an item to the basket', doing: 'Adding to your basket',
         params: { type: 'object', properties: { item: { type: 'string' }, shop: { type: 'string' } }, required: ['item'] },
         gate: null,
         hint: 'Each item has its own Add button, after its price',
@@ -185,34 +175,33 @@ export function createShop({ now = () => Date.now() } = {}) {
           const f = findItem(p.item, p.shop ? shopOf(p.shop) : null);
           if (!f) throw new Error(`I can't find ${p.item} in the shops.`);
           await toShop(ctx);
-          await ctx.tap(find(root, 'add', `${f.shop}/${f.id}`));
+          await tap(ctx, 'add', `${f.shop}/${f.id}`);
         },
-        verify(st, p) { const f = findItem(p.item, p.shop ? shopOf(p.shop) : null); return !!f && st.basket.some((l) => l.shop === f.shop && l.id === f.id); },
+        verify(st, p) { const f = findItem(p.item, p.shop ? shopOf(p.shop) : null); return (!!f && st.basket.some((l) => l.shop === f.shop && l.id === f.id)) || `${p.item} is not in the basket.`; },
       },
       pay: {
-        describe: 'Pay for your basket',
+        describe: 'Pay for the basket', doing: 'Paying for your order',
         params: { type: 'object', properties: {} },
         gate: 'pay',
         hint: 'Pay is the large button under the basket total',
-        // What leaves the phone, read from state, never from the model: "Flat white, Demo Café, £3.20."
-        readback(st = s) { return `${say(st.basket)}.`; },
+        // What leaves the phone, from state, never the model: "Flat white, Demo Café, £3.20."
+        readback(st) { return `${say(st.basket)}.`; },
         async run(p, ctx) {
           if (!s.basket.length) throw new Error('Your basket is empty.');
-          armed = true;
-          try { await ctx.tap(find(root, 'pay')); } finally { armed = false; }
+          await tap(ctx, 'pay');
         },
-        verify(st) { const o = st.orders.at(-1); return st.basket.length === 0 && o?.status === 'preparing' && st.view === 'track'; },
+        verify(st) { return (st.basket.length === 0 && st.orders.at(-1)?.status === 'preparing' && st.view === 'track') || 'It did not pay.'; },
       },
       track: {
-        describe: 'Track your order',
+        describe: 'Track the order', doing: 'Tracking your order',
         params: { type: 'object', properties: {} },
         gate: null,
         hint: 'Track your order is under the basket',
         async run(p, ctx) {
           if (lastOrder()?.status !== 'preparing') throw new Error('Nothing is on its way.');
-          if (s.view !== 'track') await ctx.tap(find(root, 'track'));
+          if (s.view !== 'track') await tap(ctx, 'track');
         },
-        verify(st) { return st.view === 'track'; },
+        verify(st) { return st.view === 'track' || 'The order is not showing.'; },
       },
     },
   };

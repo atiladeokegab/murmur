@@ -1,46 +1,41 @@
-// A just-enough DOM root for Hermes's app tests: innerHTML, one delegated click listener, and
-// querySelector for [data-act="x"][data-arg="y"]. Clicking goes through the app's own listener,
-// so a test proves the button exists, is enabled and is wired, the same path the agent's tap takes.
-import { memKV } from '../public/apps/shop/ui.js';
+// Hermes's test phone: the real SDK (registry, mountApp, createCtx, runAction, bus) on test/fake-dom.js,
+// with fresh app instances so each test owns its clock and state.
+import { createBus, createRegistry, createCtx, appKv, mountApp, runAction } from '../public/sdk/index.js';
+import { browserKV } from '../public/ports/browser-kv.js';
+import { fakeDocument, fakeStorage } from './fake-dom.js';
 
-const unesc = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-
-export function fakeRoot() {
-  let html = '', listener = null;
-  const root = {
-    get innerHTML() { return html; }, set innerHTML(v) { html = v; },
-    ownerDocument: null,
-    addEventListener(type, fn) { if (type === 'click') listener = fn; },
-    querySelector(sel) {
-      const want = [...sel.matchAll(/\[data-(act|arg)="((?:[^"\\]|\\.)*)"\]/g)].map((m) => [m[1], m[2].replace(/\\"/g, '"')]);
-      for (const tag of html.match(/<button\b[^>]*>/g) || []) {
-        const attrs = Object.fromEntries([...tag.matchAll(/data-(act|arg)="([^"]*)"/g)].map((m) => [m[1], unesc(m[2])]));
-        if (want.every(([k, v]) => attrs[k] === v)) {
-          const el = { dataset: attrs, disabled: /\sdisabled\b/.test(tag), tag,
-            closest: () => el, click() { if (!el.disabled) listener?.({ target: el }); } };
-          return el;
-        }
-      }
-      return null;
-    },
-    text() { return unesc(html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim(); },
+export async function phone(apps, { answers = [] } = {}) {
+  const doc = fakeDocument(), bus = createBus(), registry = createRegistry();
+  const port = browserKV({ storage: fakeStorage(), prefix: 'murmur' });
+  const roots = {}, taps = [], asked = [];
+  const cursor = { async moveTo(el, name) { taps.push(name); }, hide() {} };
+  const ask = async (q) => { asked.push(q); return answers.shift() ?? false; };
+  for (const app of apps) {
+    registry.register(app);
+    roots[app.id] = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say: (text) => bus.emit('say', { text }) });
+    await app.seed();
+  }
+  const ctxFor = (app) => createCtx({ app, root: roots[app.id], bus, kv: appKv(app.id, port), cursor, ask, signal: new AbortController().signal });
+  const run = (name, params = {}) => runAction({ registry, name, params, bus, ctxFor });
+  // A person's own tap: find the button by its visible text inside the app, and click it.
+  const press = (id, text) => {
+    const b = [...roots[id].all()].find((n) => n.tagName === 'BUTTON' && n.textContent.startsWith(text));
+    if (!b) throw new Error(`no button "${text}" in ${id}`);
+    b.click();
   };
-  return root;
+  return { doc, bus, roots, taps, asked, run, press, port };
 }
 
-// The agent's ctx as the spec describes it: tap a real control or fail loudly.
-export function fakeCtx(log = []) {
-  return {
-    log, kv: memKV(),
-    async tap(el) { if (!el) throw new Error('tap: no such control'); log.push(el.dataset.act); el.click(); await null; },
-    async type() {}, async say(t) { log.push(`say:${t}`); }, async confirm() { return true; },
-  };
-}
-
-// Run one action the way the runner does: gate check stays the runner's, then run, then verify.
-export async function act(app, name, params = {}, ctx = fakeCtx()) {
-  const a = app.actions[name];
-  if (!a) throw new Error(`no action ${name}`);
-  await a.run(params, ctx);
-  return a.verify(app.state(), params);
+// Contract §8 checks for one app object.
+export function checkContract(assert, app, gated) {
+  for (const k of ['mount', 'read', 'place', 'state', 'seed', 'reset']) assert.equal(typeof app[k], 'function', k);
+  for (const [name, a] of Object.entries(app.actions)) {
+    for (const k of ['describe', 'doing', 'hint']) assert.ok(typeof a[k] === 'string' && a[k], `${name}.${k}`);
+    const words = a.doing.split(/\s+/).length;
+    assert.ok(words >= 2 && words <= 5, `${name}.doing is 2 to 5 words`);
+    assert.equal(a.params?.type, 'object', `${name}.params`);
+    assert.equal(typeof a.verify, 'function');
+    if (a.gate) { assert.equal(typeof a.readback, 'function', `${name}.readback`); assert.equal(a.undo, undefined, `${name} gated, no undo`); }
+  }
+  assert.deepEqual(Object.entries(app.actions).filter(([, a]) => a.gate).map(([n]) => n), gated);
 }

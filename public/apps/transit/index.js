@@ -1,5 +1,5 @@
 // Transit: next bus, directions to a saved place, when to leave. A simulated timetable that starts at seed().
-import { btn, esc, find, minutes, num, spokenTime, style, wire } from '../shop/ui.js';
+import { controls, h, minutes, num, spokenTime, style } from '../shop/ui.js';
 
 const STOPS = { library: 'the stop by the library', market: 'the stop on Market Street' };
 // first: minutes after seed() of the first bus; every: minutes between buses.
@@ -18,10 +18,9 @@ const placeOf = (q) => { const n = norm(q).replace(/^(to |my )+/, '').replace(/ 
 const routeOf = (q) => (q == null || q === '' ? null : ROUTES[String(q).replace(/\D/g, '')] ? String(q).replace(/\D/g, '') : undefined);
 
 export function createTransit({ now = () => Date.now() } = {}) {
-  let root = null, s = {};
+  let root = null, body = null, doc = null, ui = null, s = {};
   const fresh = () => ({ view: 'home', seededAt: now(), shown: null });
-  const render = () => { if (root) root.innerHTML = html(); };
-
+  
   // Minutes until route r's next bus that you can still reach after walking `walk` minutes.
   function next(r, walk = 0) {
     const R = ROUTES[r], t = (now() - s.seededAt) / 60e3 + walk;
@@ -50,28 +49,42 @@ export function createTransit({ now = () => Date.now() } = {}) {
   }
 
   function show(view, shown) { s.view = view; s.shown = shown; render(); }
-  const handlers = {
+  const on = {
     next(r) { show('next', { route: r }); },
     directions(p) { show('directions', { place: p }); },
     leave(p) { show('leave', { place: p }); },
     back() { show('home', null); },
   };
 
-  function html() {
-    const body = s.view === 'home'
-      ? `<h2>Next bus</h2><ul>${Object.entries(ROUTES).map(([r, R]) => `<li><span>The ${r} from ${esc(STOPS[R.stop])}, ${esc(minutes(next(r).inMin))}</span>${btn('next', `Next ${r}`, r)}</li>`).join('')}</ul>
-         <h2>Saved places</h2><ul>${Object.entries(PLACES).map(([k, P]) => `<li><span>${esc(P.name)}</span>${btn('directions', `Directions to ${P.name}`, k)}${btn('leave', `When to leave for ${P.name}`, k)}</li>`).join('')}</ul>`
-      : `${s.view === 'directions' ? `<ol>${steps(s.shown.place).map((t) => `<li>${esc(t)}</li>`).join('')}</ol>` : `<p role="status">${esc(line())}</p>`}${btn('back', 'Back to Transit')}`;
-    return `<section class="m-app" aria-labelledby="transit-h"><h1 id="transit-h" tabindex="-1">${s.view === 'home' ? 'Transit' : esc(app.place().where)}</h1>
-      <p class="m-app-place">${esc(app.place().where)}</p>${body}</section>`;
+  function render() {
+    if (!root) return;
+    ui.clear();
+    const E = (t, p, ...k) => h(doc, t, p, ...k);
+    const kids = [E('p', { className: 'm-app-place' }, app.place().where)];
+    if (s.view === 'home') {
+      kids.push(E('h3', {}, 'Next bus'),
+        E('ul', {}, Object.entries(ROUTES).map(([r, R]) => E('li', {}, E('span', {}, `The ${r} from ${STOPS[R.stop]}, ${minutes(next(r).inMin)}`), ui.btn('next', `Next ${r}`, on.next, { arg: r })))),
+        E('h3', {}, 'Saved places'),
+        E('ul', {}, Object.entries(PLACES).map(([k, P]) => E('li', {}, E('span', {}, P.name),
+          ui.btn('directions', `Directions to ${P.name}`, on.directions, { arg: k }), ui.btn('leave', `When to leave for ${P.name}`, on.leave, { arg: k })))));
+    } else {
+      kids.push(s.view === 'directions' ? E('ol', {}, steps(s.shown.place).map((t) => E('li', {}, t))) : E('p', {}, line()),
+        ui.btn('back', 'Back to Transit', on.back));
+    }
+    body.replaceChildren(...kids);
   }
 
-  const go = async (ctx, act, arg) => { if (s.view !== 'home') await ctx.tap(find(root, 'back')); await ctx.tap(find(root, act, arg)); };
+  const go = async (ctx, act, arg) => { if (s.view !== 'home') await ctx.tap(ui.find('back')); await ctx.tap(ui.find(act, arg)); };
   const needPlace = (p) => { const k = placeOf(p.place); if (!k) throw new Error(`I don't have that place saved. I know Work, Mum's and the library.`); return k; };
 
   const app = {
     id: 'transit', name: 'Transit',
-    mount(el) { root = el; style(el.ownerDocument); wire(root, handlers); render(); },
+    async mount(el) {
+      root = el; doc = el.ownerDocument; ui = controls(doc); style(doc);
+      body = h(doc, 'div', { className: 'm-app-body' });
+      root.append(h(doc, 'h2', { id: 'transit-h', textContent: 'Transit' }), body);
+      render();
+    },
     read: line,
     place() {
       const sh = s.shown;
@@ -84,11 +97,11 @@ export function createTransit({ now = () => Date.now() } = {}) {
       const routes = Object.fromEntries(Object.keys(ROUTES).map((r) => [r, { ...ROUTES[r], stopName: STOPS[ROUTES[r].stop], nextInMin: next(r).inMin }]));
       return structuredClone({ view: s.view, shown: s.shown, routes, places: Object.keys(PLACES), said: line() });
     },
-    seed() { s = fresh(); render(); },
-    reset() { app.seed(); },
+    async seed() { s = fresh(); render(); },
+    async reset() { await app.seed(); },
     actions: {
       nextBus: {
-        describe: 'Find the next bus',
+        describe: 'Find the next bus', doing: 'Finding the next bus',
         params: { type: 'object', properties: { route: { type: 'string' }, place: { type: 'string' } } },
         gate: null,
         hint: 'Each bus has a Next button under Next bus',
@@ -99,23 +112,23 @@ export function createTransit({ now = () => Date.now() } = {}) {
           if (!r) r = '25';
           await go(ctx, 'next', String(r));
         },
-        verify(st, p) { return st.view === 'next' && (!routeOf(p.route) || st.shown.route === routeOf(p.route)); },
+        verify(st, p) { return (st.view === 'next' && (!routeOf(p.route) || st.shown.route === routeOf(p.route))) || 'The bus times are not showing.'; },
       },
       directions: {
-        describe: 'Get directions',
+        describe: 'Get directions to a saved place', doing: 'Getting directions',
         params: { type: 'object', properties: { place: { type: 'string' } }, required: ['place'] },
         gate: null,
         hint: 'Directions is the first button beside each saved place',
         async run(p, ctx) { await go(ctx, 'directions', needPlace(p)); },
-        verify(st, p) { return st.view === 'directions' && st.shown.place === placeOf(p.place); },
+        verify(st, p) { return (st.view === 'directions' && st.shown.place === placeOf(p.place)) || 'The directions are not showing.'; },
       },
       whenToLeave: {
-        describe: 'Work out when to leave',
+        describe: 'Work out when to leave for a saved place', doing: 'Working out when to leave',
         params: { type: 'object', properties: { place: { type: 'string' } }, required: ['place'] },
         gate: null,
         hint: 'When to leave is the second button beside each saved place',
         async run(p, ctx) { await go(ctx, 'leave', needPlace(p)); },
-        verify(st, p) { return st.view === 'leave' && st.shown.place === placeOf(p.place); },
+        verify(st, p) { return (st.view === 'leave' && st.shown.place === placeOf(p.place)) || 'The leaving time is not showing.'; },
       },
     },
   };

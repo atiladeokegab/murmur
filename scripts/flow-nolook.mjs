@@ -1,0 +1,47 @@
+// Dev only: no-look mode with a mouse standing in for a finger. PLAYWRIGHT=<pkg> node scripts/flow-nolook.mjs [url] [outdir]
+const { chromium } = await import(process.env.PLAYWRIGHT || 'playwright');
+const url = process.argv[2] || 'http://localhost:8080/';
+const out = process.argv[3] || 'shots';
+const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+const page = await browser.newPage({ viewport: { width: 390, height: 757 } });
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+await page.addInitScript(() => { window.open = (u) => { (window.opened ||= []).push(u); return {}; }; navigator.vibrate = (p) => { (window.buzz ||= []).push(p); return true; }; });
+await page.goto(url, { waitUntil: 'networkidle' });
+await page.evaluate(() => localStorage.clear());
+await page.reload({ waitUntil: 'networkidle' });
+const say = () => page.locator('#say').textContent();
+const step = async (name, fn, check) => {
+  await fn(); await page.waitForTimeout(450);
+  const s = await say(); const ok = check(s);
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${s}`); if (!ok) errors.push(name);
+};
+const tap = async () => { await page.mouse.move(200, 300); await page.mouse.down(); await page.mouse.up(); };
+const swipe = async (dx) => { await page.mouse.move(150, 300); await page.mouse.down(); await page.mouse.move(150 + dx / 2, 302, { steps: 3 }); await page.mouse.move(150 + dx, 304, { steps: 3 }); await page.mouse.up(); };
+const dbl = async () => { await tap(); await page.waitForTimeout(80); await tap(); };
+await step('turn on from Your look', async () => { await page.locator('#look-link').click(); await page.locator('[data-k="nolook"]').click(); }, (s) => /^No-look mode\. Tap anywhere/.test(s));
+await step('tap anywhere is Now', tap, (s) => /^Now: Read my notes/.test(s));
+await step('swipe right is the next tile', () => swipe(140), (s) => /^Message Mum\./.test(s));
+await page.screenshot({ path: `${out}/nolook.png` });
+await step('swipe left goes back', () => swipe(-140), (s) => /^Now:/.test(s));
+await step('swipe left at the top says so', () => swipe(-140), (s) => /first one/.test(s));
+await swipe(140); await page.waitForTimeout(400);
+await step('double tap does it', dbl, (s) => /^Mum says/.test(s));
+await step('tap with a sheet open repeats the line', tap, (s) => /^Mum says/.test(s));
+await step('swipe with a sheet open closes it', () => swipe(140), (s) => /^Closed/.test(s));
+await step('double tap opens Mum again', dbl, (s) => /^Mum says/.test(s));
+await step('double tap with a sheet open presses its main button', dbl, (s) => /WhatsApp/.test(s));
+const open = await page.evaluate(() => !!document.querySelector('dialog[open]'));
+console.log(`${!open ? 'ok  ' : 'FAIL'} sheet closed`); if (open) errors.push('sheet open');
+await step('hold is talk', async () => { await page.mouse.move(200, 300); await page.mouse.down(); await page.waitForTimeout(700); }, () => true);
+const pressed = await page.locator('#talk').getAttribute('aria-pressed');
+console.log(`${pressed === 'true' ? 'ok  ' : 'FAIL'} talk bar pressed while holding: ${pressed}`); if (pressed !== 'true') errors.push('hold');
+await page.mouse.up(); await page.waitForTimeout(300);
+const released = await page.locator('#talk').getAttribute('aria-pressed');
+console.log(`${released === 'false' ? 'ok  ' : 'FAIL'} released: ${released}`); if (released !== 'false') errors.push('release');
+const buzz = await page.evaluate(() => (window.buzz || []).length);
+console.log(`${buzz > 3 ? 'ok  ' : 'FAIL'} vibrations: ${buzz}`); if (buzz <= 3) errors.push('vibrate');
+await step('Escape leaves', () => page.keyboard.press('Escape'), (s) => /off/.test(s));
+await browser.close();
+if (errors.length) { console.error('no-look flow FAILED:', errors.join(' | ')); process.exit(1); }
+console.log('no-look flow ok');

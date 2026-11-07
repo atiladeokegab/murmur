@@ -10,6 +10,7 @@ import * as relay from './lib/relay.js';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const KEY = process.env.GEMINI_API_KEY || '';
 const PROVIDER = KEY ? 'gemini' : 'demo';
+const LIVE_URL = process.env.MURMUR_LIVE_URL || ''; // test only: point the browser at a fake Live server
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json' };
@@ -45,13 +46,24 @@ const api = {
       moved: (Array.isArray(body.moved) ? body.moved : []).slice(0, 3).map((s) => String(s).slice(0, 60)) };
     return withFallback('menu', async () => ({ say: await gemini.menuLine(KEY, info) }), () => ({ say: demo.menuLine(info) }));
   },
+  async 'POST /api/live-token'() {
+    if (LIVE_URL) return { token: 'test', url: LIVE_URL, model: gemini.LIVE_MODEL, voice: gemini.VOICE, persona: gemini.LIVE_PERSONA, tools: gemini.LIVE_TOOLS };
+    if (!KEY || process.env.MURMUR_NO_LIVE) throw Object.assign(new Error('live unavailable'), { status: 503 });
+    try { return await gemini.liveToken(KEY); }
+    catch (e) { console.warn(`[live] token failed (${String(e.message).slice(0, 40)})`); throw Object.assign(new Error('live unavailable'), { status: 503 }); }
+  },
+  async 'POST /api/tts'(body) {
+    if (!KEY) throw Object.assign(new Error('tts unavailable'), { status: 503 });
+    try { return await gemini.tts(KEY, String(body.text || '').slice(0, 400)); }
+    catch (e) { console.warn(`[tts] failed (${String(e.message).slice(0, 40)})`); throw Object.assign(new Error('tts unavailable'), { status: 503 }); }
+  },
 };
 Object.assign(api, relay.api);
 
 export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
-    if (url.pathname === '/health') return send(res, 200, { ok: true, provider: PROVIDER });
+    if (url.pathname === '/health') return send(res, 200, { ok: true, provider: PROVIDER, live: (!!KEY || !!LIVE_URL) && !process.env.MURMUR_NO_LIVE, tts: !!KEY });
     if (url.pathname === '/api/bus/stream' && req.method === 'GET') return relay.stream(req, res);
     const handler = api[`${req.method} ${url.pathname}`];
     if (handler) return send(res, 200, await handler(await readJson(req)));

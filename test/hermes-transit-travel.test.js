@@ -2,31 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTransit } from '../public/apps/transit/index.js';
 import { createTravel } from '../public/apps/travel/index.js';
-import { act, fakeCtx, fakeRoot } from './hermes-fake.js';
+import { checkContract, phone } from './hermes-fake.js';
 
-const contract = (app, gated) => {
-  for (const [name, a] of Object.entries(app.actions)) {
-    for (const k of ['describe', 'hint']) assert.ok(typeof a[k] === 'string' && a[k], `${name}.${k}`);
-    assert.equal(typeof a.verify, 'function', `${name}.verify`);
-    assert.equal(a.params?.type, 'object');
-    assert.ok('gate' in a);
-  }
-  assert.deepEqual(Object.entries(app.actions).filter(([, a]) => a.gate).map(([n]) => n), gated);
-  for (const k of ['mount', 'read', 'place', 'state', 'seed', 'reset']) assert.equal(typeof app[k], 'function', k);
-};
-
-function transitAt(clock) {
-  const app = createTransit({ now: () => clock.t });
-  const root = fakeRoot();
-  app.mount(root); app.seed();
-  return { app, root };
-}
+async function transitAt(clock) { const app = createTransit({ now: () => clock.t }); return { app, ...(await phone([app])) }; }
 
 test('Transit: contract, and the demo line at seed time', async () => {
+  checkContract(assert, createTransit(), []);
   const clock = { t: new Date(2026, 10, 7, 8, 30).getTime() };
-  const { app } = transitAt(clock);
-  contract(app, []);
-  assert.equal(await act(app, 'nextBus'), true);
+  const { app, run } = await transitAt(clock);
+  assert.ok((await run('transit__nextBus')).ok);
   assert.equal(app.read(), 'The 25 leaves in four minutes from the stop by the library.');
   clock.t += 3 * 60e3;
   assert.equal(app.read(), 'The 25 leaves in one minute from the stop by the library.');
@@ -36,53 +20,46 @@ test('Transit: contract, and the demo line at seed time', async () => {
 
 test('Transit: directions and when to leave, by name, through Back', async () => {
   const clock = { t: new Date(2026, 10, 7, 8, 30).getTime() };
-  const { app } = transitAt(clock);
-  assert.equal(await act(app, 'directions', { place: "Mum's" }), true);
+  const { app, run, taps } = await transitAt(clock);
+  assert.ok((await run('transit__directions', { place: "Mum's" })).ok);
   assert.match(app.read(), /^Walk five minutes to the stop on Market Street\. Take the 8 toward Elm Park, nine stops\./);
-  const ctx = fakeCtx();
-  assert.equal(await act(app, 'whenToLeave', { place: 'work' }, ctx), true);
-  assert.deepEqual(ctx.log, ['back', 'leave']);
+  taps.length = 0;
+  assert.ok((await run('transit__whenToLeave', { place: 'work' })).ok);
+  assert.deepEqual(taps, ['Back to Transit', 'When to leave for Work']);
   assert.equal(app.read(), "Leave in one minute to catch the 25 at eight thirty-four. You'll be at work by eight forty-eight.");
-  await assert.rejects(act(app, 'directions', { place: 'the moon' }), /don't have that place saved/);
-  await assert.rejects(act(app, 'nextBus', { route: '99' }), /No 99 stops near you/);
-  assert.equal(await act(app, 'nextBus', { route: 'the 8' }), true);
-  assert.match(app.read(), /^The 8 leaves in nine minutes from the stop on Market Street\.$/);
+  assert.match((await run('transit__directions', { place: 'the moon' })).reason, /don't have that place saved/);
+  assert.match((await run('transit__nextBus', { route: '99' })).reason, /No 99 stops near you/);
+  assert.ok((await run('transit__nextBus', { route: 'the 8' })).ok);
+  assert.equal(app.read(), 'The 8 leaves in nine minutes from the stop on Market Street.');
 });
 
-async function travel(os = {}) {
+test('Travel: three flights in three sentences, book the 9:40 through the pay gate', async () => {
+  checkContract(assert, createTravel(), ['hold']);
   const app = createTravel();
-  const root = fakeRoot();
-  app.mount(root, os); app.seed();
-  return { app, root };
-}
-
-test('Travel: three flights in three sentences, book the 9:40, hold readback', async () => {
-  const { app } = await travel();
-  contract(app, ['hold']);
-  assert.equal(await act(app, 'findFlights', { from: 'London', to: 'Lisbon', day: 'Friday' }), true);
-  const r = app.read();
-  assert.equal(r.split('. ').length - 1 >= 3, true);
-  assert.match(r, /^Three flights Friday\. Northline at six fifty-five/);
-  assert.equal(await act(app, 'pick', { flight: 'the 9:40' }), true);
-  assert.equal(app.actions.hold.readback(app.state()), 'Tagus Air, Friday at nine forty from Heathrow to Lisbon, £88, held for 24 hours.');
-  assert.equal(await act(app, 'hold'), true);
+  const { run, asked } = await phone([app], { answers: [true] });
+  assert.ok((await run('travel__findFlights', { from: 'London', to: 'Lisbon', day: 'Friday' })).ok);
+  assert.match(app.read(), /^Three flights Friday\. Northline at six fifty-five.*Tagus Air at nine forty.*Atlantica at two twenty/);
+  assert.ok((await run('travel__pick', { flight: 'the 9:40' })).ok);
+  assert.ok((await run('travel__hold')).ok);
+  assert.deepEqual(asked.map((q) => [q.gate, q.readback]), [['pay', 'Tagus Air, Friday at nine forty from Heathrow to Lisbon, £88, held for 24 hours.']]);
   assert.equal(app.read(), 'Held: Tagus Air, Friday at nine forty, for 24 hours. Nothing is charged.');
-  assert.equal(await act(app, 'pick', { flight: 'second' }), true, 'pick again goes back to the list');
+  assert.ok((await run('travel__pick', { flight: 'second' })).ok, 'pick again goes back to the list');
+  assert.ok((await run('travel__findFlights', { to: 'Lisbon', day: 'Saturday' })).ok, 'a new search from a flight');
 });
 
-test('Travel: refusals in words, and a hand Hold asks the OS', async () => {
-  let asked = null;
-  const { app, root } = await travel({ confirm: async (q) => { asked = q; return false; } });
-  await assert.rejects(act(app, 'pick', { flight: '9:40' }), /Find the flights first/);
-  await assert.rejects(act(app, 'findFlights', { to: 'Paris' }), /only find flights from London to Lisbon/);
-  await assert.rejects(act(app, 'findFlights', { to: 'Lisbon', day: 'Monday' }), /Which day/);
-  await act(app, 'findFlights', { to: 'Lisbon' });
-  await assert.rejects(act(app, 'pick', { flight: 'the 11:00' }), /There's no the 11:00/);
-  root.querySelector('[data-act="pick"][data-arg="AT118"]').click();
-  root.querySelector('[data-act="hold"]').click();
-  await new Promise((r) => setImmediate(r));
-  assert.equal(asked.gate, 'pay');
+test('Travel: a No holds nothing, refusals are in words, reset clears', async () => {
+  const app = createTravel();
+  const { run, press } = await phone([app], { answers: [false] });
+  assert.match((await run('travel__pick', { flight: '9:40' })).reason, /Find the flights first/);
+  assert.match((await run('travel__findFlights', { to: 'Paris' })).reason, /only find flights from London to Lisbon/);
+  assert.match((await run('travel__findFlights', { to: 'Lisbon', day: 'Monday' })).reason, /Which day/);
+  await run('travel__findFlights', { to: 'Lisbon' });
+  assert.match((await run('travel__pick', { flight: 'the 11:00' })).reason, /There's no the 11:00/);
+  await run('travel__pick', { flight: 'third' });
+  assert.equal((await run('travel__hold')).cancelled, true);
   assert.equal(app.state().held, null);
-  app.reset();
+  press('travel', 'Hold this flight');
+  assert.equal(app.state().held.id, 'AT118', "a person's own tap is their yes");
+  await app.reset();
   assert.equal(app.state().view, 'search');
 });
