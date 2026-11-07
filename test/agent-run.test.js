@@ -4,7 +4,7 @@ import { createToolkit } from '../public/vendor/toolkit/index.js';
 import { createAgent } from '../public/agent/index.js';
 import { placeLine } from '../public/agent/narrate.js';
 import { createVoice } from '../public/voice/route.js';
-import { gerund, BEAT_MS } from '../public/agent/runner.js';
+import { gerund, BEAT_MS, createGates } from '../public/agent/runner.js';
 import { observationOf } from '../public/agent/memory.js';
 import { phone, memoryKV } from './agent-fixtures.js';
 
@@ -319,7 +319,7 @@ test("narration and who speaks: Murmur's voice or the status region, never both"
 
   const s = await setup({ agency: () => 'ask' });
   await s.agent.hear("Read Mum's message");
-  assert.deepEqual(s.spoken.slice(0, 4), ['On it.', 'Opening the chat', 'Reading', 'Mum: Lunch on Tuesday?']);
+  assert.deepEqual(s.spoken.slice(0, 3), ['On it.', 'Reading', 'Mum: Lunch on Tuesday?'], '"Opening the chat" is dropped: its step was done before its turn');
   const quick = await setup(); // Just do it: the step earcons carry the steps; the voice says the result
   await quick.agent.hear("Read Mum's message");
   assert.ok(!quick.spoken.includes('Opening the chat'));
@@ -338,4 +338,116 @@ test('Ask me, Vertical 1: no clipped "Opening the chat" before "Sam or Samira?",
   const q = s.spoken.findIndex((t) => / or .+\?$/.test(t));
   assert.ok(!s.spoken.slice(0, q).includes('Opening the chat'), 'the question replaced the step line');
   assert.equal(s.clock.t - t0, 600, 'no 700 ms beat: the send gate is the moment to say no');
+});
+
+test('a travel hold (a pay gate that reads "held for 24 hours") asks "Hold?", a payment still asks "Pay?"', () => {
+  const said = [];
+  const g = createGates({ say: async (t) => { said.push(t); } });
+  g.ask({ gate: 'pay', readback: 'The 9:40 to Lisbon, £120, held for 24 hours.' }); g.cancel();
+  g.ask({ gate: 'pay', readback: 'Pay Sam £20. From Murmur Bank.' }); g.cancel();
+  assert.deepEqual(said, ['The 9:40 to Lisbon, £120, held for 24 hours. Hold?', 'Pay Sam £20. From Murmur Bank. Pay?']);
+});
+
+test('Stop or No while the fingerprint is up withdraws the prompt (its signal aborts), and a late match pays nothing', async () => {
+  let t = 10_000, sig = null, match;
+  const g = createGates({ clock: { now: () => t }, fingerprint: (signal) => { sig = signal; return new Promise((r) => { match = r; }); } });
+  const paid = g.ask({ gate: 'pay', readback: 'A taxi to the Station, £14.' }); t += 600;
+  const yes = g.yes(); await new Promise((r) => setTimeout(r, 0));
+  assert.ok(sig && !sig.aborted, 'the fingerprint gets a live signal');
+  g.cancel(); // what runner.stop() does on a said or typed Stop
+  assert.equal(sig.aborted, true, 'Stop withdraws the WebAuthn prompt');
+  match(true); // the finger lands late
+  assert.equal(await yes, false); assert.equal(await paid, false, 'nothing paid');
+  const g2 = createGates({ clock: { now: () => t }, fingerprint: (signal) => { sig = signal; return new Promise(() => {}); } });
+  g2.ask({ gate: 'pay', readback: 'Pay?' }); t += 600; g2.yes(); await new Promise((r) => setTimeout(r, 0));
+  g2.no(); assert.equal(sig.aborted, true, 'No withdraws it too');
+});
+
+test('a No to a hold says "Not held.", a No to a payment still says "Not paid."', async () => {
+  const { runAction } = await import('../public/sdk/run.js');
+  const no = async (readback) => {
+    const action = { gate: 'pay', readback: () => readback, run() {}, verify: () => true };
+    const app = { id: 't', name: 'T', state: () => ({}), read: () => '', place: () => ({}) };
+    const registry = { resolve: () => ({ app, action }) };
+    return (await runAction({ registry, name: 't__x', params: {}, bus: { emit() {} }, ctxFor: () => ({ confirm: async () => false }) })).reason;
+  };
+  assert.equal(await no('The 9:40 to Lisbon, £120, held for 24 hours. Hold?'), 'Not held.');
+  assert.equal(await no('Pay Sam £20. From Murmur Bank. Pay?'), 'Not paid.');
+});
+
+test('a read-only, refused or No\'d task keeps the last change undoable, still 8 s from that change', async () => {
+  const s = await setup();
+  const write = [{ tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Lunch on Tuesday.' } }];
+  await s.agent.runner.run({ utterance: 'write', steps: write });
+  s.clock.t += 2000;
+  await s.agent.hear("Read Mum's message");
+  await s.agent.hear('Check my Barclays balance');
+  s.clock.t += 2000;
+  await s.agent.hear('undo');
+  assert.equal(s.state('hello').draft, '', 'undone after a read and a refusal');
+  await s.agent.runner.run({ utterance: 'write', steps: write });
+  s.clock.t += 6000;
+  await s.agent.hear("Read Mum's message");
+  s.clock.t += 2001;
+  await s.agent.hear('undo');
+  assert.equal(s.state('hello').draft, 'Lunch on Tuesday.', 'the 8 s run from the change, not from the read');
+});
+
+test('never "Done." after a refusal the app said, or a step that changed nothing; "Done." after a real change', async () => {
+  const s = await setup({ patch: { hello: () => ({
+    sorry: { describe: 'Say sorry', doing: 'Saying sorry', hint: 'Sorry', params: { type: 'object', properties: {} }, async run(p, ctx) { await ctx.say('I cannot get the weather right now.'); }, verify: () => true },
+    noop: { describe: 'Do nothing', doing: 'Doing nothing', hint: 'Nothing', params: { type: 'object', properties: {} }, async run() {}, verify: () => true },
+  }) } });
+  for (const action of ['sorry', 'noop']) {
+    const r = await s.agent.runner.run({ utterance: action, steps: [{ tool: `hello__${action}`, app: 'hello', action, params: {} }] });
+    assert.equal(r.line, '', action);
+    assert.ok(!s.spoken.includes('Done.'), `${action}: ${s.spoken.join(' | ')}`);
+  }
+  const r = await s.agent.runner.run({ utterance: 'write', steps: [{ tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Lunch.' } }] });
+  assert.notEqual(r.line, '', 'a real change still ends on its line');
+});
+
+test('"Call Mum" with no calls app opens her chat and says so, never "Done."', async () => {
+  const s = await setup();
+  await s.agent.hear('Call Mum');
+  assert.equal(s.state('messages').currentChat, 'mum');
+  assert.ok(s.spoken.includes("I can't call yet. I've opened Mum's chat."), s.spoken.join(' | '));
+  assert.ok(!s.spoken.includes('Done.'), s.spoken.join(' | '));
+});
+
+test('a read-only task:done carries the live Undo with its own expiry, so the panel keeps the button', async () => {
+  const s = await setup();
+  await s.agent.runner.run({ utterance: 'write', steps: [{ tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Lunch.' } }] });
+  const until = s.ev('task:done').at(-1).undo?.until;
+  assert.ok(until, 'the change offers Undo');
+  s.clock.t += 2000;
+  await s.agent.hear("Read Mum's message");
+  assert.deepEqual(s.ev('task:done').at(-1).undo, { label: s.ev('task:done').at(-2).undo.label, until }, 'same Undo, same expiry');
+  s.clock.t = until + 1;
+  await s.agent.hear("Read Mum's message");
+  assert.equal(s.ev('task:done').at(-1).undo, undefined, 'an expired Undo is not offered');
+});
+
+test('Ask me: a step line is never said once its step is done, and "Writing your reply" is left to the readback', async () => {
+  const s = await setup({ agency: () => 'ask' });
+  await gated(s, "Text Sam I'm ten minutes late", async () => { s.clock.t += 600; await s.agent.hear('send'); }, { choose: 'Sam' });
+  assert.ok(!s.spoken.some((t) => /^Writing/.test(t)), s.spoken.join(' | '));
+  const at = s.spoken.length;
+  await s.agent.hear("Read Mum's message");
+  assert.ok(!s.spoken.slice(at).includes('Opening the chat'), 'its step was done before its turn');
+});
+
+test('a spoken "hold" answers "Hold?" and still checks the fingerprint; it never confirms a payment or a send', async () => {
+  const { hear } = await import('../public/agent/words.js');
+  let prints = 0;
+  const clock = { t: 0, now() { return this.t; } };
+  const g = createGates({ say: async () => {}, clock, fingerprint: async () => { prints++; return true; } });
+  const asked = g.ask({ gate: 'pay', readback: 'The 9:40 to Lisbon, £120, held for 24 hours.' });
+  clock.t = 1000;
+  assert.deepEqual(hear('hold', { gate: g.current, now: clock.t }).words, [{ kind: 'confirm', word: 'hold' }]);
+  await g.yes();
+  assert.equal(await asked, true); assert.equal(prints, 1, 'the pay fingerprint is kept');
+  const pay = { gate: 'pay', readback: 'Pay Sam £20. From Murmur Bank.', openedAt: 0 };
+  assert.equal(hear('hold', { gate: pay, now: 1000 }).words[0].kind, 'ignored');
+  assert.equal(hear('hold', { gate: { gate: 'send', readback: 'To Sam: late.', openedAt: 0 }, now: 1000 }).words[0].kind, 'ignored');
 });

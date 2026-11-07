@@ -11,7 +11,7 @@ export const MISSED = "I didn't catch how to do that.";
 export async function planUtterance(utterance, apps, context = {}, { fetch = globalThis.fetch, offline = false, budget = BUDGET_MS } = {}) {
   const p = demoPlan(utterance, apps, context);
   const v = validatePlan(p.plan, apps, { dryRun: p.kind === 'teach' });
-  const local = { kind: p.kind, ...v, say: p.say || (!v.steps.length && v.dropped.find((d) => d.say)?.say) || undefined, provider: 'demo' };
+  const local = { kind: p.kind, ...v, say: p.say || (!v.steps.length && v.dropped.find((d) => d.say)?.say) || undefined, provider: 'demo', ...(p.asked ? { asked: p.asked } : {}) };
   // A refusal never goes out either: the demo planner's answer is the answer.
   if (offline || typeof fetch !== 'function' || local.steps.length || local.kind === 'refuse') return local;
   const remote = (async () => {

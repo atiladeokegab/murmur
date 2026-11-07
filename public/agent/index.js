@@ -23,19 +23,22 @@ if (globalThis.window) installToken(); // /api/* carries the device token from h
  * @param {(choice|null)=>void} [o.onChoose]   show or hide the choice sheet: { question, choices }
  * @param {object} [o.librarian]     the toolkit Librarian (memory + skills)
  * @param {{ open?(id), current?(): string|null }} [o.os]  the shell: open an app, which one is open
- * @param {()=>Promise<boolean>} [o.fingerprint]  passkey.confirm
+ * @param {(signal)=>Promise<boolean>} [o.fingerprint]  passkey.confirm; the signal aborts when Stop or No withdraws the gate
  * @param {(step)=>'ask'|'just'|'teach'} [o.agency]
  * @param {()=>'short'|'detailed'} [o.answers]  Your look's Answers row: Detailed says a result's longer answer straight away
  * @param {(gate)=>boolean} [o.risky]  send/call need the fingerprint too (screen just locked, earphone out)
+ * @param {()=>void} [o.onStop]  the shell's whole Stop (stopAll: audio, open sheets, a pending fingerprint): a said or typed Stop calls it
+ * @param {()=>void} [o.onCut]   cut the line playing now (the shell's hush): Stop and Undo call it
  */
 export const ACK = 'On it.';
 export const NARRATION_HOLD_MS = 150; // a question this soon after a step starts replaces the step's line
 
 export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, fingerprint = async () => false,
   agency = () => 'ask', answers = () => 'short', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
-  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {} }) {
+  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {}, onStop = () => {}, onCut = () => {} }) {
   const appsList = () => (Array.isArray(registry) ? registry : typeof registry?.list === 'function' ? registry.list() : Object.values(registry || {}));
   const app = (id) => (typeof registry?.get === 'function' ? registry.get(id) : appsList().find((a) => a.id === id));
+  let movedAt = null; // when this agent last moved a Calendar event; a send or 2 minutes ends "tell Mum" about it
   let lastSaid = '', lastMore = ''; // lastMore: the last result's longer answer ("tell me more")
   // One voice, one line at a time: each line waits for the one before, so steps can act while a line is spoken.
   // Stop empties the queue (gen moves on), so nothing queued is said after it.
@@ -43,19 +46,27 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   // hold when nothing else is being said, so "Sam or Samira?" 60 ms later is said whole, not after a clipped line.
   let chain = Promise.resolve(), gen = 0, pending = 0, asked = 0;
   const holds = new Set();
-  const hold = () => new Promise((r) => { const t = setTimeout(done, NARRATION_HOLD_MS); function done() { clearTimeout(t); holds.delete(done); r(); } holds.add(done); });
+  let ackGo = null; // lets a held "On it." go at once, when no question can come first
+  const hold = (ack) => new Promise((r) => { const t = setTimeout(done, NARRATION_HOLD_MS); function done() { clearTimeout(t); holds.delete(done); if (ackGo === done) ackGo = null; r(); } holds.add(done); if (ack) ackGo = done; });
+  const releaseAck = () => ackGo?.();
   const speak = (text, signal, o) => {
     const g = gen, a = asked;
-    const out = () => g !== gen || signal?.aborted || (o?.narration && a !== asked);
+    const out = () => g !== gen || signal?.aborted || (o?.narration && (a !== asked || o.stale?.()));
+    const start = () => { o?.said?.(); return rawSpeak(text, signal); }; // on the record when it is said, in the order heard
     // queued behind a line, the narration has already waited that line out: no hold, no silence between lines
-    const go = (queued) => (out() ? false : o?.narration && !queued ? hold().then(() => (out() ? false : rawSpeak(text, signal))) : rawSpeak(text, signal));
+    const go = (queued) => (out() ? false : o?.narration && !queued ? hold(o.ack).then(() => (out() ? false : start())) : start());
     const p = pending ? chain.then(() => go(true)) : Promise.resolve(go(false)); // nothing being said: start now, not a tick later
     pending++;
-    chain = p.catch(() => {}).finally(() => { pending--; });
+    chain = p.catch(() => {}).finally(() => { if (g === gen) pending--; });
     return p;
   };
-  const hush = () => { gen++; };
-  const say = (text) => { if (!text) return Promise.resolve(); lastSaid = text; bus.emit('say', { text }); return Promise.resolve(speak(text)).catch(() => {}); };
+  // Stop and Undo: drop the queue, cut the line playing now, and let the next line start at once, not after it.
+  const hush = () => { gen++; pending = 0; chain = Promise.resolve(); try { onCut(); } catch { /* the shell's own */ } };
+  const say = (text, o) => {
+    if (!text) return Promise.resolve();
+    const said = () => { lastSaid = text; bus.emit('say', { text }); };
+    return Promise.resolve(speak(text, undefined, { ...o, said })).catch(() => {});
+  };
   const sayQuestion = (q) => { asked++; for (const done of [...holds]) done(); return say(q); };
   const describeStep = (s) => {
     const x = s.app && app(s.app)?.actions?.[s.action];
@@ -66,7 +77,8 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   let lastApp = null, savedAt = 0, offer = null, question = null, proposal = null, taskMode = null, choice = null;
   const current = () => os.current?.() || lastApp;
 
-  bus.on('step:start', (e) => { if (e.app) lastApp = e.app; });
+  // A first step's question ("Sam or Samira?") comes within the same turn as its start; after that, "On it." goes.
+  bus.on('step:start', (e) => { if (e.app) lastApp = e.app; if (ackGo) { if (e.app) setTimeout(releaseAck, 0); else releaseAck(); } }); // Murmur's own tools never ask
   bus.on('memory', (e) => { if (e.proposal) { proposal = e.proposal; say(`${e.proposal.text} Yes, not now, or never?`); } });
 
   const gates = createGates({ say: (t) => (t === 'Check your fingerprint.' ? say(t) : sayQuestion(t)), clock, fingerprint, risky, onChange: onGate });
@@ -145,6 +157,9 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     taskMode = mode;
     try {
       const r = await runner.run({ utterance, steps, plan });
+      // a send in the same plan already told them: clear, else a finished move arms "tell Mum" (Atlas, 6726f01)
+      if (steps.some((x) => x.tool === 'messages__send')) movedAt = null;
+      else if (r.status === 'done' && steps.some((x) => x.tool === 'calendar__move')) movedAt = clock.now();
       lastMore = r.more || '';
       if (lastMore && answers() === 'detailed') await say(lastMore);
       return r;
@@ -165,14 +180,15 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
 
   async function reservedWord(w) {
     switch (w.kind) {
-      case 'stop': hush(); choice?.resolve(null); runner.stop(); return;
+      case 'stop': if (!w.shell) try { onStop(); } catch { /* the shell's own */ } hush(); choice?.resolve(null); runner.stop(); return; // the shell's Stop button already ran stopAll
       case 'take_over': choice?.resolve(null); runner.takeOver(); return;
       case 'where': await where(); return;
-      case 'undo': await runner.undo(); return;
+      case 'undo': hush(); await runner.undo(); return; // "Undone." now, not after the stale lines
       case 'carry_on': {
         const a = app(current());
         const x = a && (a.actions.carryOn ? 'carryOn' : a.actions.resume ? 'resume' : null);
         if (x) await runPlan('carry on', [{ tool: `${a.id}__${x}`, app: a.id, action: x, params: {}, gate: null }]);
+        else if (lastMore && !runner.busy) await say(lastMore); // "go on" after a result with more to say
         else runner.nudge();
         return;
       }
@@ -220,16 +236,19 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     offer = null;
 
     // The first sound within 300 ms of the last word: the shell's heard earcon, then "On it." while the plan runs.
-    say(ACK);
+    // Held like a step's line, so a question that comes first ("Sam or Samira?") is the ack instead.
+    say(ACK, { narration: true, ack: true });
     const p = await planFor(rest);
-    if (!p.steps.length) { say(p.say || p.dropped.find((d) => d.say)?.say || "I can't do that one yet."); return { status: p.kind === 'refuse' ? 'refused' : 'unknown', say: p.say }; }
+    slotAsk = p.asked || null;
+    if (!p.steps.length || p.kind === 'teach') releaseAck();
+    if (!p.steps.length) { await say(p.say || p.dropped.find((d) => d.say)?.say || "I can't do that one yet."); return { status: p.kind === 'refuse' ? 'refused' : 'unknown', say: p.say }; }
     const unsaid = p.dropped.find((d) => d.say);
     if (unsaid) say(unsaid.say);
 
     if (p.kind === 'teach') {
       const lines = p.steps.map((s) => { const x = s.app && app(s.app)?.actions?.[s.action]; return x?.hint || (x ? x.describe : s.tool); });
       const apps = [...new Set(p.steps.filter((s) => s.app).map((s) => app(s.app)?.name))];
-      say(`${['Open ' + apps.join(' and '), ...lines].join(', then ')}. Shall I do it, or walk you through?`);
+      await say(`${['Open ' + apps.join(' and '), ...lines].join(', then ')}. Shall I do it, or walk you through?`);
       const reg = describeRegistry(appsList());
       offer = { utterance: rest, steps: p.steps.map((s) => ({ ...s, complete: isComplete(s, reg) })) };
       return { status: 'taught', hints: lines };
@@ -244,7 +263,14 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
   // the plan when the final words and the open app match. Anything else plans afresh.
   let early = null;
   const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
-  async function contextNow() { return { app: current(), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [] }; }
+  let slotAsk = null; // "get a price": the words a slot question ("Where to?") waits to finish
+  async function contextNow() {
+    // the last Calendar move with someone, so "tell Mum" can say what moved
+    const fresh = movedAt != null && clock.now() - movedAt < 120000;
+    const cal = fresh && app('calendar')?.state?.(), mv = cal?.lastMoved, ev = mv && cal.events?.find((e) => e.id === mv.id);
+    const moved = ev?.with ? { what: ev.title.replace(/\s+with\s+.+$/i, ''), with: ev.with, day: mv.to, time: mv.time } : null;
+    return { app: current(), ...(slotAsk ? { asked: slotAsk } : {}), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [], ...(moved ? { moved } : {}) };
+  }
   async function planFor(text) {
     const context = await contextNow();
     if (early && early.text === norm(text) && early.app === context.app) { const e = early; early = null; return e.plan; }
@@ -279,7 +305,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     /** A tap on the choice sheet. */
     pick: (i) => choice?.resolve(i),
     /** Android Back or the Stop bar: same as "stop". */
-    stop: () => reservedWord({ kind: 'stop' }),
+    stop: () => reservedWord({ kind: 'stop', shell: true }),
     takeOver: () => reservedWord({ kind: 'take_over' }),
     undo: () => runner.undo(),
     carryOn: () => reservedWord({ kind: 'carry_on' }),

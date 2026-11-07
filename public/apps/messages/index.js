@@ -39,6 +39,7 @@ const app = {
   actions: {
     openChat: {
       describe: 'Open the chat with a person',
+      say: (st) => (M.chatOf(st) ? '' : "open Mum's chat"),   // what a person would say (offer.js); '' = not here, now
       doing: 'Opening the chat',
       params: { type: 'object', properties: { who: { type: 'string', description: 'The name as said' }, id: { type: 'string', enum: ['mum', 'sam', 'samira'] } } },
       gate: null,
@@ -61,6 +62,7 @@ const app = {
     },
     read: {
       describe: 'Read the new message in the open chat, sentence by sentence. new: true opens the first chat with a new message ("Read my messages")',
+      say: (st) => (M.chatOf(st) ? `read ${M.possessive(M.chatOf(st).name)} message` : 'read my messages'),
       doing: 'Reading',
       params: { type: 'object', properties: { new: { type: 'boolean', description: 'Go to the first chat with a new message first' } } },
       gate: null,
@@ -89,6 +91,7 @@ const app = {
     },
     reply: {
       describe: 'Write a reply in the open chat',
+      say: (st) => (M.chatOf(st) ? `reply to ${M.chatOf(st).name}` : ''),
       doing: 'Writing your reply',
       params: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       gate: null,
@@ -98,6 +101,7 @@ const app = {
     },
     replace: {
       describe: 'Change one word in the reply to another',
+      say: (st) => (st.draft ? 'change a word' : ''),
       doing: 'Changing the word',
       params: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] },
       gate: null,
@@ -116,6 +120,7 @@ const app = {
     },
     send: {
       describe: 'Send the reply',
+      say: (st) => (st.draft ? 'send it' : ''),
       doing: 'Sending',
       params: { type: 'object', properties: {} },
       gate: 'send',
