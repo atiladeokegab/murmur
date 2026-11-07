@@ -112,3 +112,13 @@ test('"open a chapter" with Writer open asks for the number, and "two" opens it'
   assert.equal(tool('two', 'writer', { asked: 'open a chapter' }), 'writer__openChapter{"n":2}');
   assert.equal(tool('open chapter 3', 'writer'), 'writer__openChapter{"n":3}');
 });
+
+test('blind 60 regressions: no claim on a verb alone, another app\'s noun, or a guessed optional slot', () => {
+  for (const open of [null, 'messages', 'writer', 'look', 'mine']) {
+    for (const u of ['Delete that message', 'Delete the last word', 'Who is my latest message from', 'New paragraph']) {
+      assert.match(tool(u, open), /^I can't do that one yet/, `${u} (${open})`);
+    }
+    assert.equal(tool('Use a dark background', open), 'look__colours{"colours":"dark"}', open);
+  }
+  assert.equal(tool('delete the morning tile'), 'mine__delete{"name":"morning"}', 'its own noun still plans it');
+});

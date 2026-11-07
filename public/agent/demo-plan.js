@@ -130,14 +130,18 @@ export function byWords(t, apps, here) {
   const content = words(t).filter((w) => !STOP.has(w));
   if (!content.length) return null;
   const hits = [];
+  // each app's own nouns (its id, name and action names): "delete that message" names Messages, so no other app claims it
+  const nouns = new Map(apps.map((a) => [a.id, new Set([...words(a.id), ...words(a.name), ...(a.actions || []).flatMap((x) => words(x.name))])]));
   for (const a of apps) for (const x of a.actions || []) {
     const name = words(x.name), say = words(x.say), all = new Set([...name, ...say, ...words(x.describe), ...words(a.name), ...words(a.id)]);
     if (![...name, say[0], words(x.describe)[0]].includes(content[0])) continue;
     const nums = Object.values(x.params?.properties || {}).some((d) => d.type === 'number' || d.type === 'integer');
     if ((nums && content.some((w) => !all.has(w))) || (x.gate === 'pay' && x.params?.required?.length)) continue; // a spoken number, and money with a slot, stay with the hand-written words
     const n = new Set(content.filter((w) => all.has(w))).size;
-    const f = fit(t, x, all);
-    if (!f.slot && content.some((w) => !all.has(w))) continue; // words it has no place for ("next bus") are not this action
+    const f = fit(t, x, all), strays = content.filter((w) => !all.has(w));
+    if (strays.length && !f.free) continue; // words it has no place for ("next bus", "new paragraph") are not this action
+    if (strays.some((w) => apps.some((b) => b.id !== a.id && nouns.get(b.id).has(w)))) continue; // another app's noun
+    if (x.gate && content.length > 1 && !content.slice(1).some((w) => all.has(w))) continue; // a gated action needs its own noun, not the verb alone ("delete the last word")
     if (f.gap && Object.keys(f.params).length) continue; // a slot guessed but another still missing ("send Sam 20 quid" as an invite)
     if (n >= 2 || name.includes(content[0]) || say[0] === content[0]) hits.push({ a, x, n, ...f }); // one word alone must be its own verb
   }
@@ -163,9 +167,11 @@ function fit(t, x, all) {
   let left = t.split(/\s+/).filter((w) => !all.has(words(w)[0])).join(' ').replace(/^(?:(?:my|the|a|an|to|for|some|of)\s+)+/i, '').trim();
   if (words(left).every((w) => STOP.has(w)) || /^(?:an?\s+)?(?:item|word|tile|thing|something|one|chapter|event|place|name)$/i.test(left)) left = ''; // "take an item out": which item? ask
   const props = x.params?.properties || {}, need = x.params?.required || [];
-  const slot = need.find((k) => props[k]?.type === 'string') || Object.keys(props).find((k) => props[k]?.type === 'string');
-  const params = left && slot ? { [slot]: left } : {};
-  return { params, slot, gap: need.find((k) => !(k in params)) };
+  const slot = need.find((k) => props[k]?.type === 'string'); // only a required slot takes free words: "new paragraph" is no chapter title
+  const choices = slot && props[slot].enum, said = new Set(words(t));
+  const pick = choices?.find((v) => words(v).every((w) => said.has(w))); // "use a dark background": theme dark
+  const params = choices ? (pick ? { [slot]: pick } : {}) : left && slot ? { [slot]: left } : {};
+  return { params, slot, free: choices ? !!pick : !!(left && slot), gap: need.find((k) => !(k in params)) };
 }
 
 function plan(said, apps, context, dry) {
