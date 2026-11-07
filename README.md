@@ -68,7 +68,7 @@ decide.
 | **Your look** | Text up to 400% that reflows instead of scrolling sideways; dark, light or yellow-on-black colours; large targets. |
 
 <p align="center">
-  <img src="docs/readme/home.png" alt="The board: Saturday, Murmur. A large Now tile on top, then Calendar, Messages, The Writer and Mine, with a Tap to talk bar at the bottom." width="240">
+  <img src="docs/readme/home.png" alt="The board: Saturday, Murmur. A large Now tile on top, then a tile for each app (Messages, The Writer, Mine, Calendar), with a Tap to talk bar at the bottom." width="240">
   &nbsp;
   <img src="docs/readme/ask-first.png" alt="The ask-first sheet: Send it? Send to Sam: I'm ten minutes late. A Send button and a No button." width="240">
   &nbsp;
