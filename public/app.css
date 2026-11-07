@@ -57,7 +57,10 @@
   --h-talk: 88px;
   --h-btn: 96px;
   --h-link: 64px;
+  --t-glide: 200ms;          /* the agent cursor glide */
   --nl-room: 40svh;         /* no-look: room so the band never hides the pointed tile */
+  --fs-race-clock: clamp(3rem, 12vw, 7rem);
+  --fs-race-taps: 1.5rem;
   --w-column: 720px;
   --r-now: 6px;
   --r-cell: 3px;
@@ -297,3 +300,33 @@ dialog { container: sheet / inline-size; }
   .nl-band .choice { flex: 1 1 100%; min-height: 64px; font-size: 0.75rem; padding: 2px 6px; }
 }
 .tile.cursor { outline: var(--ring) solid var(--c-focus); outline-offset: calc(var(--ring) * -1); background: var(--c-board-press); }
+
+/* ---------- the race page ---------- */
+.race main { padding: var(--gutter); }
+.race-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 0; }
+.race-head h1 { margin: 0; font: 700 var(--fs-h1)/1.1 var(--f-read); }
+.race-head .choices { flex: 0 1 24rem; }
+.race-head .choice { font-size: var(--fs-title); }
+.lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--gutter); margin-top: var(--gutter); }
+.lane { padding: 1rem; border: var(--bw-now) solid var(--c-slat); border-radius: var(--r-now); background: var(--c-board); }
+.lane.won { border-color: var(--c-accent); }
+.lane h2 { margin: 0; font-size: var(--fs-title); }
+.clock { margin: 0.5rem 0; font: 700 var(--fs-race-clock)/1 var(--f-time); font-variant-numeric: tabular-nums; color: var(--c-accent); }
+.taps { margin: 0 0 1rem; font-size: var(--fs-race-taps); color: var(--c-quiet); }
+.taps .n { font-family: var(--f-time); color: var(--c-ink); }
+.lane .choice { min-height: var(--h-btn); font-size: var(--fs-title); }
+@container board (max-width: 15em) {
+  .race-head, .lanes { --fs-h1: 1rem; --fs-title: 0.75rem; --fs-race-clock: 1rem; --fs-race-taps: 0.75rem; }
+  .lane { padding: 6px 8px; }
+  .lane .choice, .race-head .choice { flex-basis: 100%; min-height: 64px; padding: 2px 6px; }
+}
+
+/* ---------- the agent cursor: the ring on the control the agent presses (public/sdk/cursor.js) ---------- */
+.agent-cursor {
+  position: fixed; left: 0; top: 0; z-index: 20; pointer-events: none; box-sizing: border-box;
+  width: var(--w); height: var(--h); transform: translate(var(--x), var(--y));
+  border: var(--ring) solid var(--c-focus); border-radius: var(--r-btn);
+  transition: transform var(--t-glide) ease-out, width var(--t-glide) ease-out, height var(--t-glide) ease-out;
+}
+.agent-cursor[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .agent-cursor { transition: none; } }
