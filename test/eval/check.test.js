@@ -35,6 +35,12 @@ test('a tick alone, or a truthy verify result, never counts', () => {
   assert.match(checkTrace([...confirmed(), run(), verify({ result: 'yes' }), bus('step:verified')]).join(), /no matching successful verify/);
 });
 
+test('omitting both verify and its tick cannot hide an unchecked action', () => {
+  assert.match(checkTrace([...confirmed(), run(), bus('task:done', { ok: true })]).join(), /without a successful verify or a recorded failure/);
+  assert.match(checkTrace([...confirmed(), run(), verify({ result: false }), bus('task:done', { ok: false })]).join(), /without a successful verify or a recorded failure/);
+  assert.deepEqual(checkTrace([...confirmed(), run(), verify(), bus('step:failed', { stopped: true }), bus('task:done', { ok: false })]), []);
+});
+
 test('a gate cannot borrow an earlier step confirmation or reuse its own', () => {
   assert.match(checkTrace([bus('confirm', { result: true }), bus('step:start'), run()]).join(), /without one fresh accepted confirmation/);
   assert.match(checkTrace([...confirmed(), run(), run()]).join(), /without one fresh accepted confirmation/);

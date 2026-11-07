@@ -346,7 +346,7 @@ try {
     }, null, { timeout: TIMEOUT });
     const health = await preflight.request.get(new URL('/health', url).href);
     provider = (await health.json()).provider;
-    console.log(`Provider: ${provider}; input: utterance transcripts and typed UI; virtual WebAuthn.`);
+    console.log(`Configured provider: ${provider}; input: utterance transcripts and typed UI; virtual WebAuthn.`);
   } catch (error) { throw new Error([error.message, ...startupErrors].join(' | ')); }
   finally { await preflight.close(); }
   for (const task of tasks) {

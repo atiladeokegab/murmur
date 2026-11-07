@@ -111,6 +111,7 @@ export function checkTrace(trace, task = {}) {
       else verified++;
     } else if (record.kind === 'bus' && record.name === 'step:failed') {
       failedTasks.add(record.task);
+      if (step && step.task === record.task && step.action === record.action) step.failed = true;
     } else if (record.kind === 'bus' && record.name === 'task:done' && record.ok === true && failedTasks.has(record.task)) {
       fail(record, 'failed task reported success');
     }
@@ -119,7 +120,10 @@ export function checkTrace(trace, task = {}) {
   if (task.requiresVerifiedStep && verified === 0) errors.push('no real app action was verified');
   if (task.fault && !trace.some(record => record?.kind === 'fault')) errors.push('seeded control fault was not applied');
   for (const step of steps.values()) {
-    if (step.runs && step.checks.at(-1) === true && !step.ticks) errors.push(`${step.action}: successful verify was never recorded`);
+    if (step.runs && !step.failed) {
+      if (step.checks.length !== 1 || step.checks[0] !== true) errors.push(`${step.action}: run ended without a successful verify or a recorded failure`);
+      else if (!step.ticks) errors.push(`${step.action}: successful verify was never recorded`);
+    }
   }
   return errors;
 }
