@@ -95,7 +95,21 @@ check('Murmur mode turns the region off', await page.locator('#say').getAttribut
 await page.goBack(); await page.waitForTimeout(100);
 check('Back closes Your look', await page.evaluate(() => !document.querySelector('#board-view').hidden));
 check('Your look is not a board tile', await page.locator('#board .tile[data-app="look"]').count() === 0);
-check('No-look mode is one tap from the board', await page.locator('#nolook-link').count() === 1);
+check('Phone settings are one tap from the board', await page.locator('#phone-link').count() === 1);
+const native = await page.evaluate(async () => {
+  const { runAction } = await import('/sdk/index.js');
+  const { bus, registry, host } = window.murmur;
+  const c = new AbortController();
+  const run = (name, params) => runAction({ registry, name, params, bus, ctxFor: (app) => host.ctxFor(app, c.signal) });
+  const off = await run('phone__sound', { on: false });
+  const muted = registry.get('phone').state().sound === false;
+  const on = await run('phone__sound', { on: true });
+  const where = await run('phone__where', {});
+  const names = registry.tools().map((t) => t.name).filter((n) => n.startsWith('phone__') || n.startsWith('look__'));
+  window.murmur.home();
+  return { ok: off.ok && muted && on.ok && where.ok, names };
+});
+check('the agent reaches the shell settings as tools (phone__*, look__*)', native.ok && native.names.includes('phone__noLook') && native.names.includes('phone__stop') && native.names.some((n) => n.startsWith('look__')), native.names.join(' '));
 
 // Demo controls: three taps on the day (build-look's panel)
 for (let i = 0; i < 3; i++) await page.locator('#day').click();

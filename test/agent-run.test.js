@@ -319,9 +319,13 @@ test("narration and who speaks: Murmur's voice or the status region, never both"
   assert.equal(status.attrs['aria-live'], 'polite');
   assert.equal(status.textContent, 'Sent.');
 
-  const s = await setup();
+  const s = await setup({ agency: () => 'ask' });
   await s.agent.hear("Read Mum's message");
   assert.deepEqual(s.spoken.slice(0, 3), ['Opening the chat', 'Reading', 'Lunch on Tuesday?']);
+  const quick = await setup(); // Just do it: the step earcons carry the steps; the voice says the result
+  await quick.agent.hear("Read Mum's message");
+  assert.ok(!quick.spoken.includes('Opening the chat'));
+  assert.equal(quick.spoken.at(-1), quick.registry.get('messages').read());
   assert.equal(s.spoken.at(-1), s.registry.get('messages').read());
   assert.deepEqual(s.ev('say').map((e) => e.text), s.spoken, 'every sentence heard is on the record, once');
   assert.equal(gerund('Change a word'), 'Changing a word');

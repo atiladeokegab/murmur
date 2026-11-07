@@ -101,7 +101,9 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
       lastApp = a;
       const mode = agency(step);
       if (!x.gate) {
-        await say(task, x.doing || gerund(x.describe));
+        // Just do it: the step earcon and the panel carry each step, and the voice keeps to questions and the result
+        // (the lead's 6 s bar). Ask and Teach still say every step.
+        if (mode === 'ask' || mode === 'teach') await say(task, x.doing || gerund(x.describe));
         // a spoken task is the yes for its first step; later changing steps get a beat to say stop
         if (mode === 'ask' && CHANGES(step.action) && i > 0) await beat(task, BEAT_MS);
         if (task.stopped) { status = task.takenOver ? 'taken-over' : 'stopped'; break; }

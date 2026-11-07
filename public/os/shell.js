@@ -12,7 +12,8 @@ import * as passkey from '../passkey.js';
 import { byHand } from './gate.js';
 import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
 import { installToken } from '../agent/token.js';
-import { play, buzz } from '../sound/index.js';
+import { play, buzz, mute, unmute, isMuted } from '../sound/index.js';
+import { createPhone } from './phone.js';
 installToken(); // wraps fetch before any /api call
 
 const $ = (s) => document.querySelector(s);
@@ -122,6 +123,9 @@ function onBack(kind) {
 const bus = createBus();
 const registry = createRegistry();
 await loadApps(registry, appIds);
+registry.register(createPhone({ stop: () => stopAll(), where: () => where(), noLook: (on) => setNoLook(on), isNoLook: () => !!look.nolook,
+  sound: (on) => { (on ? unmute : mute)(); store.set('muted', !on); }, isSound: () => !isMuted() }));
+if (store.get('muted', false)) mute();
 const port = browserKV({ prefix: 'murmur' });
 const appsEl = $('#apps');
 const roots = {}, kvs = {};
@@ -190,7 +194,7 @@ const nowTime = () => { const d = new Date(); return `${pad(d.getHours())}:${pad
 const flap = (s) => el('span', { className: 'flap' }, [...s].map((c) => el('i', { className: c === ':' ? 'sep' : '', textContent: c })));
 const firstSentence = (t) => (String(t || '').match(/^[^.!?]*[.!?]?/) || [''])[0];
 function tilesNow() {
-  const apps = registry.list().filter((a) => a.id !== 'look'); // Your look is the link under the board
+  const apps = registry.list().filter((a) => a.id !== 'look' && a.id !== 'phone'); // the links under the board
   const lines = apps.map((a) => { try { return a.now?.({ day }) || null; } catch { return null; } });
   const i = Math.max(0, lines.findIndex(Boolean));
   return apps.map((a, k) => ({ app: a, now: k === i, line: lines[k] || { why: firstSentence(a.read()) } }))
@@ -235,6 +239,10 @@ function renderPanel() {
   $('#place').textContent = p.place || (current ? placeLine(registry.get(current).place()) : '');
   $('#step').textContent = p.on ? p.step : '';
   $('#step').hidden = !p.on;
+  $('#slot-a').hidden = $('#slot-b').hidden = !(p.on || p.done);
+  $('#done-line').hidden = p.on || !p.done;
+  // While Murmur works or reports, the panel replaces the board rather than pushing it down.
+  $('#board-view').hidden = !!(current || ((p.on || p.done) && stack.length));
   const stop = $('#stop');
   stop.hidden = !p.on;
   stop.setAttribute('aria-label', `Stop. Murmur is ${(p.step || 'working').replace(/\.$/, '').toLowerCase()}`);
@@ -247,10 +255,11 @@ function renderPanel() {
     u.hidden = !p.done.undo;
     if (p.done.undo) u.setAttribute('aria-label', `${p.done.line} Undo ${p.done.undo.label || ''}`.trim());
   }
-  $('#lines').hidden = !p.on; // once done, the ticks are the record; the sentences would repeat them
   $('#lines').replaceChildren(...p.lines.map((t, i) => el('li', {}, el('span', { className: 'sr', textContent: `Sentence ${i + 1} of ${p.lines.length}: ` }), t)));
-  $('#ticks').replaceChildren(...p.ticks.map((t) => el('li', { className: t.ok ? 'ok' : 'no' },
-    el('span', { className: 'sr', textContent: t.ok ? 'Done: ' : 'Failed: ' }), t.label)));
+  // One row of marks, one per step, drawn in as each verify passes; the labels are for the screen reader.
+  const ticks = $('#ticks');
+  for (const [i, t] of p.ticks.entries()) if (!ticks.children[i]) ticks.append(el('li', { className: t.ok ? 'ok' : 'no' }, el('span', { className: 'sr', textContent: `${t.ok ? 'Done' : 'Failed'}: ${t.label}` })));
+  while (ticks.children.length > p.ticks.length) ticks.lastChild.remove();
 }
 bus.on('*', (name, e) => {
   const was = panel;
@@ -464,7 +473,7 @@ $('#board-view').addEventListener('click', (e) => { if (!e.target.closest('butto
 
 // ---------- Your look is an app (public/apps/look/); the demo panel and first open come from wire.js ----------
 $('#look-link').addEventListener('click', (e) => { e.preventDefault(); open('look'); });
-$('#nolook-link').addEventListener('click', () => setNoLook(true));
+$('#phone-link').addEventListener('click', (e) => { e.preventDefault(); open('phone'); });
 async function resetAll() {
   stopAll();
   for (const a of registry.list()) await a.reset();
