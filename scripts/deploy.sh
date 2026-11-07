@@ -10,6 +10,7 @@ if [ -n "${ELEVENLABS_API_KEY:-}" ]; then ENV_VARS="$ENV_VARS,ELEVENLABS_API_KEY
 if [ -n "${OPENAI_API_KEY:-}" ]; then ENV_VARS="$ENV_VARS,OPENAI_API_KEY=$OPENAI_API_KEY"; fi
 if [ -n "${GEMINI_MODEL:-}" ]; then ENV_VARS="$ENV_VARS,GEMINI_MODEL=$GEMINI_MODEL"; fi
 if [ -n "${GEMINI_TTS_MODEL:-}" ]; then ENV_VARS="$ENV_VARS,GEMINI_TTS_MODEL=$GEMINI_TTS_MODEL"; fi
+if [ -n "${MURMUR_TOKEN:-}" ]; then ENV_VARS="$ENV_VARS,MURMUR_TOKEN=$MURMUR_TOKEN"; fi # /mcp needs it off-loopback
 # shortcut: --max-instances 1 because lib/relay.js is in memory; move the ring to a shared store before scaling out.
 # --allow-unauthenticated makes the link public so judges can open it on their phones; drop it to keep it private.
 timeout 900 gcloud run deploy murmur --source . \
