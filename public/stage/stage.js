@@ -20,7 +20,7 @@ new ResizeObserver(fit).observe(col);
 // script-free iframe. No frame for 8 s (the phone beats every 5 s when idle): this laptop's phone instead, opened with
 // ?nomirror so it never mirrors itself, and unloaded again when the real phone is back.
 const mirror = $('mirror-frame'), live = $('phone-frame'), cursor = $('cursor');
-const STYLES = ['/app.css', '/os/phone-chrome.css', '/os/onboard/onboard.css', '/apps/look/look.css', '/os/demo/demo.css']; // the phone's head is not in a frame
+const STYLES = ['/app.css', '/os/phone-chrome.css', '/os/onboard/onboard.css', '/apps/look/look.css', '/os/demo/demo.css', '/stage/emu.css']; // the phone's head is not in a frame
 mirror.srcdoc = `<!doctype html><html lang="en-GB"><head><meta charset="utf-8">${STYLES.map((h) => `<link rel="stylesheet" href="${h}">`).join('')}</head><body></body></html>`;
 let lastFrame = 0, mode = null;
 function show(next) {
@@ -32,6 +32,13 @@ function show(next) {
   if (next === 'live') { size = { w: 390, h: 844 }; fit(); live.src = `/${pass}&nomirror`; }
   else live.src = 'about:blank';
 }
+// The laptop copy gets the same emulator look; the real phone never loads emu.css.
+live.addEventListener('load', () => {
+  const d = live.contentDocument;
+  if (!d?.head || d.URL === 'about:blank') return;
+  d.documentElement.classList.add('stage-emu');
+  d.head.append(Object.assign(d.createElement('link'), { rel: 'stylesheet', href: '/stage/emu.css' }));
+});
 let pending = null; // a frame that came before the srcdoc finished loading (the relay's latest, on connect)
 mirror.addEventListener('load', () => { if (pending) frame(pending); pending = null; });
 function frame(e) {
@@ -42,7 +49,7 @@ function frame(e) {
   show('mirror');
   if (Number(e.w) > 0 && Number(e.h) > 0 && (e.w !== size.w || e.h !== size.h)) size = { w: Number(e.w), h: Number(e.h) };
   const s = fit(), root = d.documentElement, th = e.theme && typeof e.theme === 'object' ? e.theme : {};
-  root.className = th.className || '';
+  root.className = `${th.className || ''} stage-emu`; // the emulator look: /stage only
   for (const k of Object.keys(root.dataset)) delete root.dataset[k];
   for (const [k, v] of Object.entries(th)) if (k !== 'className' && typeof v === 'string') root.dataset[k] = v;
   root.style.fontSize = typeof e.size === 'string' ? e.size : '';
