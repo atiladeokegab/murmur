@@ -50,8 +50,9 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     const g = gen, a = asked;
     const out = () => g !== gen || signal?.aborted || (o?.narration && (a !== asked || o.stale?.()));
     const start = () => { o?.said?.(); return rawSpeak(text, signal); }; // on the record when it is said, in the order heard
-    const go = () => (out() ? false : o?.narration ? hold(o.ack).then(() => (out() ? false : start())) : start());
-    const p = pending ? chain.then(go) : Promise.resolve(go()); // nothing being said: start now, not a tick later
+    // queued behind a line, the narration has already waited that line out: no hold, no silence between lines
+    const go = (queued) => (out() ? false : o?.narration && !queued ? hold(o.ack).then(() => (out() ? false : start())) : start());
+    const p = pending ? chain.then(() => go(true)) : Promise.resolve(go(false)); // nothing being said: start now, not a tick later
     pending++;
     chain = p.catch(() => {}).finally(() => { pending--; });
     return p;

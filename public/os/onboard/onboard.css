@@ -1,0 +1,7 @@
+/* The welcome's quiet caption, for a sighted helper: the same line Murmur says, just above it. Tokens only. */
+.welcome-caption {
+  margin: 0 auto 0.25rem; padding: 0 1rem; color: var(--c-quiet); font-size: var(--fs-why); line-height: 1.4;
+  overflow-wrap: normal; hyphens: none;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; /* big text: the screen above keeps its room */
+}
+.welcome-caption[hidden] { display: none; }
