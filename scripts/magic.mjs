@@ -1,12 +1,13 @@
 // Dev only: how smooth Vertical 1 feels, in numbers. Runs "Text Sam I'm ten minutes late" N times on a phone
 // viewport, answers "Sam" and "yes" like a quick person, and scores the median run against the demo targets.
-// PLAYWRIGHT=<pkg> node scripts/magic.mjs [url] [--runs 3] [--out dir] [--demo-plan: skip /api/plan, plan in the browser] [--first-open: let the guided welcome play out, then the task]   (exits 1 if any row fails)
+// PLAYWRIGHT=<pkg> node scripts/magic.mjs [url] [--runs 3] [--out dir] [--demo-plan: skip /api/plan, plan in the browser] [--first-open: let the guided welcome play out, then the task] [--over-welcome: say the task while the welcome plays]   (exits 1 if any row fails)
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv.splice(i, 2)[1] : d; };
 const RUNS = Number(opt('--runs', 3));
 const OUT = opt('--out', 'magic-out');
 const DEMO_PLAN = argv.includes('--demo-plan') && argv.splice(argv.indexOf('--demo-plan'), 1);
 const FIRST_OPEN = argv.includes('--first-open') && argv.splice(argv.indexOf('--first-open'), 1);
+const OVER = argv.includes('--over-welcome') && argv.splice(argv.indexOf('--over-welcome'), 1);
 const URL_ = argv[0] || 'https://murmur-901257379404.europe-west1.run.app';
 const SAY = "Text Sam I'm ten minutes late";
 const REACT_MS = 300; // a quick person answers this long after the question stops sounding
@@ -16,13 +17,16 @@ const instrument = () => {
   const M = window.__magic = { sounds: [], frames: [], longtasks: [], shifts: [], cursor: [], blanks: 0, events: [] };
   const now = () => performance.now();
   const sound = (kind, start) => { const s = { kind, start, end: null }; M.sounds.push(s); return s; };
-  // Which line each TTS buffer says: /api/tts replies arrive in the order the shell plays them.
-  const tts = [], fetch0 = window.fetch;
+  // Which line each TTS buffer says: lines are prefetched and cached, so match the clip itself. Each /api/tts reply's
+  // audio maps to its text; playPcm decodes that audio with atob just before it builds the buffer.
+  const byAudio = new Map(), fetch0 = window.fetch, atob0 = window.atob;
+  let decoding = null;
   window.fetch = async (u, o) => {
     const r = await fetch0(u, o);
-    if (/\/api\/tts/.test(String(u?.url || u)) && r.ok) { try { tts.push(JSON.parse(o.body).text); } catch { /* not ours */ } }
+    if (/\/api\/tts/.test(String(u?.url || u)) && r.ok) r.clone().json().then((j) => byAudio.set(j.audio, JSON.parse(o.body).text)).catch(() => {});
     return r;
   };
+  window.atob = (b) => { if (byAudio.has(b)) decoding = byAudio.get(b); return atob0(b); };
   // Web Audio: earcon oscillators, and TTS buffers. Start is the scheduled time. A TTS buffer counts only from its
   // first to its last audible sample (padding is silence to a listener); a hush cuts it at the real 'ended'.
   for (const [proto, kind] of [[OscillatorNode.prototype, 'earcon'], [AudioBufferSourceNode.prototype, 'voice']]) {
@@ -36,7 +40,7 @@ const instrument = () => {
         let i = 0, j = ch.length - 1;
         while (i < ch.length && !loud(ch[i])) i++;
         while (j > i && !loud(ch[j])) j--;
-        if (this.buffer.duration > 0.05) s.text = tts.shift();
+        if (this.buffer.duration > 0.05) { s.text = decoding; decoding = null; }
         Object.assign(s, { start: at + (i / rate) * 1000, audibleEnd: at + (j / rate) * 1000, raw: [at, at + this.buffer.duration * 1000] });
         this.addEventListener('ended', () => { s.end = Math.min(now(), s.audibleEnd); });
       } else this.addEventListener('ended', () => { s.end = now(); });
@@ -163,7 +167,7 @@ async function once({ browser, devices }, n) {
   const ready = () => page.waitForSelector('html[data-ready="true"]', { timeout: 30000 });
   await page.goto(URL_, { timeout: 30000 }); await ready();
   // A returning person by default: the guided welcome already said (os.onboard 'said' and 'done'); --first-open leaves it owed.
-  await page.evaluate((first) => { localStorage.clear(); if (!first) for (const k of ['said', 'done']) localStorage.setItem(`murmur:os.onboard:${k}`, 'true'); }, !!FIRST_OPEN);
+  await page.evaluate((first) => { localStorage.clear(); if (!first) for (const k of ['said', 'done']) localStorage.setItem(`murmur:os.onboard:${k}`, 'true'); }, !!(FIRST_OPEN || OVER));
   await page.reload({ timeout: 30000 }); await ready();
   // No tap first: any tap starts listening, and headless recognition never ends. The autoplay flag unlocks audio.
   // shortcut: the transcript is injected, so the shell's 1.5 s end-of-speech wait before hear() is not measured.
