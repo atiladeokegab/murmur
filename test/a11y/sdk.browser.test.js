@@ -59,24 +59,47 @@ test('mounted Hello visible controls meet the 64px target floor', async () => {
   assert.deepEqual(targets.filter(({ width, height }) => width < 64 || height < 64), []);
 });
 
-test('agent cursor is hidden from assistive technology and skips its glide for reduced motion', async () => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  const result = await page.locator('#hello-send').evaluate(async (el) => {
-    const { createCursor } = await import('/sdk/cursor.js');
-    const cursor = createCursor(document);
-    await cursor.moveTo(el, 'Send to Sam');
-    const ring = document.querySelector('.agent-cursor');
-    return {
-      hiddenFromAT: ring.getAttribute('aria-hidden'),
-      name: ring.dataset.name,
-      transitionProperties: getComputedStyle(ring).transitionProperty.split(',').map((p) => p.trim()),
-      animation: getComputedStyle(ring).animationName,
-      left: ring.style.getPropertyValue('--x'),
-    };
+for (const reducedMotion of ['no-preference', 'reduce']) {
+  test(`agent cursor lands on its first and second targets without scrolling (${reducedMotion})`, async () => {
+    await page.emulateMedia({ reducedMotion });
+    const results = await page.evaluate(async () => {
+      const { createCursor } = await import('/sdk/cursor.js');
+      const cursor = createCursor(document), results = [];
+      const scroll = { x: scrollX, y: scrollY };
+      // Visible fixed targets prevent a scroll event from repairing a missing first placement.
+      for (const [i, name] of ['First target', 'Second target'].entries()) {
+        const target = document.createElement('button');
+        target.textContent = name;
+        target.style.cssText = `position:fixed;left:${32 + i * 160}px;top:${120 + i * 200}px;width:140px;height:64px`;
+        document.body.append(target);
+        await cursor.moveTo(target, name);
+        const ring = document.querySelector('.agent-cursor');
+        await Promise.all(ring.getAnimations().map((animation) => animation.finished));
+        results.push({
+          target: target.getBoundingClientRect().toJSON(), ring: ring.getBoundingClientRect().toJSON(),
+          visible: ring.checkVisibility(), hiddenFromAT: ring.getAttribute('aria-hidden'), name: ring.dataset.name,
+          transitionProperties: getComputedStyle(ring).transitionProperty.split(',').map((p) => p.trim()),
+          animation: getComputedStyle(ring).animationName, scroll, afterScroll: { x: scrollX, y: scrollY },
+        });
+        target.remove();
+      }
+      cursor.hide();
+      document.querySelector('.agent-cursor').remove();
+      return results;
+    });
+    for (const [i, result] of results.entries()) {
+      assert.equal(result.visible, true);
+      assert.equal(result.hiddenFromAT, 'true');
+      assert.equal(result.name, i ? 'Second target' : 'First target');
+      assert.deepEqual(result.afterScroll, result.scroll, 'placement must work before any scroll');
+      for (const dimension of ['x', 'y', 'width', 'height']) {
+        assert.ok(Math.abs(result.ring[dimension] - result.target[dimension]) <= 1,
+          `${result.name}: ring ${dimension} ${result.ring[dimension]} must match target ${result.target[dimension]}`);
+      }
+      if (reducedMotion === 'reduce') {
+        assert.ok(result.transitionProperties.every((p) => p === 'opacity' || p === 'none'));
+        assert.equal(result.animation, 'none');
+      }
+    }
   });
-  assert.equal(result.hiddenFromAT, 'true');
-  assert.equal(result.name, 'Send to Sam');
-  assert.ok(result.transitionProperties.every((p) => p === 'opacity' || p === 'none'));
-  assert.equal(result.animation, 'none');
-  assert.match(result.left, /^\d+(?:\.\d+)?px$/);
-});
+}
