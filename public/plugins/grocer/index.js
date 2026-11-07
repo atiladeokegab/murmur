@@ -29,7 +29,13 @@ function render() {
   removers.clear();
   list.replaceChildren(...basket.map((i) => {
     const b = el('button', { type: 'button', className: 'app-btn quiet', textContent: `Remove ${i}` });
-    b.addEventListener('click', async () => { basket = basket.filter((x) => x !== i); note = `Took ${i} out.`; await save(); render(); });
+    b.addEventListener('click', async () => {
+      const had = root.ownerDocument.activeElement === b, at = basket.indexOf(i);
+      basket = basket.filter((x) => x !== i); note = `Took ${i} out.`;
+      await save(); render();
+      // the pressed button is gone: keep the person's place on the next item, else the total
+      if (had) (removers.get(basket[at]) || removers.get(basket[at - 1]) || totalLine).focus();
+    });
     removers.set(i, b);
     return el('li', { className: 'app-card' }, el('span', { className: 'app-title', textContent: `${i[0].toUpperCase()}${i.slice(1)}, ${money(SHOP.find((x) => x.item === i).pence)}` }), b);
   }));
@@ -64,8 +70,8 @@ const app = {
       note = `Ordered. ${money(order.total)}, delivered by 6 pm.`;
       await save(); render();
     });
-    totalLine = el('p', { id: 'grocer-total', className: 'app-why' });
-    line = el('p', { id: 'grocer-line', className: 'app-done' });
+    totalLine = el('p', { id: 'grocer-total', className: 'app-why', tabIndex: -1 });
+    line = el('p', { id: 'grocer-line', className: 'app-done', role: 'status' });   // a hand tap's result is announced
     root.append(
       el('h2', { id: 'grocer-h', textContent: 'Corner Grocer' }),
       el('p', { className: 'app-h3', textContent: 'Your usual basket' }), list, totalLine,

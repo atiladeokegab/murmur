@@ -156,7 +156,8 @@ for (const app of registry.list()) {
 const plug = { registry, host: appsEl, port, os: osFor,
   // a plug-in's own Remove button: the sheet asks (gate delete), then the app leaves the board
   confirm: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true),
-  removed: (x) => { if (x.ok) { if (current === x.id) home(); delete roots[x.id]; delete kvs[x.id]; renderBoard(); } speak(x.say, personal.signal); } };
+  // home() re-renders the board and focuses its first tile; a second render after it would drop that focus
+  removed: (x) => { if (x.ok) { delete roots[x.id]; delete kvs[x.id]; if (current === x.id) home(); else renderBoard(); } speak(x.say, personal.signal); } };
 const added = (r) => { roots[r.id] = r.root; kvs[r.id] = r.kv; return r; };
 for (const r of await restoreApps(plug)) added(r); // no renderBoard here: `day` is declared below (TDZ)
 async function install(name) { const r = await installByName(name, plug); if (r.root) { added(r); renderBoard(); } return r; }
@@ -224,7 +225,10 @@ function addTile() {
     const l = (await availableApps(plug)).filter((p) => !p.installed);
     if (!l.length) return speak('Every app is already added.', personal.signal);
     const i = await sheetChoose({ question: 'Which app do you want to add?', choices: l.map((p) => p.name) });
-    if (i != null) speak((await install(l[i].id)).say, personal.signal);
+    if (i == null) return btn.focus();
+    const r = await install(l[i].id);
+    speak(r.say, personal.signal);
+    $(`#board .tile[data-app="${r.id}"]`)?.focus(); // the sheet closed: land on the new app's tile, not the page
   });
   return el('li', {}, btn);
 }

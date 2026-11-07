@@ -7,8 +7,13 @@ import { browserKV } from '../ports/browser-kv.js';
 
 export const PLUGINS = new URL('../plugins/', import.meta.url);   // /plugins/ in the browser
 const AREA = 'os.plugins';
-// An action named like money or messages must ask first; a plug-in may not opt out.
-const RISKY = /pay|send|transfer|call|buy|purchase|order|book|checkout/i;
+// An action named like money or messages must ask first with the right gate; a plug-in may not opt out or
+// downgrade (pay is the only gate that checks the fingerprint, so money must be pay, never send or call).
+const MONEY = /pay|buy|purchase|order|book|checkout|transfer|money/i;
+const needs = (k) => (MONEY.test(k) ? ['pay'] : /send/i.test(k) ? ['send', 'pay'] : /call/i.test(k) ? ['call', 'pay'] : null);
+// One plug-in module: lower-case folders and a .js file, nothing else. No %, dots, query or hash: the server
+// decodes %2e%2e%2f after the URL check, so an encoded path could step outside /plugins/.
+const PATH = /^[a-z0-9-]+(\/[a-z0-9-]+)*\.js$/;
 
 /** The agent's builtin tool (public/agent/plan.js BUILTINS shape). */
 export const INSTALL_APP = {
@@ -17,11 +22,17 @@ export const INSTALL_APP = {
 };
 
 const port = (o) => o.port || browserKV({ prefix: 'murmur' });
-const installed = async (o) => (await port(o).get(AREA, 'installed')) || [];
+// The saved list is a trust boundary too: anything but an array of { id, path } strings is dropped, never fatal at boot.
+async function installed(o) {
+  let v;
+  try { v = await port(o).get(AREA, 'installed'); } catch { return []; }
+  return Array.isArray(v) ? v.filter((x) => typeof x?.id === 'string' && typeof x.path === 'string') : [];
+}
 
 function checkGates(app) {
   for (const [k, a] of Object.entries(app?.actions || {})) {
-    if (RISKY.test(k) && !a.gate) throw new Error(`app ${app.id}: ${k} moves money or messages, so it must have a gate`);
+    const need = needs(k);
+    if (need && !need.includes(a.gate)) throw new Error(`app ${app.id}: ${k} must have a gate of ${need.join(' or ')}`);
   }
 }
 
@@ -37,7 +48,7 @@ function checkGates(app) {
 export async function installApp(url, o) {
   const { registry, host, os = (app, kv) => ({ kv, say() {} }), persist = true } = o;
   const href = new URL(url, globalThis.location?.href ?? PLUGINS).href;
-  if (!href.startsWith(PLUGINS.href)) throw new Error(`Refused ${url}: plug-ins load only from ${PLUGINS.pathname} on this site.`);
+  if (!href.startsWith(PLUGINS.href) || !PATH.test(href.slice(PLUGINS.href.length))) throw new Error(`Refused ${url}: plug-ins load only from ${PLUGINS.pathname} on this site.`);
   const app = (await import(href)).default;
   checkGates(app);
   registry.register(app);                    // the built-in rules: id, fields, gates; throws on an id collision
@@ -53,14 +64,14 @@ export async function installApp(url, o) {
       b.addEventListener('click', async () => o.removed?.(await removeApp(app.id, o, o.confirm)));
       root.append(b);
     }
+    if (persist) {   // inside the try: a failed save rolls the install back, so the list and the phone agree
+      const list = (await installed(o)).filter((x) => x.id !== app.id);
+      await port(o).set(AREA, 'installed', [...list, { id: app.id, path: href.slice(PLUGINS.href.length) }]); // origin-free
+    }
   } catch (e) {
     registry.unregister(app.id);
     root?.remove?.();
     throw e;
-  }
-  if (persist) {
-    const list = (await installed(o)).filter((x) => x.id !== app.id);
-    await port(o).set(AREA, 'installed', [...list, { id: app.id, path: href.slice(PLUGINS.href.length) }]); // origin-free
   }
   return { id: app.id, name: app.name, actions: Object.keys(app.actions), url, root, kv };
 }
@@ -69,9 +80,9 @@ export async function installApp(url, o) {
 export async function uninstallApp(id, o) {
   const list = await installed(o);
   if (!list.some((x) => x.id === id)) throw new Error(`${id} is not an added app.`);
+  await port(o).set(AREA, 'installed', list.filter((x) => x.id !== id));   // first: if the save fails, nothing changed
   o.registry.unregister(id);
   o.host?.querySelector(`#app-${id}`)?.remove?.();
-  await port(o).set(AREA, 'installed', list.filter((x) => x.id !== id));
   const kv = appKv(id, port(o));   // its data goes with it: a reinstall starts clean
   for (const k of Object.keys(await kv.all())) await kv.set(k, undefined);
   return { id };
@@ -90,7 +101,7 @@ export async function removeApp(id, o, confirm = o.confirm) {
 /** On boot: install everything in the saved list. One broken plug-in is skipped and reported, never fatal. */
 export async function restoreApps(o) {
   const out = [];
-  for (const { path } of await installed(o)) {
+  for (const { path } of await installed(o)) {   // installed() already dropped malformed entries
     try { out.push(await installApp(new URL(path, PLUGINS).href, { ...o, persist: false })); } catch (e) { console.warn('plug-in not restored', path, e.message); }
   }
   return out;
