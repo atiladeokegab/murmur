@@ -157,6 +157,7 @@ test('remove_app: the agent gate asks, a spoken no keeps it, a tile of the same 
   assert.equal(s.spoken.at(-1), 'Remove Hello from your phone?');
   s.agent.no(); await p;
   assert.ok(s.spoken.includes('Kept it.')); assert.deepEqual(removed, []);
+  assert.ok(!s.spoken.some((l) => l.startsWith("That didn't work")), 'a kept app is not a failure');
   p = s.agent.hear('Uninstall the hello app');
   await until(() => s.agent.gates.current); await s.agent.yes(); await p;
   assert.deepEqual(removed, ['hello']);

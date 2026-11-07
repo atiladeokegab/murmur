@@ -124,7 +124,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
       case 'remove_app': {
         // The agent's own delete gate asks, so a spoken yes or no answers it like any other gate.
         const r = await os.remove?.(p.name, { confirm: (readback) => gates.ask({ gate: 'delete', readback }) });
-        await say(r?.say || "I can't remove apps here."); return !!r?.ok;
+        await say(r?.say || "I can't remove apps here."); return !!(r?.ok || r?.cancelled); // a kept app is a choice, not a failure
       }
       case 'run_workflow': return false; // handled in hear(): it becomes its own task
       default: return false;
