@@ -356,7 +356,14 @@ export function act({ say = '', action } = {}) {
     case 'open': return byId(a.tile) ? runTile(a.tile, null, 'talk') : speak(say);
     case 'draft': return openDraft(a.text || undefined);
     case 'pay': return openPay();
-    case 'yes': case 'send': return sheet && sheet.yes ? sheet.yes() : speak("There's nothing to send right now.");
+    case 'send':
+      // Said "send" over a draft: read it back and ask first. "Yes" (or "send" again) sends.
+      if (reader.area && sheet && !sheet.confirming) {
+        sheet.confirming = true;
+        return speak(`Send this to Mum: ${reader.area.value} Yes?`);
+      }
+      return sheet && sheet.yes ? sheet.yes() : speak("There's nothing to send right now.");
+    case 'yes': return sheet && sheet.yes ? sheet.yes() : speak("There's nothing to say yes to right now.");
     case 'no': if (dialog.open) closeSheet(); return speak(say || 'Okay, I left it.');
     case 'stop': hush(); reader.reading = false; return speak('Stopped.', { show: true });
     case 'read': return inDoc ? readFrom(0) : speak('Open a note or a message first.');
@@ -367,6 +374,7 @@ export function act({ say = '', action } = {}) {
       const r = replaceWord(reader.text, a.from, a.to, reader.index);
       if (!r.changed) return speak(`I couldn't find ${a.from}.`);
       reader.text = r.text; reader.index = r.index;
+      if (sheet) sheet.confirming = false;
       if (reader.area) reader.area.value = r.text;
       renderDoc();
       return speak(`Changed. ${sentences(r.text)[r.index]}`);

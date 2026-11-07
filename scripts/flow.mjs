@@ -27,7 +27,8 @@ console.log(`${focused === 'notes' ? 'ok  ' : 'FAIL'} focus back on the tile: ${
 await step('Message Mum', () => page.locator('[data-id="mum"]').click(), (s) => /^Mum says/.test(s));
 await step('voice edit the reply', () => page.evaluate(() => murmur.ask('change one to two')), (s) => /at two on Sunday/.test(s));
 await page.screenshot({ path: `${out}/draft.png` });
-await step('send', () => page.evaluate(() => murmur.ask('send')), (s) => /WhatsApp/.test(s));
+await step('send asks first', () => page.evaluate(() => murmur.ask('send')), (s) => /^Send this to Mum: Yes, I'll be there at two/.test(s));
+await step('yes sends', () => page.evaluate(() => murmur.ask('yes')), (s) => /WhatsApp/.test(s));
 const sent = await page.evaluate(() => window.opened && window.opened.at(-1));
 console.log(`${/two%20on%20Sunday/.test(sent) ? 'ok  ' : 'FAIL'} WhatsApp link: ${sent}`); if (!/two%20on%20Sunday/.test(sent)) errors.push('wa');
 await step('order beans by voice', () => page.evaluate(() => murmur.ask('order my usual beans')), (s) => /Shall I pay/.test(s));
