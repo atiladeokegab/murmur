@@ -69,12 +69,14 @@ function follow({ kv, say, bus, caption, sleep }) {
 }
 
 /** The first tap (or Space or Enter) says the welcome, and does nothing else, so nobody starts talking over it. */
+const PRESSABLE = 'button, a, select, input, textarea, summary, [role="button"], [role="link"]';
 function onFirstTap(win, fn) {
   const types = ['pointerdown', 'pointerup', 'click', 'contextmenu', 'keydown', 'keyup'];
   let spent = false;
   const off = () => types.forEach((t) => win.removeEventListener(t, swallow, true));
   function swallow(e) {
     if (!e.isTrusted) return; // the agent's own synthetic clicks are not the person's first tap
+    if (e.target?.closest?.(PRESSABLE)) { if (!spent) { spent = true; fn(); } off(); return; } // a first press on a control is the press itself, and still starts the welcome
     const key = e.type.startsWith('key');
     if (key && e.key !== ' ' && e.key !== 'Enter') return; // Tab and the rest still move about
     e.stopImmediatePropagation?.(); e.stopPropagation?.();

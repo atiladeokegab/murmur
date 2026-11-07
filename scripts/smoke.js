@@ -50,7 +50,7 @@ try {
   assert.equal(chat.provider, 'demo');
   const page = await get('/');
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /Tap to talk/);
+  assert.match(await page.text(), /Tap anywhere to talk/);
   const race = await get('/race');
   assert.equal(race.status, 200);
   assert.match(await race.text(), /Start both/);

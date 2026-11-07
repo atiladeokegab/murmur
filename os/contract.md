@@ -184,13 +184,17 @@ Also decided:
   `runAction` still verifies every step.
 - Ids have no underscores.
 - `seed()` is idempotent, and `reset()` wipes and then calls seed.
-- **A person's own tap on a gated control is their yes** (rev 3, 13:30). The app calls
-  `await os.confirm({ gate, readback })` before it acts, and acts only on `true`. For `send`, `call` and
-  `delete` a hand tap gets no extra sheet: `os.confirm` records `confirm { byHand: true, result: true }` and
-  says yes. **Pay always needs the fingerprint** (spec §3.7), hand tap or not: `os.confirm` runs the passkey
-  (`public/passkey.js`) and says yes only when it verified the person. A phone with no platform authenticator
-  gets the readback sheet instead, recorded `fingerprint: false`. When the agent pressed the control,
-  `os.confirm` answers yes at once, because the runner already asked through `ctx.confirm`.
+- **Send, pay, call and delete ALWAYS ask, a person's own tap included** (the lead's rule; rev 3, corrected
+  13:40). The app calls `await os.confirm({ gate, readback })` before it acts, and acts only on `true`. A hand
+  tap shows the same readback sheet ("Send to Sam: …", Yes or No), because a mis-tap by someone who cannot see
+  is the risk. The only difference is that a hand tap has no 0.5 s grace. `confirm` is recorded with `byHand: true`.
+  When the agent pressed the control, `os.confirm` answers yes at once, because the runner already asked
+  through `ctx.confirm` (the grant is scoped to that one synthetic click).
+- **Every pay needs a yes AND the fingerprint, and fails closed** (spec §3.7, the lead's rule), on the hand
+  path and the agent path alike (`public/os/gate.js` `checkFingerprint`). A saved passkey is asked for. With
+  none, making one (`setup()`) is the fingerprint ask. A cancel, or no answer in 20 s, says "No fingerprint, so
+  nothing was paid." No platform authenticator says "This phone can't check a fingerprint, so I can't pay."
+  Either way nothing is paid and the agent is free. The spoken or tapped yes never stands alone.
 - **The shell owns the gate sheet** (rev 3). Every gate the runner meets goes through `ctx.confirm`, which
   calls the shell's sheet: the readback said aloud, a yes in the first 0.5 s ignored, the passkey for `pay`,
   and the `confirm` event. The agent does not draw its own sheet or check its own fingerprint.
@@ -201,7 +205,7 @@ Also decided:
 - [ ] `id`, `name`, and an `<h2>` with the name in `mount`
 - [ ] every control is real and named, at least 64 px, source order is reading order, tokens only
 - [ ] `read()` and `place()` in plain words; `state()` is JSON and holds everything verify needs
-- [ ] `seed()` and `reset()` with invented people only. No banking, health or government
+- [ ] `seed()` and `reset()` with invented people only. No health or government. A simulated Bank only: invented money, and every pay needs a yes and the fingerprint (the lead, 13:15)
 - [ ] each action has `describe`, `doing` (2 to 5 words), `params` schema, `hint`, `run` through ctx, and `verify`
 - [ ] gated actions (`send`, `pay`, `call`, `delete`) have a `readback` and no `undo`, and the control's own
       handler awaits `os.confirm({ gate, readback })` before it acts

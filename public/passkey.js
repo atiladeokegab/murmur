@@ -17,8 +17,8 @@ export async function available() {
 export const hasPasskey = () => { try { return !!localStorage.getItem(KEY); } catch { return false; } };
 
 /** Make the passkey once. Creating it already asks for Face ID or fingerprint. */
-export async function setup() {
-  const cred = await navigator.credentials.create({ publicKey: {
+export async function setup(signal) {
+  const cred = await navigator.credentials.create({ signal, publicKey: {
     challenge: random(32),
     rp: { name: 'Murmur' },
     user: { id: random(16), name: 'murmur-user', displayName: 'You' },
@@ -31,9 +31,12 @@ export async function setup() {
 }
 
 /** Ask the phone to check it is you. Resolves true only when the authenticator verified the user. */
-export async function confirm() {
-  if (!hasPasskey()) return setup();
-  const a = await navigator.credentials.get({ publicKey: {
+export async function confirm(signal) {
+  try { return await check(signal); } catch { return false; } // a withdrawn or refused prompt is a no
+}
+async function check(signal) {
+  if (!hasPasskey()) return setup(signal);
+  const a = await navigator.credentials.get({ signal, publicKey: {
     challenge: random(32),
     allowCredentials: [{ type: 'public-key', id: unb64u(localStorage.getItem(KEY)) }],
     userVerification: 'required',
