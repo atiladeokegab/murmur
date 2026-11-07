@@ -255,3 +255,43 @@ test('fail closed: with no confirm on the mount, a hand tap books, orders and ca
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(p.registry.get('grocer').state().order, null, 'no order without a confirm');
 });
+
+test('review: an encoded path, a query or a capital cannot step outside /plugins/', async () => {
+  const p = await phone();
+  for (const rel of ['%2e%2e%2fapps/hello/index.js', '%2E%2E/apps/hello/index.js', 'taxi%2findex.js', 'taxi/index.js?x=1', 'taxi/index.js#x', 'Taxi/index.js', 'taxi/index.json']) {
+    await assert.rejects(installApp(new URL(rel, PLUGINS).href, p.plug), /plug-ins load only from/, rel);
+  }
+  assert.ok(!p.names().includes('taxi__book'));
+});
+
+test('review: money must be gated pay, never downgraded to send or call; send and call need their own gate or pay', async () => {
+  const p = await phone();
+  for (const [k, gate] of [['pay', 'send'], ['sendMoney', 'send'], ['transfer', 'call'], ['order', 'delete'], ['send', 'call'], ['callDriver', 'send']]) {
+    await assert.rejects(installApp(bad(`down${k.toLowerCase()}${gate}`, `{ ${k}: { describe: 'Do it', doing: 'Doing it', gate: '${gate}', run() {}, verify: () => true } }`), p.plug),
+      /must have a gate of/, `${k} with ${gate}`);
+  }
+  const ok = await installApp(bad('okcall', `{ callDriver: { describe: 'Ring', doing: 'Ringing', gate: 'call', run() {}, verify: () => true }, sendNote: { describe: 'Send', doing: 'Sending', gate: 'pay', run() {}, verify: () => true } }`), p.plug);
+  assert.equal(ok.id, 'okcall', 'the right gate, or the stricter pay, is accepted');
+});
+
+test('review: a corrupt or tampered saved list never stops boot', async () => {
+  const storage = fakeStorage();
+  storage.setItem('murmur:os.plugins:installed', JSON.stringify([null, 5, 'taxi', { id: 'x' }, { id: 'evil', path: '../apps/hello/index.js' }, { id: 'taxi', path: 'taxi/index.js' }]));
+  const p = await phone({ storage });
+  assert.ok(p.names().includes('taxi__book'), 'the good entry still comes back');
+  storage.setItem('murmur:os.plugins:installed', '{not json');
+  const q = await phone({ storage });
+  assert.ok(!q.names().includes('taxi__book') && q.names().includes('hello__send'), 'unreadable list: boot with the built-ins');
+});
+
+test('review: a failed save rolls an install back, and a failed uninstall leaves the app in place', async () => {
+  const p = await phone();
+  const real = p.plug.port;
+  const broken = { ...real, set: async (area, k, v) => { if (area === 'os.plugins') throw new Error('QuotaExceededError'); return real.set(area, k, v); } };
+  await assert.rejects(installApp(TAXI, { ...p.plug, port: broken }), /QuotaExceeded/);
+  assert.ok(!p.names().includes('taxi__book'), 'not half-installed');
+  p.add(await installApp(TAXI, p.plug));
+  await assert.rejects(uninstallApp('taxi', { ...p.plug, port: broken }), /QuotaExceeded/);
+  assert.ok(p.names().includes('taxi__book'), 'still installed, and still in the saved list');
+  assert.ok((await phone({ storage: p.storage })).names().includes('taxi__book'));
+});
