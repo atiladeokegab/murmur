@@ -115,13 +115,17 @@ test('calendar: invite is gated with a readback from state; no means nothing sen
 test("calendar: a person's own Send invite tap gets the shell's ask-first sheet with the same readback", async () => {
   for (const yes of [false, true]) {
     const asked = [];
-    const { root, s } = await phone({ confirm: async (q) => { asked.push(q); return yes; } });
+    const { root, s, said } = await phone({ confirm: async (q) => { asked.push(q); return yes; } });
     const tap = async (id) => { root.querySelector(`#${id}`).dispatchEvent({ type: 'click', isTrusted: true }); await new Promise((r) => setTimeout(r)); };
     await tap('cal-day-Tuesday'); await tap('cal-ev-lunch'); await tap('cal-invite');
     const who = root.querySelector('#cal-who'); who.value = 'Mum'; who.dispatchEvent(new Event('input'));
     await tap('cal-send');
     assert.deepEqual(asked, [{ gate: 'send', readback: 'Send Mum an invite: Lunch with Mum, Tuesday at 12:30 pm.' }]);
     assert.deepEqual(ev(s(), 'lunch').invited, yes ? ['Mum'] : []);
+    // one live region: the person's result goes to the shell's say once, never a second role=status in the app
+    assert.deepEqual(said().filter((t) => /^(Invite sent|Not sent)/.test(t)), [yes ? 'Invite sent to Mum.' : 'Not sent.']);
+    assert.equal(root.querySelector('#cal-status').getAttribute('role'), null);
+    assert.equal(root.querySelector('#cal-status').textContent, '');
   }
 });
 
