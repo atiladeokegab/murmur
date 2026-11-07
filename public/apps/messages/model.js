@@ -4,9 +4,9 @@ import { sentences } from '../../lib/notes.js';
 
 export const seedChats = () => [
   { id: 'mum', name: 'Mum', unread: 1, messages: [
-    { from: 'them', text: 'Did you get home all right?' },
-    { from: 'me', text: 'Yes, all fine. Love you.' },
-    { from: 'them', text: 'Lunch on Tuesday?' },
+    { from: 'them', text: 'Did you get home all right?', ago: 1500 },
+    { from: 'me', text: 'Yes, all fine. Love you.', ago: 1490 },
+    { from: 'them', text: 'Lunch on Tuesday?', ago: 2 },
   ] },
   { id: 'sam', name: 'Sam', unread: 1, messages: [
     { from: 'them', text: 'Are you still coming to the quiz tonight? We start at seven.' },
@@ -18,6 +18,19 @@ export const seedChats = () => [
 ];
 
 export const fresh = () => ({ chats: seedChats(), currentChat: null, draft: '', changed: null, reading: null, lastSent: null });
+
+// ago: minutes before the demo, fixed so the eval's state.example.json stays the same on every run.
+// shortcut: seeded times never age, store a real timestamp if messages ever arrive live.
+const NUM = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+const n = (x) => NUM[x] || String(x);
+export function agoWords(min) {
+  if (min == null) return '';
+  if (min < 1) return 'just now';
+  if (min < 60) return min === 1 ? 'a minute ago' : `${n(min)} minutes ago`;
+  if (min < 120) return 'an hour ago';
+  if (min < 1440) return `${n(Math.floor(min / 60))} hours ago`;
+  return min < 2880 ? 'yesterday' : `${n(Math.floor(min / 1440))} days ago`;
+}
 
 const norm = (s) => String(s || '').trim().toLowerCase();
 export const possessive = (name) => (/s$/i.test(name) ? `${name}'` : `${name}'s`);
