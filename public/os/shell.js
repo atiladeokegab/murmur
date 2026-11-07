@@ -27,7 +27,7 @@ const store = {
   set(k, v) { try { localStorage.setItem('murmur:' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
 const QUIET = /[?&]quiet\b/.test(location.search); // the eval and the flows: no audio, no waiting for speech
-const look = Object.assign({ size: 100, theme: 'auto', rate: 1.15, speaker: 'murmur', agency: 'ask', planner: 'auto', nolook: false },
+const look = Object.assign({ size: 100, theme: 'auto', rate: 1.15, speaker: 'murmur', agency: 'ask', answers: 'short', planner: 'auto', nolook: false },
   store.get('look', {}));
 const saveLook = () => store.set('look', look);
 let agent = null; // declared before the mount loop: Mine reads os.workflows during seed()
@@ -510,7 +510,7 @@ try {
     registry, bus, ctxFor, speak, librarian,
     os: { open: (id) => open(id), current: () => current, install },
     fingerprint: () => passkey.confirm(),
-    agency: () => look.agency,
+    agency: () => look.agency, answers: () => look.answers,
     onGate: agentGate, onChoose: agentChoose,
   });
   // Mine mounted before the agent, on its own seed. Give the real store that first tile so Run My morning runs.
