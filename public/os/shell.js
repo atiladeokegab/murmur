@@ -25,6 +25,7 @@ const QUIET = /[?&]quiet\b/.test(location.search); // the eval and the flows: no
 const look = Object.assign({ size: 100, theme: 'dark', rate: 1, speaker: 'murmur', agency: 'ask', planner: 'auto', nolook: false },
   store.get('look', {}));
 const saveLook = () => store.set('look', look);
+let agent = null; // set at the end, once every app has mounted (Mine reads os.workflows on mount)
 
 // ---------- the Librarian: Your look lives in the ability profile; Stop learning pauses memory ----------
 let librarian;
@@ -524,7 +525,6 @@ const host = {
     no: () => answerSheet(pending?.kind === 'confirm' ? false : null), choose: (i) => answerSheet(i) },
   verbs: { stop: stopAll, where, again, takeOver },
 };
-let agent = null;
 try {
   const { createAgent } = await import('../agent/index.js');
   agent = await createAgent({
