@@ -163,7 +163,7 @@ test('speed: "speak at N percent" and "N times faster" set the nearest voice ste
     ['set the voice to 180 percent', 200], ['twice as fast', 200]]) assert.equal(tool(said), `look__setVoice{"percent":${percent}}`, said);
   assert.equal(tool('speak faster'), 'look__voiceFaster{}');
   assert.match(tool('text Sam three times faster'), /^messages__openChat/, 'content is never a setting');
-  assert.deepEqual([0.75, 1, 1.15, 1.25, 1.5, 5].map(cloudAt), [false, true, false, false, false, false]);
+  assert.deepEqual([0.75, 1, 1.15, 1.25, 1.5, 5].map(cloudAt), [true, true, true, true, false, false]);
 });
 
 test('the lead 15:50: "what can I do" is everything, "who am I" describes the person, friends get a warm answer', async () => {

@@ -16,4 +16,4 @@ export function cachedTts(text, { fetch = globalThis.fetch } = {}) {
 
 export const warmTts = (lines, o) => Promise.allSettled(lines.map((l) => cachedTts(l, o)));
 /** The cloud voice plays at its own speed, so above 125 percent Murmur speaks with the browser voice, which takes the rate. */
-export const cloudAt = (rate) => !rate || rate === 1; // the cloud voice plays at 1x only; any other speed uses the phone voice so 75% and 125% really change (Prometheus 15:44)
+export const cloudAt = (rate) => !(rate > 1.25); // the cloud voice up to 125%; faster uses the phone voice. Back to this after 1x-only went silent on phones (7 Nov 15:56)
