@@ -5,4 +5,5 @@ export default [
   'messages',
   'writer',
   'mine',
+  'bank',
 ];

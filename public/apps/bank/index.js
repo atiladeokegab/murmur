@@ -1,0 +1,263 @@
+// Bank on the Murmur SDK (os/contract.md): a simulated "Murmur Bank" with invented people and money.
+// The agent presses the same controls a person does. Pay always asks first: the runner's gate for the agent,
+// os.confirm (with the fingerprint) for a person's own tap. Nothing here talks to the Librarian.
+import * as M from './model.js';
+
+let s = M.fresh();
+let root = null, os = null, body = null, paying = null;
+const q = (sel) => root && root.querySelector(sel);
+const save = () => os?.kv?.set('state', s);
+const pence = (amount) => Math.round(Number(amount) * 100);
+const typed = (p) => (p % 100 ? (p / 100).toFixed(2) : String(p / 100));
+
+async function toScreen(ctx, screen, opener) {
+  if (s.screen === screen) return;
+  if (s.screen !== 'home') await ctx.tap(q('#bank-back'));
+  if (opener) await ctx.tap(q(opener));
+}
+
+/** Each spoken name to one payee id; "Sam" asks "Sam or Samira?". Returns { ids, asked }. */
+async function whoIs(ctx, whos) {
+  const ids = []; let asked = false;
+  for (const w of whos) {
+    const r = M.resolve(s, w);
+    if (r.none) throw new Error(r.none);
+    let id = r.id;
+    if (r.ask) {
+      const pick = await ctx.choose(r.ask.question, r.ask.choices);
+      if (!pick) throw new Error('No one chosen.');
+      id = pick.id; asked = true;
+    }
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return { ids, asked };
+}
+
+/** Fill the open form and press Pay. When a name was only settled after the gate, ask again with the exact words. */
+async function fillAndPay(ctx, { ids, asked }, total, note) {
+  const d = { mode: s.screen, to: ids, amount: typed(total) };
+  if (asked && !(await ctx.confirm('pay', M.readback(M.planOf(s, d))))) throw new Error('Not paid.');
+  for (const id of ids) if (!s.draft.to.includes(id)) await ctx.tap(q(`[data-payee="${id}"]`));
+  const amount = q('#bank-amount');
+  await ctx.tap(amount); await ctx.type(amount, d.amount);
+  if (note) { const n = q('#bank-note'); await ctx.tap(n); await ctx.type(n, note); }
+  await ctx.tap(q('#bank-pay'));
+  const why = await paying; // the click's handler awaits os.confirm; settle it before the runner verifies
+  if (why) throw new Error(why);
+}
+
+const cancelUndo = async (ctx) => {
+  if (!M.canCancel(s)) throw new Error('Too late to cancel: it has gone.');
+  await toScreen(ctx, 'paid');
+  await ctx.tap(q('#bank-cancel'));
+};
+const paidTo = (st, whos) => {
+  const lp = st.lastPaid;
+  if (!lp || lp.cancelled) return false;
+  return whos.length === lp.to.length && whos.every((w) => M.candidates(st, w).some((c) => lp.to.includes(c.id)));
+};
+
+const app = {
+  id: 'bank',
+  name: 'Bank',
+  async mount(r, o) {
+    root = r; os = o;
+    const saved = await os.kv?.get('state');
+    if (saved && Number.isInteger(saved.balance)) s = saved;
+    root.append(el('h2', { id: 'bank-h' }, 'Bank'), body = el('div', { className: 'app-body' }));
+    render();
+  },
+  async seed() { if (!Number.isInteger(s?.balance)) s = M.fresh(); await save(); render(); },
+  async reset() { s = M.fresh(); await save(); render(); },
+  state: () => structuredClone(s),
+  read: () => M.read(s),
+  place: () => M.place(s),
+
+  actions: {
+    balance: {
+      describe: 'Say how much money is in the account',
+      doing: 'Reading your balance',
+      params: { type: 'object', properties: {} },
+      gate: null,
+      hint: 'Hear your balance is the first button under the Bank heading',
+      async run(p, ctx) {
+        await toScreen(ctx, 'balance', '#bank-balance');
+        await ctx.say(`Your balance is ${M.spoken(s.balance)}.`);
+      },
+      verify: (st) => st.screen === 'balance' || 'The balance did not open.',
+    },
+    recent: {
+      describe: 'Read the last three payments in and out',
+      doing: 'Reading recent payments',
+      params: { type: 'object', properties: {} },
+      gate: null,
+      hint: 'Recent payments is the second button under the Bank heading',
+      async run(p, ctx) {
+        await toScreen(ctx, 'recent', '#bank-recent');
+        for (const t of M.recent(s)) await ctx.say(M.txWords(t));
+      },
+      verify: (st) => st.screen === 'recent' || 'Recent payments did not open.',
+    },
+    payPerson: {
+      describe: 'Pay one of your payees an amount in pounds',
+      doing: 'Paying',
+      params: { type: 'object', properties: {
+        who: { type: 'string', description: 'The name as said: Mum, Sam, Samira or Landlord' },
+        amount: { type: 'number', description: 'Pounds, for example 20 or 12.50' },
+        note: { type: 'string', description: 'What it is for, if they said' },
+      }, required: ['who', 'amount'] },
+      gate: 'pay',
+      hint: 'Pay someone is the third button; choose the person, write the amount, then Pay',
+      readback: (st, p) => M.readbackFor(st, [p.who], pence(p.amount)),
+      async run(p, ctx) {
+        if (!(pence(p.amount) > 0)) throw new Error('The amount must be more than nothing.');
+        const who = await whoIs(ctx, [p.who]);
+        await toScreen(ctx, 'pay', '#bank-pay-open');
+        await fillAndPay(ctx, who, pence(p.amount), p.note);
+      },
+      verify: (st, p) => (paidTo(st, [p.who]) && st.lastPaid.total === pence(p.amount)) || 'It did not pay.',
+      // shortcut: the runner treats every gated step as final, so this undo is reached only by the Cancel button's
+      // own path today; it starts working by voice if the runner offers undo for pay within 8 s.
+      undo: cancelUndo,
+    },
+    splitBill: {
+      describe: 'Split a bill total equally and pay each person their share',
+      doing: 'Splitting the bill',
+      params: { type: 'object', properties: {
+        who: { type: 'array', items: { type: 'string' }, description: 'The names as said' },
+        total: { type: 'number', description: 'The whole bill in pounds' },
+      }, required: ['who', 'total'] },
+      gate: 'pay',
+      hint: 'Split a bill is the fourth button; choose everyone who shares it, write the total, then Pay',
+      readback: (st, p) => M.readbackFor(st, p.who, pence(p.total), 'split'),
+      async run(p, ctx) {
+        if (!p.who.length) throw new Error('Say who shares the bill.');
+        if (!(pence(p.total) > 0)) throw new Error('The total must be more than nothing.');
+        const who = await whoIs(ctx, p.who);
+        await toScreen(ctx, 'split', '#bank-split-open');
+        await fillAndPay(ctx, who, pence(p.total), '');
+      },
+      verify: (st, p) => (paidTo(st, p.who) && st.lastPaid.total === pence(p.total)) || 'It did not pay everyone.',
+      undo: cancelUndo,
+    },
+    freezeCard: {
+      describe: 'Freeze the bank card so nobody can use it',
+      doing: 'Freezing your card',
+      params: { type: 'object', properties: {} },
+      gate: null,
+      hint: 'Freeze card is the last button under the Bank heading',
+      readback: () => `Freezing your ${M.CARD}.`,
+      async run(p, ctx) {
+        await ctx.say(app.actions.freezeCard.readback());
+        await toScreen(ctx, 'home');
+        if (!s.cardFrozen) await ctx.tap(q('#bank-freeze'));
+      },
+      verify: (st) => st.cardFrozen === true || 'The card is not frozen.',
+      async undo(ctx) {
+        await toScreen(ctx, 'home');
+        if (s.cardFrozen) await ctx.tap(q('#bank-freeze'));
+      },
+    },
+  },
+};
+export default app;
+
+// A person's own tap on Pay asks through os.confirm (the shell adds the fingerprint). When the agent pressed it,
+// the runner already asked and os.confirm answers yes at once. No os.confirm: nothing moves.
+async function payTap() {
+  const plan = M.planOf(s);
+  if (!plan.length) return 'Choose who to pay and how much.';
+  const yes = os?.confirm ? os.confirm({ gate: 'pay', readback: M.readback(plan) }) : false; // called before any await
+  if (!(await yes)) return 'Not paid.';
+  const why = M.pay(s);
+  if (!why) setTimeout(render, M.CANCEL_MS + 50)?.unref?.(); // the Cancel button goes after 8 s
+  save(); render();
+  return why;
+}
+
+// ---------- the screen ----------
+function el(tag, props = {}, ...kids) {
+  const n = root.ownerDocument.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k.startsWith('aria-') || k.startsWith('data-') || k === 'for') n.setAttribute(k, String(v));
+    else if (k === 'onclick') n.addEventListener('click', v);
+    else n[k] = v;
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(k);
+  return n;
+}
+const button = (text, props = {}) => el('button', { type: 'button', className: 'app-btn', ...props }, text);
+const go = (screen) => () => { s.screen = screen; save(); render(); };
+const back = () => button('Back to your account', { id: 'bank-back', onclick: go('home') });
+const speakIfPerson = (e, text) => { if (e.isTrusted) os?.say?.(text); };
+
+function render() {
+  if (!body) return;
+  const view = { balance: balanceView, recent: recentView, pay: formView, split: formView, paid: paidView }[s.screen] || homeView;
+  body.replaceChildren(view());
+}
+
+function homeView() {
+  return el('div', { className: 'app-body' },
+    el('p', { className: 'app-title' }, `Murmur Bank. Balance ${M.shown(s.balance)}`),
+    el('p', { className: 'app-why' }, `Your ${M.CARD} is ${s.cardFrozen ? 'frozen' : 'on'}.`),
+    button('Hear your balance', { id: 'bank-balance', onclick: (e) => { go('balance')(); speakIfPerson(e, M.read(s)); } }),
+    button('Recent payments', { id: 'bank-recent', onclick: (e) => { go('recent')(); speakIfPerson(e, M.read(s)); } }),
+    button('Pay someone', { id: 'bank-pay-open', onclick: () => { M.openForm(s, 'pay'); save(); render(); } }),
+    button('Split a bill', { id: 'bank-split-open', onclick: () => { M.openForm(s, 'split'); save(); render(); } }),
+    button(`${s.cardFrozen ? 'Unfreeze' : 'Freeze'} ${M.CARD}`, { id: 'bank-freeze', 'aria-pressed': s.cardFrozen,
+      onclick: () => { s.cardFrozen = !s.cardFrozen; save(); render(); } }),
+  );
+}
+
+function balanceView() {
+  return el('div', { className: 'app-body' },
+    el('h3', { className: 'app-h3' }, 'Your balance'),
+    el('p', { className: 'app-done' }, M.shown(s.balance)),
+    back());
+}
+
+function recentView() {
+  return el('div', { className: 'app-body' },
+    el('h3', { className: 'app-h3' }, 'Recent payments, newest first'),
+    el('ol', { className: 'app-chat', 'aria-label': 'Recent payments' },
+      M.recent(s).map((t) => el('li', { className: t.pence < 0 ? 'me' : 'them' }, M.txWords(t, M.shown)))),
+    back());
+}
+
+function formView() {
+  const split = s.screen === 'split', d = s.draft;
+  const amount = el('input', { id: 'bank-amount', className: 'app-field', inputMode: 'decimal', autocomplete: 'off' });
+  amount.value = d.amount;
+  amount.addEventListener('input', () => { d.amount = amount.value; save(); renderPay(); });
+  const note = split ? null : el('input', { id: 'bank-note', className: 'app-field', autocomplete: 'off' });
+  if (note) { note.value = d.note; note.addEventListener('input', () => { d.note = note.value; save(); }); }
+  return el('div', { className: 'app-body' },
+    el('h3', { className: 'app-h3' }, split ? 'Split a bill' : 'Pay someone'),
+    el('p', { className: 'app-why' }, split ? 'Choose everyone who shares it. Each is paid an equal share.' : 'Choose who to pay.'),
+    el('ul', { className: 'app-list', 'aria-label': split ? 'Who shares it' : 'Who to pay' }, s.payees.map((p) => el('li', {},
+      button(p.name, { 'data-payee': p.id, 'aria-pressed': d.to.includes(p.id), onclick: () => { M.pick(s, p.id); save(); render(); } })))),
+    el('label', { for: 'bank-amount', className: 'app-label' }, split ? 'Bill total in pounds' : 'Amount in pounds'),
+    amount,
+    note && el('label', { for: 'bank-note', className: 'app-label' }, 'What it is for, if you like'),
+    note,
+    el('div', { id: 'bank-pay-slot' }, payButton()),
+    back());
+}
+function payButton() {
+  const plan = M.planOf(s);
+  const label = plan.length ? M.readback(plan).replace(/\. From Murmur Bank\.$/, '') : 'Pay';
+  return button(label, { id: 'bank-pay', className: 'app-btn primary', disabled: !plan.length, onclick: () => { paying = payTap(); } });
+}
+function renderPay() { q('#bank-pay-slot')?.replaceChildren(payButton()); }
+
+function paidView() {
+  const live = M.canCancel(s);
+  return el('div', { className: 'app-body' },
+    el('h3', { className: 'app-h3' }, s.lastPaid?.cancelled ? 'Cancelled' : 'Paid'),
+    el('p', { className: 'app-done', role: 'status' }, M.paidWords(s, M.shown)),
+    live && button('Cancel this payment', { id: 'bank-cancel', onclick: () => { if (M.cancel(s)) { save(); render(); } } }),
+    live && el('p', { className: 'app-why' }, 'You can cancel for 8 seconds.'),
+    back());
+}
