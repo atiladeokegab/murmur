@@ -58,7 +58,10 @@ function fill(action, slots) {
 }
 
 const DAY = '(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)';
-const NO_GO = /\b(bank|banking|balance|transfer (?:\w+ )?(?:money|funds|pounds|quid|euros|dollars)|account number|sort code|overdraft|doctor|gp|prescription|medication|diagnos\w*|nhs|benefits|universal credit|tax return|hmrc|passport|driving licence|council tax|savings|mortgage|loan|credit card|pin number|move (?:my |some )?money|barclays|hsbc|lloyds|natwest|santander|monzo|starling|nationwide|halifax|revolut)\b/i;
+// Real money stays with the person. The phone's own Bank app (invented money) is in scope: its words pass only when
+// it is installed (BANK_WORDS), so with no Bank app "bank" and "balance" are still refused.
+const NO_GO = /\b(transfer (?:\w+ )?(?:money|funds|pounds|quid|euros|dollars)|account numbers?|sort code|my pin|pin (?:number|code)|card numbers?|online banking|(?:log|sign)(?:ging)? ?in(?:to)? (?:to )?(?:my |an? )?(?:\w+ )?account|between (?:my )?accounts|overdraft|doctor|gp|prescription|medication|diagnos\w*|nhs|benefits|universal credit|tax return|hmrc|passport|driving licence|council tax|savings|mortgage|loan|credit card|pin number|move (?:my |some )?money|barclays|hsbc|lloyds|natwest|santander|monzo|starling|nationwide|halifax|revolut)\b/i;
+const BANK_WORDS = /\b(bank|banking|balance)\b/i;
 const GARBLED = /\.\.\.|…|\[(?:unintelligible|inaudible|noise)\]|^\W*$/i;
 
 /**
@@ -69,7 +72,7 @@ const GARBLED = /\.\.\.|…|\[(?:unintelligible|inaudible|noise)\]|^\W*$/i;
 export function demoPlan(utterance, apps, context = {}) {
   const raw = String(utterance || '').trim();
   if (!raw) return { kind: 'unknown', plan: [], say: 'Sorry, again?' };
-  if (NO_GO.test(raw)) return { kind: 'refuse', plan: [], say: "I don't do banking, health or government. Those stay with you." };
+  if (NO_GO.test(raw) || (BANK_WORDS.test(raw) && !apps.some((a) => a.id === 'bank'))) return { kind: 'refuse', plan: [], say: "I don't do banking, health or government. Those stay with you." };
   if (GARBLED.test(raw)) return { kind: 'unknown', plan: [], say: "Sorry, I didn't catch that. Again?" };
   const teach = raw.match(/^how (?:do|can|would|should) i\s+(.+?)[?.!]*$/i);
   if (teach) {
@@ -237,8 +240,13 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:book|get|call|order)\s+(?:me\s+)?(?:a\s+)?(?:taxi|cab)(?:\s+(?:to\s+)?(?:the\s+)?(.+))?$/i))) {
     return task([step('taxi', ['book'], m[1] ? { to: m[1].toLowerCase() } : {})]);
   }
-  // "Pay Sam twenty pounds", "Pay Samira five pounds fifty", "Send Sam £20 please"
-  if ((m = t.match(/^(?:pay|send)\s+(\w+)\s+(?:£\s*)?(\d+(?:\.\d\d)?|[a-z -]+?)(?:\s+(?:pounds?|quid)(?:\s+(?:and\s+)?(?!please\b)(\d\d|[a-z -]+?)(?:\s+p(?:ence)?)?)?)?(?:,?\s+please)?$/i))
+  // The phone's Bank: "Open the bank", "What's my balance", "Recent payments", "Freeze my card"
+  if (/^(?:open|go to|show)\s+(?:the\s+|my\s+)?(?:murmur\s+)?bank(?:\s+app)?$/i.test(t) ||
+    /^(?:what'?s|what is|check|tell me|read|say|how much is)\s+(?:in\s+)?(?:my\s+|the\s+)?(?:(?:murmur\s+)?bank\s+)?balance$|^how much (?:money )?(?:have i got|do i have)(?: in (?:the|my) bank)?$/i.test(t)) return task([step('bank', ['balance'], {})]);
+  if (/^(?:read |what are |show )?(?:my |the )?(?:recent|last) (?:bank )?(?:payments|transactions|spending)$|^what have i (?:spent|paid)(?: recently)?$/i.test(t)) return task([step('bank', ['recent'], {})]);
+  if (/^freeze (?:my |the )?(?:bank )?card$/i.test(t)) return task([step('bank', ['freezeCard'], {})]);
+  // "Pay Sam twenty pounds", "Pay Samira five pounds fifty", "Send Sam £20 please", "... from Murmur Bank"
+  if ((m = t.replace(/\s+from (?:the |my )?(?:murmur )?bank$/i, '').match(/^(?:pay|send)\s+(\w+)\s+(?:£\s*)?(\d+(?:\.\d\d)?|[a-z -]+?)(?:\s+(?:pounds?|quid)(?:\s+(?:and\s+)?(?!please\b)(\d\d|[a-z -]+?)(?:\s+p(?:ence)?)?)?)?(?:,?\s+please)?$/i))
     && money(m[2]) > 0 && (!m[3] || (money(m[3]) > 0 && money(m[3]) < 100))) {
     return task([step('bank', ['payPerson', 'pay'], { who: name(m[1]), amount: money(m[2]) + (m[3] ? money(m[3]) / 100 : 0) })]);
   }
