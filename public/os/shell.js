@@ -9,7 +9,7 @@ import { createToolkit } from '../vendor/toolkit/index.js';
 import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
 import * as passkey from '../passkey.js';
-import { byHand, checkFingerprint } from './gate.js';
+import { byHand, checkFingerprint, payAttempt } from './gate.js';
 import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
 import { installToken } from '../agent/token.js';
 import { play, buzz, mute, unmute, isMuted, EARCON_NAMES } from '../sound/index.js';
@@ -361,12 +361,14 @@ function sheetConfirm({ gate, readback, grace = true }) {
   return new Promise((resolve) => {
     showSheet('confirm', { gate, readback }, (v) => {
       if (v === true && grace && performance.now() - pending.at < GRACE_MS) return false;
-      pending = null;
       if (v === true && gate === 'pay') { // pay always needs the fingerprint (spec §3.7)
         show('Check your fingerprint.');
-        fingerprint().then((ok) => { closeSheet(); resolve({ result: ok, fingerprint: ok }); });
+        const attempt = payAttempt(fingerprint);
+        const mine = pending = { ...pending, answer: (w) => (w === true ? false : (attempt.cancel(), true)) }; // Stop or Back cancels; another yes waits
+        attempt.result.then((ok) => { if (pending === mine) pending = null; closeSheet(); resolve({ result: ok, fingerprint: ok }); });
         return true;
       }
+      pending = null;
       closeSheet(); resolve(v === true);
       return true;
     });

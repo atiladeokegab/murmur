@@ -10,6 +10,13 @@ export async function byHand({ app, gate, readback, bus, sheet }) {
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
+// One pay attempt after Yes. Stop or Back cancels it at once, and a fingerprint that says yes after that pays nothing.
+export function payAttempt(fingerprint) {
+  let cancel;
+  const stopped = new Promise((res) => { cancel = () => res(false); });
+  return { result: Promise.race([fingerprint().then((ok) => ok === true, () => false), stopped]), cancel };
+}
+
 // The fingerprint, failing closed on both paths. A saved passkey is asked for; with none, making one IS the ask.
 // No authenticator, a cancel, or no answer in 20 s: nothing is paid. The spoken yes never stands alone.
 export async function checkFingerprint({ passkey, say, wait = sleep, ms = 20000 }) {

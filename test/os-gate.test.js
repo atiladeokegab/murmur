@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { byHand, checkFingerprint } from '../public/os/gate.js';
+import { byHand, checkFingerprint, payAttempt } from '../public/os/gate.js';
 import { createBus, createCtx } from '../public/sdk/index.js';
 
 const rec = () => { const bus = createBus(); const seen = []; bus.on('confirm', (e) => seen.push(e)); return { bus, seen }; };
@@ -62,4 +62,19 @@ test('ctx.confirm records the fingerprint the host checked, and {result:false} i
     assert.equal(await ctx.confirm('pay', 'Pay'), result);
     assert.equal(seen[0].result, result); assert.equal(seen[0].fingerprint, fp);
   }
+});
+
+test('Yes, then Stop or Back before the fingerprint returns: a late fingerprint yes pays nothing (Atlas P1)', async () => {
+  for (const how of ['Stop', 'Back']) {
+    let uv;
+    const a = payAttempt(() => new Promise((res) => { uv = res; }));
+    a.cancel(); // ${how}
+    uv(true); // the fingerprint says yes, too late
+    assert.equal(await a.result, false, how);
+  }
+  const ok = payAttempt(async () => true);
+  assert.equal(await ok.result, true, 'no Stop: the fingerprint pays');
+  ok.cancel();
+  assert.equal(await ok.result, true, 'a Stop after the pay changes nothing');
+  assert.equal(await payAttempt(async () => { throw new Error('cancelled'); }).result, false, 'a failed check pays nothing');
 });
