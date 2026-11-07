@@ -22,8 +22,11 @@ const mins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m
 const order = (a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || mins(a.time) - mins(b.time);
 /** "today", "tomorrow", "wed", "Wednesday" -> "Wednesday"; null if not a day. */
 export function dayOf(s, today = TODAY) {
-  const q = String(s ?? '').trim().toLowerCase();
-  if (!q || q === 'today') return today;
+  const raw = String(s ?? '').trim().toLowerCase();
+  // dictation leaves fillers in: "um Wednesday", "Wednesday please"
+  const q = raw.replace(/[^a-z ]/g, ' ').replace(/\b(um+|uh+|erm?|please|on|this|the|like|so)\b/g, ' ').trim().replace(/\s+/g, ' ');
+  if (!raw || q === 'today') return today;
+  if (q.includes(' ')) return q.split(' ').map((w) => dayOf(w, today)).find(Boolean) ?? null;
   if (q === 'tomorrow') return DAYS[(DAYS.indexOf(today) + 1) % 7];
   return DAYS.find((d) => q.length >= 3 && d.toLowerCase().startsWith(q.slice(0, 3)) && d.toLowerCase().startsWith(q.replace(/s$/, ''))) ?? null;
 }
@@ -42,10 +45,22 @@ export function spoken(t) {
   const [h, m] = t.split(':').map(Number);
   return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
 }
-/** The best-matching events for what was said ("lunch with Mum", "lunch", "Mum"). Ties come back together. */
+const NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+/** "3pm", "three o'clock", "my 12:30 meeting" -> "15:00", "15:00", "12:30". A bare 1 to 7 is afternoon. Not a time: null. */
+export function heardTime(q) {
+  const s = String(q ?? '').toLowerCase().replace(/\b(my|the|meeting|event|appointment|thing|o'?clock)\b/g, ' ')
+    .trim().replace(/^[a-z]+/, (w) => NUMS[w] ?? w);
+  const t = timeOf(s);
+  if (!t || /[ap]\.?m/.test(s)) return t;
+  const h = Number(t.slice(0, 2));
+  return h >= 1 && h <= 7 ? `${h + 12}${t.slice(2)}` : t;
+}
+/** The best-matching events for what was said ("lunch with Mum", "lunch", "Mum", or a time: "my 12:30"). Ties come back together. */
 export function matches(list, said) {
   const q = String(said ?? '').toLowerCase().replace(/\b(the|my|a)\b/g, ' ').replace(/\s+/g, ' ').trim();
   if (!q) return [];
+  const at = heardTime(q);
+  if (at) return list.filter((e) => e.time === at);
   const score = (e) => {
     const t = e.title.toLowerCase();
     if (t === q) return 4;
@@ -236,7 +251,7 @@ async function openEvent(ctx, e) {
 }
 async function pickOne(ctx, said) {
   const found = matches(events, said);
-  if (!found.length) throw new Error(`There's nothing called ${said} this week.`);
+  if (!found.length) { const at = heardTime(said); throw new Error(at ? `Nothing's at ${spoken(at)} this week.` : `There's nothing called ${said} this week.`); }
   if (found.length === 1) return found[0];
   const c = await ctx.choose(`${found.map((x) => `${x.title} on ${x.day}`).join(' or ')}?`, found.map((x) => ({ label: `${x.title} on ${x.day}`, id: x.id })));
   if (!c) throw new Error('No event chosen.');

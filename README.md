@@ -76,6 +76,15 @@ decide.
 </p>
 <p align="center"><sub>The board · ask first, with the readback · sent, every step ticked</sub></p>
 
+## Why not computer use?
+
+Computer use clicks pixels it reads from screenshots, which suits a sighted supervisor who can watch it and
+catch its mistakes. In Murmur each app declares its actions: the OS gates send, pay, call and delete behind
+an ask (pay also needs a fingerprint), every step is checked against the app's own state, and words Murmur
+already knows are planned on the phone and never leave it. The closest prior
+work is Apple's App Intents and Android's App Actions; Murmur makes that kind of declared action the only way
+an app can be driven, by a person or the agent.
+
 ## How it works
 
 ```mermaid
