@@ -199,7 +199,10 @@ li.now { border: 0; }
 
 /* ---------- talk bar ---------- */
 footer { order: 1; /* the bar is first in the DOM for Tab order, last on screen */
-  position: sticky; bottom: 0; z-index: 3; flex: none; container: bar / inline-size; padding: 6px var(--gutter) max(12px, env(safe-area-inset-bottom)); background: var(--c-page); border-top: 1px solid var(--c-slat); }
+  position: sticky; bottom: 0; z-index: 3; flex: none; container: bar / inline-size; padding: 6px var(--gutter) max(12px, env(safe-area-inset-bottom)); background: var(--c-page); border-top: 1px solid var(--c-slat);
+  display: flex; flex-direction: column; max-block-size: 45svh; } /* never more than the lower half of the screen at any zoom: the text rows give way, Talk never does */
+.say, .welcome-caption { flex: 0 1 auto; }
+.typed, .talk { flex: none; }
 footer > * { width: min(100%, var(--w-column)); margin-inline: auto; }
 .say { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; margin-top: 0; margin-bottom: 6px; padding: 0 1rem; font-size: var(--fs-say); line-height: 1.35;
   min-block-size: 4.05em; } /* three lines, all reserved: no scroll box (keyboard), and the bar never changes height when the line does */
@@ -292,6 +295,7 @@ dialog:not([open]) { display: block; visibility: hidden; opacity: 0; translate: 
   .say { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; block-size: auto; min-block-size: 2.8em; margin-bottom: 6px; font-size: 0.75rem; padding-inline: 0; } /* two lines, reserved: no scroll box, and the bar never grows */
   .say .who { margin-right: 0.3em; }
   .welcome-caption { font-size: 0.75rem; padding-inline: 0; margin-bottom: 6px; } /* build-look's first-open caption keeps step with the say line */
+  .typed { margin-bottom: 6px; } /* big text: with the typing box up, the bar still fits under 45svh with Talk whole */
   .talk { font-size: 0.75rem; min-height: 72px; padding: 0.2rem 12px; border-radius: var(--r-btn); gap: 0.4rem; }
   .talk svg, .talk .hint { display: none; }
 }
