@@ -74,6 +74,7 @@ function onFirstTap(win, fn) {
   let spent = false;
   const off = () => types.forEach((t) => win.removeEventListener(t, swallow, true));
   function swallow(e) {
+    if (!e.isTrusted) return; // the agent's own synthetic clicks are not the person's first tap
     const key = e.type.startsWith('key');
     if (key && e.key !== ' ' && e.key !== 'Enter') return; // Tab and the rest still move about
     e.stopImmediatePropagation?.(); e.stopPropagation?.();

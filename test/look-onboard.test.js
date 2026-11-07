@@ -35,12 +35,15 @@ test('step 1 with no speech recognition says plainly to use Chrome or type', asy
 test('step 1 waits for the first tap when the browser will not speak before one; that tap does nothing else', async () => {
   const listeners = {};
   const win = { addEventListener: (t, f) => ((listeners[t] ||= []).push(f)), removeEventListener: (t, f) => { listeners[t] = (listeners[t] || []).filter((g) => g !== f); } };
-  const fire = (type, extra = {}) => { const e = { type, stopped: false, prevented: false, stopImmediatePropagation() { this.stopped = true; }, stopPropagation() { this.stopped = true; }, preventDefault() { this.prevented = true; }, ...extra }; (listeners[type] || []).forEach((f) => f(e)); return e; };
+  const fire = (type, extra = {}) => { const e = { type, stopped: false, prevented: false, stopImmediatePropagation() { this.stopped = true; }, stopPropagation() { this.stopped = true; }, preventDefault() { this.prevented = true; }, isTrusted: true, ...extra }; (listeners[type] || []).forEach((f) => f(e)); return e; };
   const p = phone({ waitTap: true, win });
   await p.open();
   assert.deepEqual(p.said, [], 'nothing said into a blocked voice');
   assert.deepEqual(p.shown, [FIRST_WORDS], 'the caption is up at once');
   assert.equal(fire('keydown', { key: 'Tab' }).stopped, false, 'Tab still moves about');
+  const agentClick = fire('click', { isTrusted: false });
+  assert.equal(agentClick.stopped || agentClick.prevented, false, "the agent's own synthetic click goes through");
+  assert.deepEqual(p.said, [], 'and is not taken as the first tap');
   assert.equal(fire('pointerdown').stopped, true, 'the tap does not start listening');
   fire('pointerup');
   const c = fire('click');
