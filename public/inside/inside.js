@@ -12,7 +12,7 @@ const ROW = {
   Plan: (r) => `${r.plan.map((c) => `${esc(c.name)} ${code(c.params ?? {})}`).join('<br>') || 'No plan'}`
     + `${r.dropped.length ? `<br>Dropped: ${code(r.dropped)}` : ''}${r.provider ? `<br><code>${esc(r.provider)}</code>` : ''}`,
   Actions: (r) => `<span class="${r.result === 'verified' ? 'ok' : r.result === 'failed' ? 'no' : ''}">${esc(r.label || r.action)}</span>${r.gate ? ` <b>[${esc(r.gate)}]</b>` : ''}`
-    + `<br><code>${esc(r.app ? `${r.app}.` : '')}${esc(r.action)} ${esc(JSON.stringify(r.params ?? {}))}</code>`
+    + `<br><code>${esc(r.action)} ${esc(JSON.stringify(r.params ?? {}))}</code>`
     + `<br><code>${esc(r.control ? `pressed ${r.control} · ` : '')}verify: ${esc(r.result)}${ms(r.ms)}</code>${r.reason ? `<br>Didn't work: ${esc(r.reason)}` : ''}`,
   Asked: (r) => `<b>${esc(r.gate)}</b>: ${esc(r.readback)}<br><code>${esc(r.app || '')} answer: ${esc(yesNo(r.result))}</code>`,
   Memory: (r) => `${esc(r.kind)} ${code(r.fields)}`,
@@ -26,13 +26,18 @@ $('cols').innerHTML = COLUMNS.map((c) => `<section aria-labelledby="h-${c}"><h2 
 function draw() {
   const t = model.tally(), cols = model.columns();
   $('tally').innerHTML = LABELS.map(([k, l]) => `<div class="${k === 'bypassed' && t[k] ? 'bad' : ''}"><dt>${l}</dt><dd>${t[k]}</dd></div>`).join('');
-  for (const c of COLUMNS) $(`c-${c}`).innerHTML = cols[c].map((r) => `<li>${ROW[c](r)}</li>`).join('');
+  for (const c of COLUMNS) {
+    const ol = $(`c-${c}`), box = ol.parentElement;
+    ol.innerHTML = cols[c].map((r) => `<li>${ROW[c](r)}</li>`).join('');
+    box.scrollTop = box.scrollHeight; // keep the newest row in view during the demo
+  }
 }
 draw();
 
 let pending = false;
 const src = new EventSource('/api/bus/stream');
-src.onopen = () => { $('link').textContent = 'Joined to the phone.'; };
+// The relay replays its whole ring on every connect, so start the model over or a reconnect counts everything twice.
+src.onopen = () => { model = createTally(); draw(); $('link').textContent = 'Joined to the phone.'; };
 src.onerror = () => { $('link').textContent = 'Lost the phone. Reconnecting.'; };
 src.onmessage = (m) => {
   const e = JSON.parse(m.data);
