@@ -304,16 +304,17 @@ function plan(said, apps, context, dry) {
       (m = t.match(/^read\s+(?:me\s+)?(?:my\s+|the\s+)?(?:latest\s+|last\s+|new\s+)?(?:messages?|texts?)\s+from\s+(\w+)$/i)) || (m = t.match(/^(?:open|show)\s+(\w+)'s\s+chat$/i))) {
     return task([step('messages', ['openChat', 'open'], { who: name(m[1]) }), step('messages', ['read'])]);
   }
-  // No phone app yet: "call Mum" opens Mum's chat and says so; an installed calls app gets its own plan.
-  if ((m = t.match(/^(?:call|ring|phone|video call)\s+(?!(?:a|an|the|my|me|it|them)\b)(\w+)(?:\s+(?:now|back|please))?$/i)) && !apps.some((a) => (a.actions || []).some((x) => /^(?:call|ring|dial)/i.test(x.name)))) { // a call action, not an app id: the shell's Phone is settings
+  // "Call Mum": an installed app with a call action places the call; with none, Mum's chat opens and Murmur says so.
+  // A call action, not an app id: the shell's Phone app is settings.
+  if ((m = t.match(/^(?:call|ring|phone|video call)\s+(?!(?:a|an|the|my|me|it|them)\b)(\w+)(?:\s+(?:now|back|please))?$/i))) {
     const who = name(m[1]);
+    for (const a of apps) { const x = (a.actions || []).find((y) => /^(?:call|ring|dial)$/i.test(y.name)); if (x) return task([{ tool: `${a.id}${SEP}${x.name}`, params: { who } }]); }
     return task([step('messages', ['openChat', 'open'], { who }), { tool: 'say', params: { text: `I can't call yet. I've opened ${who}'s chat.` } }]);
   }
   // "Reply to that message": no words to send yet, so ask, and the answer is the reply (drafted, never sent unasked).
   if (/^(?:reply|answer|respond)(?:\s+to\s+(?:that|this|the|it|her|him|them)(?:\s+(?:message|text|one))?)?$/i.test(t)) return { ...task([{ tool: 'ask', params: { question: 'What should I say?' } }]), asked: 'reply' };
   if ((m = raw.match(/^(?:reply|answer|respond)(?:\s+with)?[:,]?\s+(.+)$/i))) return task([step('messages', ['reply', 'draft'], { text: body(m[1].replace(/[.!?]+$/, '')) })]);
   if (/^send(?: it| that| the reply)?$/i.test(t)) return task([step(here || 'messages', ['send'])]);
-  if ((m = t.match(/^(?:call|ring|phone)\s+(\w+)$/i))) return task([step('messages', ['call'], { who: name(m[1]) })]);
 
   // Clock: the timer, the alarm and the time
   if ((m = t.match(/^(?:set|start)\s+(?:a\s+|the\s+|my\s+)?timer\s+(?:for\s+)?(.+)$/i)) || (m = t.match(/^(?:set\s+)?(?:a\s+)?timer\s+for\s+(.+)$/i))) return task([step('clock', ['setTimer'], { length: m[1] })]);

@@ -141,6 +141,14 @@ test('"Call Mum" opens her chat on the real phone, whose Phone app is settings; 
   const p = demoPlan('Call Mum', real, { app: null, workflows: [] });
   assert.deepEqual(p.plan.map((s) => s.tool), ['messages__openChat', 'say'], JSON.stringify(p));
   assert.equal(p.plan[1].params.text, "I can't call yet. I've opened Mum's chat.");
-  const calls = { id: 'calls', name: 'Calls', actions: { call: { describe: 'Call a person', doing: 'Calling', hint: 'Call', params: { type: 'object', properties: { who: { type: 'string' } }, required: ['who'] }, async run() {}, verify: () => true } } };
-  assert.ok(!demoPlan('Call Mum', describeRegistry([...apps, phoneApp, calls]), { app: null, workflows: [] }).plan.some((s) => s.tool === 'say'));
+  // the Calls app's shape (calls branch d8623fc): call {who} and callBack, beside the Phone settings app
+  const act = (describe, properties = {}, required) => ({ describe, doing: describe, hint: describe, params: { type: 'object', properties, ...(required ? { required } : {}) }, async run() {}, verify: () => true });
+  const calls = { id: 'calls', name: 'Calls', async mount() {}, read: () => '', place: () => ({}), state: () => ({}), async seed() {}, async reset() {}, actions: { call: act('Call a person', { who: { type: 'string' } }, ['who']), missed: act('Read missed calls'), hangUp: act('Hang up'), callBack: act('Call back', { who: { type: 'string' } }) } };
+  const registry = createRegistry(); for (const a of [phoneApp, calls]) registry.register(a);
+  for (const said of ['Call Mum', 'Ring Mum', 'Call Sam']) {
+    const steps = demoPlan(said, describeRegistry([...apps, phoneApp, calls]), { app: null, workflows: [] }).plan;
+    assert.deepEqual(steps.map((s) => s.tool), ['calls__call'], said);
+    assert.equal(registry.resolve(steps[0].tool)?.app?.id, 'calls', `${said}: the step resolves to the installed app`);
+    assert.equal(steps[0].params.who, said.split(' ')[1]);
+  }
 });
