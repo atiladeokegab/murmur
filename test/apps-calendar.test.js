@@ -37,6 +37,8 @@ test('calendar: real heading, named day buttons with pressed state, every action
   const { root } = await phone();
   assert.equal(root.querySelector('h2').textContent, 'Calendar');
   assert.equal(controlName(root.querySelector('#cal-day-Monday')), 'Monday, today');
+  assert.equal(root.querySelector('#cal-day-Wednesday').textContent, 'Wed', 'short visible name, full name in aria-label');
+  assert.equal(controlName(root.querySelector('#cal-day-Wednesday')), 'Wednesday');
   assert.equal(root.querySelector('#cal-day-Monday').getAttribute('aria-pressed'), 'true');
   assert.equal(controlName(root.querySelector('#cal-next')), "What's next");
   for (const [k, a] of Object.entries(calendar.actions)) {

@@ -81,11 +81,14 @@ function el(tag, props = {}, ...kids) {
   return n;
 }
 const $ = (id) => root.querySelector(`#${id}`);
-function btn(id, text, onClick, cls = 'choice') {
+function btn(id, text, onClick, cls = 'choice', label) {
   const b = el('button', { type: 'button', id, className: cls, textContent: text });
+  if (label) b.setAttribute('aria-label', label);
   b.addEventListener('click', (e) => { personal = !!e?.isTrusted; pressed = b; onClick(); });
   return b;
 }
+// Short visible names so a day never breaks mid-word at 400%; the full name stays in the accessible name.
+const dayBtn = (id, d, tail, onClick) => btn(id, d.slice(0, 3) + tail, onClick, 'choice', d + tail);
 function field(id, label, key, type = 'text') {
   const i = el('input', { id, type, value: draft[key], autocomplete: 'off' });
   i.addEventListener('input', () => { draft[key] = i.value; });
@@ -177,7 +180,7 @@ function render(focusId) {
   const e = ev();
   const days = DAYS.map((d) => {
     const on = d === shown && !adding;
-    const b = btn(`cal-day-${d}`, d === TODAY ? `${d}, today` : d, () => show(d));
+    const b = dayBtn(`cal-day-${d}`, d, d === TODAY ? ', today' : '', () => show(d));
     b.setAttribute('aria-pressed', String(on));
     return b;
   });
@@ -202,7 +205,7 @@ function render(focusId) {
     } else if (picking) {
       body.push(el('h4', { id: 'cal-pick-h', tabIndex: -1, textContent: `Move ${e.title} to` }), ...field('cal-to-time', 'At', 'to'),
         el('div', { className: 'cal-grid', role: 'group', 'aria-label': 'Days' }, ...DAYS.map((d) => {
-          const b = btn(`cal-to-${d}`, d === e.day ? `${d}, now` : d, () => pickDay(d));
+          const b = dayBtn(`cal-to-${d}`, d, d === e.day ? ', now' : '', () => pickDay(d));
           if (d === e.day) b.setAttribute('aria-current', 'true');
           return b;
         })));
