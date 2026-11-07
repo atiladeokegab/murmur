@@ -40,7 +40,7 @@ test('find, explain, run and delete verify on the app truth', () => {
   s.lastRun = 'My morning';
   assert.equal(A.run.verify(s, { name: 'My morning' }), true);
   assert.notEqual(A.delete.verify(s, { name: 'My morning' }), true);
-  assert.match(A.delete.readback(s, { name: 'my morning' }), /^Delete My morning\? My morning: say what's on today/);
+  assert.equal(A.delete.readback(s, { name: 'my morning' }), "Delete 'My morning'?");
   assert.ok(Mi.remove(s, 'my morning'));
   assert.equal(A.delete.verify(s, { name: 'My morning' }), true);
   assert.notEqual(A.delete.verify(s, { name: '' }), true, 'an empty name never verifies');
