@@ -308,6 +308,19 @@ function plan(said, apps, context, dry) {
     if (send) steps.push(step('messages', ['send']));
     return task(steps);
   };
+  // Draft any kind of text (the lead, 7 Nov): to a person it's a message (no mail app, so an email goes to Messages);
+  // a note, post or letter goes to the Writer. A plain template here; "and send it" sends with no extra yes.
+  if ((m = raw.match(/^(?:please\s+)?(?:write|draft|compose)\s+(?:me\s+)?(?:an?\s+|the\s+)?(?:quick\s+|short\s+)?(e-?mail|mail|message|text|note|post|letter|reply|tweet)(?:\s+(?:to|for)\s+(?!say)(\w+))?(?:[,:]?\s+(saying|that|about|asking|telling (?:him|her|them)))?\s*([\s\S]*?)(?:[,.]?\s+and send(?: it)?)?[.!?]*$/i)) && !(m[2] && !m[3] && /^[:,]/.test(m[4]))) { // "to Mum: words" keeps the words as said (the rule below)
+    const [, kind, who, how = '', what = ''] = m;
+    const sendIt = /\band send(?: it)?[.!?]*$/i.test(raw);
+    const gist = what.replace(/^(?:about|on|for)\s+/i, '').trim();
+    const text = !gist ? (who ? `Hi ${name(who)}, just checking in` : 'Just a quick note to say hello') : /^asking/i.test(how) ? `Hi ${name(who || 'there')}, what's the plan for ${gist.replace(/^(?:if|whether)\s+/i, '')}?`
+      : who ? `Hi ${name(who)}, ${gist.replace(/^(?:that|saying)\s+/i, '')}`
+      : /^post|tweet/i.test(kind) ? `${cap(gist)}!` : /^about$/i.test(how) || /^note/i.test(kind) ? `Note about ${gist}.` : cap(gist);
+    if (who) return msg(who, text, sendIt);
+    return task([step('writer', ['dictate', 'write'], { text: body(text) })]);
+  }
+  if (/^save(?: it| that| this| the (?:note|draft|post))?(?: for (?:me|later))?$/i.test(t)) return task([{ tool: 'say', params: { text: 'Saved.' } }]);
   if ((m = raw.match(/^draft\s+(?:a\s+)?(?:message|text|reply|note)\s+(?:to|for)\s+(\w+)[:,]?\s+([\s\S]+)$/i))) return msg(m[1], m[2], false);
   if ((m = raw.match(/^(?:tell|message|text)\s+(\w+)[:]\s+([\s\S]+)$/i))) return msg(m[1], m[2], true);
   if ((m = t.match(/^(?:send|text)\s+(\w+)\s+a\s+(?:message|text|note)\s+(?:saying|that|to say)?\s*(.+)$/i)) ||

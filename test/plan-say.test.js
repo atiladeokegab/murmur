@@ -236,3 +236,14 @@ test('"remind me to water the plants at 7 a.m." and friends add a calendar remin
     assert.deepEqual([x.params.title, x.params.time, x.params.day, x.params.remind], ['Water the plants', time, day, true], s);
   }
 });
+
+test('draft any kind of text: a person gets a message, a note or post the Writer; "and send it" sends, "save" saves', () => {
+  assert.equal(tool("Write an email to Sam saying I'll be late"), 'messages__openChat{"who":"Sam"} > messages__reply{"text":"Hi Sam, I\'ll be late."}');
+  assert.equal(tool('draft a message to Priya asking about Friday'), 'messages__openChat{"who":"Priya"} > messages__reply{"text":"Hi Priya, what\'s the plan for Friday?"}');
+  assert.equal(tool("draft a note about tomorrow's shopping"), 'writer__dictate{"text":"Note about tomorrow\'s shopping."}');
+  assert.equal(tool('write a post saying I loved the gig'), 'writer__dictate{"text":"I loved the gig!"}');
+  assert.match(tool('write a message to Priya saying running late and send it'), /messages__reply\{"text":"Hi Priya, running late\."\} > messages__send\{\}$/);
+  assert.equal(tool('save it'), 'say{"text":"Saved."}');
+  assert.equal(tool('draft a letter'), 'writer__dictate{"text":"Just a quick note to say hello."}');
+  assert.equal(tool('write an email to Sam'), 'messages__openChat{"who":"Sam"} > messages__reply{"text":"Hi Sam, just checking in."}');
+});
