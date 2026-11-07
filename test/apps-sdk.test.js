@@ -56,6 +56,10 @@ test('Vertical 1: "Text Sam I\'m ten minutes late" asks Sam or Samira, writes, g
   assert.deepEqual(p.taps, ["Sam. New: Are you still coming to the quiz tonight? We start at seven.", 'Your reply, edit it here', 'Send']);
   const ev = p.bus.log.map((e) => e.name);
   assert.ok(ev.indexOf('confirm') < ev.lastIndexOf('step:verified'), 'asked before it sent');
+  r = await p.run('messages__read', { new: true });
+  assert.ok(r.ok, r.reason);
+  assert.equal(messages.state().currentChat, 'mum', '"Read my messages" goes back from Sam to the first new message, Mum');
+  assert.ok(p.said.some((t) => /Tuesday/.test(t)), 'and reads it');
 });
 
 test('no pick, no chat: the step fails in words', async () => {

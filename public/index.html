@@ -13,7 +13,9 @@
     var z = /[?&]zoom=([\d.]+)/.exec(location.search);
     var size = z ? Number(z[1]) * 100 : look.size;
     if (size) document.documentElement.style.fontSize = size + '%';
-    if (look.theme) document.documentElement.dataset.theme = look.theme;
+    var theme = look.theme || 'auto'; // no colours chosen: follow the phone's light or dark setting
+    if (theme === 'auto') theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    if (theme !== 'dark') document.documentElement.dataset.theme = theme;
   })();
 </script>
 <link rel="preload" href="fonts/atkinson-next.woff2" as="font" type="font/woff2" crossorigin>

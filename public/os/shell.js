@@ -4,7 +4,7 @@ import { createBus, createRegistry, createCursor, createCtx, appKv, loadApps, mo
 import appIds from '../apps/apps.js';
 import { IDLE, reduce, placeLine } from './panel.js';
 import { recogniser } from '../lib/gestures.js';
-import { readLook, writeLook, applyLook } from '../look.js';
+import { loadLook, writeLook, applyLook } from '../look.js';
 import { createToolkit } from '../vendor/toolkit/index.js';
 import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
@@ -29,7 +29,7 @@ const store = {
   set(k, v) { try { localStorage.setItem('murmur:' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
 const QUIET = /[?&]quiet\b/.test(location.search); // the eval and the flows: no audio, no waiting for speech
-const look = Object.assign({ size: 100, theme: 'dark', rate: 1.15, speaker: 'murmur', agency: 'ask', planner: 'auto', nolook: false },
+const look = Object.assign({ size: 100, theme: 'auto', rate: 1.15, speaker: 'murmur', agency: 'ask', planner: 'auto', nolook: false },
   store.get('look', {}));
 const saveLook = () => store.set('look', look);
 let agent = null; // declared before the mount loop: Mine reads os.workflows during seed()
@@ -39,7 +39,7 @@ let librarian, datastore;
 try {
   ({ librarian, datastore } = createToolkit({ kv: browserKV() }));
   if (!(await librarian.getProfile())?.fields?.needs?.length) await writeLook(librarian, look);
-  Object.assign(look, await readLook(librarian));
+  await loadLook(librarian, look);
 } catch (e) {
   console.warn('Librarian unavailable; Your look stays on this phone only', e.name);
   librarian = null; datastore = null;

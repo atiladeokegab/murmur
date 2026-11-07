@@ -1,5 +1,5 @@
 // First open: one spoken sentence, only once. No welcome screens and no tutorial (spec §7).
-export const FIRST_WORDS = 'Tap anywhere and tell me what you need.';
+export const FIRST_WORDS = 'Tap anywhere and speak.';
 
 const defaultKv = async () => {
   const { browserKV } = await import('../../ports/browser-kv.js');
