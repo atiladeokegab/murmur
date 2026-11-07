@@ -30,7 +30,7 @@ export async function checkFingerprint({ passkey, say, wait = sleep, ms = 20000,
     const can = passkey.has() || await passkey.available().catch(() => false);
     if (late || signal?.aborted) return false; // Stop or the deadline came first: never start a WebAuthn prompt
     if (!can) return NONE;
-    return passkey.confirm().then((v) => v === true, () => false);
+    return passkey.confirm(signal).then((v) => v === true, () => false); // the signal withdraws the WebAuthn prompt on Stop
   })();
   const stopped = new Promise((res) => signal?.addEventListener('abort', () => res(false), { once: true }));
   const ok = await Promise.race([check, wait(ms).then(() => { late = true; return false; }), stopped]);

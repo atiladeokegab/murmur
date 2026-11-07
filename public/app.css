@@ -99,7 +99,7 @@
 }
 
 * { box-sizing: border-box; }
-html { background: var(--c-page); overflow-x: hidden; overscroll-behavior: contain; }
+html { background: var(--c-page); overflow-x: hidden; overscroll-behavior: contain; scroll-padding-bottom: min(var(--footer-h, 160px), 50svh); } /* the sticky talk bar never hides a focused control; capped, as a bar taller than the screen would block scrolling */
 body {
   margin: 0; min-height: 100svh; display: flex; flex-direction: column;
   background: var(--c-page); color: var(--c-ink);

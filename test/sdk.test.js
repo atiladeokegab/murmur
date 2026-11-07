@@ -78,6 +78,7 @@ test('hello mounts with a focusable heading, a labelled box and named controls',
   assert.equal(root.hidden, true);
   assert.equal(root.getAttribute('aria-labelledby'), 'hello-h');
   assert.equal(root.querySelector('h2').tabIndex, -1);
+  assert.equal(root.querySelector('h2').getAttribute('aria-level'), '1', 'an open app has a level-1 heading for screen-reader navigation');
   assert.equal(controlName(root.querySelector('#hello-box')), 'Your message to Sam');
   assert.equal(controlName(root.querySelector('#hello-send')), 'Send to Sam');
 });

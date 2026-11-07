@@ -539,9 +539,9 @@ try {
     registry, bus, ctxFor, speak, librarian,
     os: { open: (id) => open(id), current: () => current, install, home: () => home(),
       sound: (on) => { (on ? unmute : mute)(); store.set('muted', !on); } },
-    fingerprint,
+    fingerprint, // (signal): the agent's gates abort it on Stop, No or a new ask, which withdraws the WebAuthn prompt
     agency: () => look.agency, answers: () => look.answers,
-    onStop: hush, // a said Stop or Undo cuts the audio too (build-agent)
+    onStop: stopAll, onCut: hush, // a said or typed Stop is the whole Stop (sheets, a pending fingerprint); Undo cuts the audio (build-agent)
     onGate: agentGate, onChoose: agentChoose,
   });
   // Mine mounted before the agent, on its own seed. Give the real store that first tile so Run My morning runs.
