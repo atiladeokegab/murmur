@@ -54,7 +54,7 @@ try {
   const race = await get('/race');
   assert.equal(race.status, 200);
   assert.match(await race.text(), /Start both/);
-  for (const p of ['/os/shell.js', '/os/earcons.js', '/os/panel.js', '/app.js', '/app.css', '/race.js', '/lib/race.js', '/lib/gestures.js', '/look.js', '/ports/browser-kv.js', '/vendor/toolkit/index.js', '/fonts/martian-mono.woff2']) {
+  for (const p of ['/os/shell.js', '/os/gate.js', '/os/wire.js', '/sound/index.js', '/os/panel.js', '/app.js', '/app.css', '/race.js', '/lib/race.js', '/lib/gestures.js', '/look.js', '/ports/browser-kv.js', '/vendor/toolkit/index.js', '/fonts/martian-mono.woff2']) {
     assert.equal((await get(p)).status, 200, p);
   }
   assert.equal((await get('/../server.js')).status !== 200, true, 'no path traversal');
