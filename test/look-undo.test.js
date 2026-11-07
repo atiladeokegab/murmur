@@ -65,6 +65,13 @@ test('the done line after a change says only the changed row; read() stays the w
   assert.equal(await line('look__setVoice', { percent: 500 }), 'This is 500 percent. That is the fastest.');
   assert.equal(await line('look__setVoice', { percent: 300 }), 'This is 300 percent.');
   assert.equal(await line('look__setVoice', { percent: 100 }), 'This is 100 percent.');
+  // the registry refuses a percent off the list; run() itself still ends on the nearest step, never loops
+  assert.equal((await runAction({ registry, name: 'look__setVoice', params: { percent: 350 }, bus, ctxFor })).ok, false);
+  await look.actions.setVoice.run({ percent: 350 }, ctxFor(look));
+  assert.equal(look.state().rate, 3, 'a percent off the list ends on the nearest step');
+  await look.actions.setText.run({ percent: 230 }, ctxFor(look));
+  assert.equal(look.state().size, 200, 'so does a text size off the list');
+  await look.actions.setText.run({ percent: 400 }, ctxFor(look));
   assert.equal(await line('look__colours', { colours: 'yellow' }), 'Colours: yellow on black.');
   assert.equal(await line('look__howMuch', { mode: 'teach' }), 'How much Murmur does: teach me.');
   assert.equal(await line('look__learning', { on: false }), 'Learning stopped.');
