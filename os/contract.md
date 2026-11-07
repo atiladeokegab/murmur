@@ -2,7 +2,7 @@
 
 This is the contract between the shell, the agent and the apps. It is the source of truth on `main`. To
 change it, send a change request to Zeus; never edit it silently. Rev 3 (13:30): `step:next`, `task:done`
-`line` and `undo`, `confirm` `fingerprint` and `byHand`, the hand-tap rule for gates (§7) and the host (§9). Spec: Murmur OS §3.3 and §8.1.
+`line` and `undo`, `confirm` `fingerprint` and `byHand`, the hand-tap rule for gates (§7) and the host (§9). Rev 4 (15:10): an action's optional `more`. Spec: Murmur OS §3.3 and §8.1.
 
 The code is in `public/sdk/` (import everything from `public/sdk/index.js`). The worked example is
 `public/apps/hello/`, and `test/sdk.test.js` runs it end to end.
@@ -43,6 +43,7 @@ export default {
       async run(params, ctx) {},            // presses controls through ctx only; see §3
       verify(state, params) {},             // true = pass. A string = fail with that reason. Anything else = fail
       async undo(ctx, params) {},           // optional; goes back through ctx too. Gated actions have none
+      more(state, params) {},               // optional; the longer answer as one string, said on "tell me more" or straight away with Answers: Detailed
     },
   },
 };
@@ -107,7 +108,7 @@ validate(schema, params)                // { ok, params, errors, dropped }: unkn
 
 ```js
 const r = await runAction({ registry, name, params, bus, ctxFor: (app) => createCtx({...}), n, of });
-// r = { ok, params? } | { ok:false, reason, cancelled?, stopped? }
+// r = { ok, params?, more? } | { ok:false, reason, cancelled?, stopped? }
 ```
 
 The order is fixed, and the agent's runner cannot skip a step:

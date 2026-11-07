@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-labelledby="t d">
   <title id="t">Murmur</title>
   <desc id="d">Murmur: a phone built for ears.</desc>
-  <rect width="1280" height="320" fill="#000"/>
-  <rect x="24" y="24" width="1232" height="272" rx="20" fill="#0B0A07" stroke="#2B2820" stroke-width="2"/>
+  <rect width="1280" height="320" fill="#0C0D10"/>
+  <rect x="24" y="24" width="1232" height="272" rx="20" fill="#14161B" stroke="#272B33" stroke-width="2"/>
   <!-- the agent's cursor ring, the product's one mark -->
-  <circle cx="1040" cy="160" r="76" fill="none" stroke="#FFB000" stroke-width="10"/>
-  <circle cx="1040" cy="160" r="104" fill="none" stroke="#FFB000" stroke-width="3" opacity="0.45"/>
-  <circle cx="1040" cy="160" r="132" fill="none" stroke="#FFB000" stroke-width="2" opacity="0.2"/>
+  <circle cx="1040" cy="160" r="76" fill="none" stroke="#FFC266" stroke-width="10"/>
+  <circle cx="1040" cy="160" r="104" fill="none" stroke="#FFC266" stroke-width="3" opacity="0.45"/>
+  <circle cx="1040" cy="160" r="132" fill="none" stroke="#FFC266" stroke-width="2" opacity="0.2"/>
   <!-- a murmur: a soft voice wave -->
-  <path d="M1000 160 q10 -26 20 0 t20 0 t20 0 t20 0" fill="none" stroke="#F4F2EA" stroke-width="6" stroke-linecap="round"/>
-  <text x="96" y="168" fill="#F4F2EA" font-family="'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="104" font-weight="700" letter-spacing="-2">Murmur</text>
-  <text x="100" y="228" fill="#FFB000" font-family="'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="34" font-weight="700">A phone built for ears.</text>
+  <path d="M1000 160 q10 -26 20 0 t20 0 t20 0 t20 0" fill="none" stroke="#F5F6F8" stroke-width="6" stroke-linecap="round"/>
+  <text x="96" y="168" fill="#F5F6F8" font-family="'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="104" font-weight="700" letter-spacing="-2">Murmur</text>
+  <text x="100" y="228" fill="#FFC266" font-family="'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="34" font-weight="700">A phone built for ears.</text>
 </svg>

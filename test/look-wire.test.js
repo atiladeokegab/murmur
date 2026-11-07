@@ -1,3 +1,4 @@
+globalThis.webkitSpeechRecognition ||= function Rec() {}; // the phone can hear: the welcome is the talking one
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBus, createRegistry } from '../public/sdk/index.js';

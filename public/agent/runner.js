@@ -159,8 +159,10 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
     if (madeUndo && lastUndo === madeUndo) { if (status === 'done') lastUndo.until = clock.now() + UNDO_MS; else lastUndo = null; }
     if (doneSteps.length && status === 'done') history.push({ utterance, at: clock.now(), steps: doneSteps.map(({ tool, app, action, params, gate }) => ({ tool, app, action, params, gate })) });
     if (current === task) current = null;
+    // the live Undo rides on every task:done (its own until, not reset), so the panel keeps its Undo button
+    const live = lastUndo && (lastUndo === madeUndo || clock.now() <= lastUndo.until) ? lastUndo : null;
     task.bus.emit('task:done', { ms, ok: status === 'done', ...(status === 'done' ? {} : { reason }), line,
-      ...(madeUndo && lastUndo === madeUndo ? { undo: { label: lastUndo.label, until: lastUndo.until } } : {}) });
+      ...(live ? { undo: { label: live.label, until: live.until } } : {}) });
     // the done line is said after the task ends: Stop has nothing left to stop
     if (line) { try { await speak(line, undefined, { said: () => task.bus.emit('say', { text: line }) }); } catch { /* hushed */ } }
     return { status, ms, line, task: id, actions: doneSteps.map((s) => s.tool), more: status === 'done' ? more : '' };
@@ -209,8 +211,9 @@ export function createGates({ say = async () => {}, clock = { now: () => Date.no
       const question = gate === 'pay' && /\b(hold|held)\b/i.test(readback || '') ? 'Hold?'
         : { send: 'Send it?', pay: 'Pay?', call: 'Call?', delete: 'Delete it?' }[gate] || 'Do it?';
       return new Promise((resolve) => {
-        open = { gate, readback, openedAt: clock.now(), checking: false,
-          resolve: (r) => { open = null; onChange(null); resolve(r); } };
+        const o = { gate, readback, openedAt: clock.now(), checking: false, ctl: new AbortController(),
+          resolve: (r) => { o.ctl.abort(); open = null; onChange(null); resolve(r); } }; // Stop, No or a new ask withdraws the fingerprint prompt
+        open = o;
         onChange({ gate, readback, question });
         say(/\?$/.test(readback) ? readback : `${readback} ${question}`); // "Send 'I'm late' to Sam?" is its own question
       });
@@ -224,7 +227,7 @@ export function createGates({ say = async () => {}, clock = { now: () => Date.no
         g.checking = true;
         await say('Check your fingerprint.');
         let ok = false;
-        try { ok = !!(await fingerprint()); } catch { ok = false; }
+        try { ok = !g.ctl.signal.aborted && !!(await fingerprint(g.ctl.signal)); } catch { ok = false; }
         g.checking = false;
         if (open !== g) return false;
         if (!ok) { g.resolve(false); return false; } // fails closed: the step is cancelled and says "Not paid." 

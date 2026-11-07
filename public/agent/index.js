@@ -23,7 +23,7 @@ if (globalThis.window) installToken(); // /api/* carries the device token from h
  * @param {(choice|null)=>void} [o.onChoose]   show or hide the choice sheet: { question, choices }
  * @param {object} [o.librarian]     the toolkit Librarian (memory + skills)
  * @param {{ open?(id), current?(): string|null }} [o.os]  the shell: open an app, which one is open
- * @param {()=>Promise<boolean>} [o.fingerprint]  passkey.confirm
+ * @param {(signal)=>Promise<boolean>} [o.fingerprint]  passkey.confirm; the signal aborts when Stop or No withdraws the gate
  * @param {(step)=>'ask'|'just'|'teach'} [o.agency]
  * @param {()=>'short'|'detailed'} [o.answers]  Your look's Answers row: Detailed says a result's longer answer straight away
  * @param {(gate)=>boolean} [o.risky]  send/call need the fingerprint too (screen just locked, earphone out)
@@ -52,8 +52,9 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     const g = gen, a = asked;
     const out = () => g !== gen || signal?.aborted || (o?.narration && (a !== asked || o.stale?.()));
     const start = () => { o?.said?.(); return rawSpeak(text, signal); }; // on the record when it is said, in the order heard
-    const go = () => (out() ? false : o?.narration ? hold(o.ack).then(() => (out() ? false : start())) : start());
-    const p = pending ? chain.then(go) : Promise.resolve(go()); // nothing being said: start now, not a tick later
+    // queued behind a line, the narration has already waited that line out: no hold, no silence between lines
+    const go = (queued) => (out() ? false : o?.narration && !queued ? hold(o.ack).then(() => (out() ? false : start())) : start());
+    const p = pending ? chain.then(() => go(true)) : Promise.resolve(go(false)); // nothing being said: start now, not a tick later
     pending++;
     chain = p.catch(() => {}).finally(() => { if (g === gen) pending--; });
     return p;
