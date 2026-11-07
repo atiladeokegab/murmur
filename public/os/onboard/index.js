@@ -1,5 +1,6 @@
 // First open: one spoken sentence, only once. No welcome screens and no tutorial (spec §7).
 export const FIRST_WORDS = 'Tap anywhere and speak.';
+export const OFFER_HINT = "Say 'what can I do' any time.";
 
 const defaultKv = async () => {
   const { browserKV } = await import('../../ports/browser-kv.js');
@@ -13,6 +14,7 @@ export async function firstOpen({ kv, say } = {}) {
   if (await kv.get('said')) return false;
   await kv.set('said', true); // marked first, so an interrupted sentence is never said twice
   await say(FIRST_WORDS);
+  await say(OFFER_HINT);
   return true;
 }
 
