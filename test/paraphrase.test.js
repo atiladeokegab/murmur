@@ -108,6 +108,42 @@ const LINES = [
   ['Nope', word('deny'), false, 'words.js', GATE],
 ];
 
+// Messy speech, the way dictation hands it over: lower case, no punctuation, fillers, a repeated word.
+const SAM_LATE_CLEAN = [['messages__openChat', { who: 'Sam' }], ['messages__reply', { text: /late\W*$/i }], ['messages__send', {}]];
+const TO_WED = [['calendar__move', { event: /lunch/i, day: /wednesday/i }]]; // the calendar's dayOf drops "um" and "please"
+LINES.push(
+  ['text sam im gonna be late', SAM_LATE_CLEAN, true],
+  ['um text sam im late', SAM_LATE_CLEAN, false, 'planner: a leading filler'],
+  ['text text sam im running late', SAM_LATE_CLEAN, false, 'planner: a repeated word; opens a chat with "Text"'],
+  ["uh tell sam i'll be like ten minutes late", SAM_LATE_CLEAN, false, 'planner: a leading filler'],
+  ['murmur text sam im late', SAM_LATE_CLEAN, false, 'planner: the wake word'],
+  ['okay so text sam that im late', SAM_LATE_CLEAN, false, 'planner: leading fillers'],
+  ['text sam im late please', SAM_LATE_CLEAN, false, 'planner: "please" goes into the message'],
+  ['um read my messages', READ, false, 'planner'],
+  ['read read my messages', READ, false, 'planner'],
+  ['uh what did sam say', READ, false, 'planner: a leading filler'],
+  ['whats on today', TODAY, true],
+  ['um whats on today', TODAY, false, 'planner: a leading filler'],
+  ["what's on what's on today", TODAY, false, 'planner: a repeated phrase'],
+  ['whats next', [['calendar__next', {}]], true],
+  ['move lunch with mum to wednesday please', TO_WED, true],
+  ['move lunch with mum to um wednesday', TO_WED, true],
+  ['um move lunch with mum to wednesday', TO_WED, false, 'planner: a leading filler'],
+  ['make the text bigger please', BIGGER, false, 'planner: a trailing "please"'],
+  ['um make the text bigger', BIGGER, false, 'planner: a leading filler'],
+  ['uh dark mode', DARK, false, 'planner: a leading filler'],
+  ['switch to dark mode please', DARK, false, 'planner: a trailing "please"'],
+  ['pay sam twenty pounds', PAY, has('bank'), 'Bank not on main'],
+  ['um pay sam 20 pounds', PAY, false, 'planner: a leading filler'],
+  ['stop stop', word('stop'), true],
+  ['um stop', word('stop'), true],
+  ['undo undo', word('undo'), true],
+  ['yes yes', word('confirm', 'yes'), true, '', GATE],
+  ['uh yes', word('confirm', 'yes'), true, '', GATE],
+  ['no no', word('deny'), true, '', GATE],
+  ['um no', word('deny'), true, '', GATE],
+);
+
 /** What the agent would do: reserved words as `word:<kind>` steps, then the offline plan of the rest. */
 async function heard(said, opts = {}) {
   const h = hear(said, opts);
@@ -127,8 +163,8 @@ for (const [said, want, must, why, opts] of LINES) {
   });
 }
 
-test('paraphrase: the sweep has at least 60 lines; the hit rate and misses are in the diagnostics', async (t) => {
-  assert.ok(LINES.length >= 60);
+test('paraphrase: the sweep has at least 90 lines; the hit rate and misses are in the diagnostics', async (t) => {
+  assert.ok(LINES.length >= 90);
   const missed = [];
   for (const [said, want, , why, opts] of LINES) if (!hit((await heard(said, opts)).steps, want)) missed.push(`${said} (${why})`);
   t.diagnostic(`hit rate ${LINES.length - missed.length} of ${LINES.length}`);
