@@ -8,6 +8,7 @@ export function createTally() {
   const cols = Object.fromEntries(COLUMNS.map((c) => [c, []]));
   let step = null;     // the Actions row of the step:start in flight
   let heard = false;   // a `heard` came since the last task:start
+  const unasked = () => { if (step?.ask && step.ask.result === null) step.ask.unasked = true; }; // the step ended before its sheet
   const last = (c) => cols[c][cols[c].length - 1];
 
   function add(e) {
@@ -28,6 +29,8 @@ export function createTally() {
         step = { action: e.action, app: e.app ?? null, task: e.task ?? null, label: e.label ?? '', params: e.params ?? {}, gate: e.gate ?? null,
           n: e.n ?? null, of: e.of ?? null, control: null, result: 'running', ms: null, reason: null, yes: false };
         cols.Actions.push(step);
+        // A gated step shows its question in Asked at once (answer pending), so the room sees the gate before the yes.
+        if (step.gate) cols.Asked.push(step.ask = { app: step.app, gate: step.gate, readback: step.label, result: null });
         if (e.dropped?.length) {
           if (!last('Plan')) cols.Plan.push({ plan: [], dropped: [], provider: null });
           last('Plan').dropped.push(...e.dropped.map((k) => `${e.action}.${k}`));
@@ -40,10 +43,12 @@ export function createTally() {
         t.asked++;
         // Only a yes for this step's own gate, app and task, after its step:start, lets a gated step through.
         if (step && step.gate && e.gate === step.gate && e.result === true && e.app === step.app && (e.task ?? null) === step.task) step.yes = true;
-        cols.Asked.push({ app: e.app ?? null, gate: e.gate ?? null, readback: e.readback ?? '', result: e.result ?? null });
+        if (step?.ask && step.ask.result === null && !step.ask.unasked && e.gate === step.gate && e.app === step.app) Object.assign(step.ask, { readback: e.readback ?? step.ask.readback, result: e.result ?? null });
+        else cols.Asked.push({ app: e.app ?? null, gate: e.gate ?? null, readback: e.readback ?? '', result: e.result ?? null });
         break;
       case 'step:verified':
         t.verified++;
+        unasked();
         if (step) {
           step.result = 'verified'; step.ms = e.ms ?? null;
           if (step.gate && !step.yes) t.bypassed++; // must stay 0
@@ -52,6 +57,7 @@ export function createTally() {
         break;
       case 'step:failed':
         t.failed++;
+        unasked();
         if (step) { step.result = 'failed'; step.ms = e.ms ?? null; step.reason = e.reason ?? ''; }
         step = null;
         break;
@@ -60,7 +66,7 @@ export function createTally() {
         cols.Memory.push({ kind, fields: e[kind] ?? {} });
         break;
       }
-      case 'task:done': step = null; break;
+      case 'task:done': unasked(); step = null; break;
       default: break;
     }
   }
