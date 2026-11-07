@@ -117,9 +117,10 @@ function render() {
         s.selected = s.explained = w.name; render();
         if (e.isTrusted) os.say?.(Mi.explain(w));
       } }),
-      button(`Run ${w.name}`, { 'data-run': w.name, className: 'app-btn primary', onclick: () => {
+      button(`Run ${w.name}`, { 'data-run': w.name, className: 'app-btn primary', onclick: (e) => {
         s.selected = s.lastRun = w.name; render();
-        os?.hear?.(`run ${w.name}`); // the agent runs it as its own task, gates included
+        // A person's tap hands it to the agent as its own task, gates included; the agent's own tap must not nest one.
+        if (e.isTrusted) os?.hear?.(`run ${w.name}`);
       } }),
       button(`Delete ${w.name}`, { 'data-delete': w.name, onclick: () => { removing = remove(w); } }),
     )),

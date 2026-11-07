@@ -1,103 +1,20 @@
 {
-  "afterSeed": {
-    "today": "Saturday",
-    "events": [
-      {
-        "id": "lunch-mum",
-        "title": "Lunch with Mum",
-        "day": "Tuesday",
-        "time": "13:00",
-        "with": [
-          "mum"
-        ],
-        "invited": []
-      },
-      {
-        "id": "dentist",
-        "title": "Dentist",
-        "day": "Thursday",
-        "time": "09:30",
-        "with": [],
-        "invited": []
-      },
-      {
-        "id": "choir",
-        "title": "Choir",
-        "day": "Saturday",
-        "time": "18:00",
-        "with": [
-          "samira"
-        ],
-        "invited": []
-      },
-      {
-        "id": "quiz",
-        "title": "Quiz with Sam",
-        "day": "Saturday",
-        "time": "19:30",
-        "with": [
-          "sam"
-        ],
-        "invited": []
-      }
-    ],
-    "showing": "Saturday",
-    "selected": null
-  },
-  "afterAction": {
-    "said": [
-      {
-        "name": "calendar__move",
-        "params": {
-          "what": "lunch with Mum",
-          "to": "Wednesday"
-        }
-      }
-    ],
-    "state": {
-      "today": "Saturday",
-      "events": [
-        {
-          "id": "lunch-mum",
-          "title": "Lunch with Mum",
-          "day": "Wednesday",
-          "time": "13:00",
-          "with": [
-            "mum"
-          ],
-          "invited": []
-        },
-        {
-          "id": "dentist",
-          "title": "Dentist",
-          "day": "Thursday",
-          "time": "09:30",
-          "with": [],
-          "invited": []
-        },
-        {
-          "id": "choir",
-          "title": "Choir",
-          "day": "Saturday",
-          "time": "18:00",
-          "with": [
-            "samira"
-          ],
-          "invited": []
-        },
-        {
-          "id": "quiz",
-          "title": "Quiz with Sam",
-          "day": "Saturday",
-          "time": "19:30",
-          "with": [
-            "sam"
-          ],
-          "invited": []
-        }
-      ],
-      "showing": "Wednesday",
-      "selected": "lunch-mum"
-    }
-  }
+  "today": "Monday",
+  "now": "09:00",
+  "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+  "shown": "Monday",
+  "open": null,
+  "picking": false,
+  "clash": null,
+  "adding": false,
+  "inviting": false,
+  "events": [
+    { "id": "lunch", "title": "Lunch with Mum", "day": "Tuesday", "time": "12:30", "mins": 60, "with": "Mum", "invited": [] },
+    { "id": "bookclub", "title": "Book club", "day": "Thursday", "time": "19:00", "mins": 90, "with": null, "invited": [] },
+    { "id": "callsam", "title": "Call Sam", "day": "Friday", "time": "19:00", "mins": 30, "with": "Sam", "invited": [] }
+  ],
+  "next": "lunch",
+  "lastMoved": null,
+  "lastAdded": null,
+  "lastInvite": null
 }

@@ -1,171 +1,379 @@
-// Calendar on the Murmur SDK (os/contract.md): what's on, add, move, invite (asks first).
-import * as C from './model.js';
+// Calendar: the glance a sighted person gets ("what's on today"), by voice. Contract: os/contract.md.
+// One invented week. "Today" is fixed at Monday 09:00 so the demo and the eval always hear the same week.
+// The screen shows one thing at a time: a day's list, or one open event, or the add form.
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const TODAY = 'Monday', NOW = '09:00';
+const SEED = [
+  { id: 'lunch', title: 'Lunch with Mum', day: 'Tuesday', time: '12:30', mins: 60, with: 'Mum', invited: [] },
+  { id: 'bookclub', title: 'Book club', day: 'Thursday', time: '19:00', mins: 90, with: null, invited: [] },
+  { id: 'callsam', title: 'Call Sam', day: 'Friday', time: '19:00', mins: 30, with: 'Sam', invited: [] },
+];
 
-let s = C.fresh();
-let root = null, os = null, body = null;
-let note = { ok: false, text: '' }; // what the last move said: "Wednesday's free. Moved. Tell Mum?" or the clash
-const q = (sel) => root && root.querySelector(sel);
-const save = () => os?.kv?.set('state', s);
-const personOf = (who) => Object.keys(C.PEOPLE).find((x) => C.PEOPLE[x].toLowerCase() === String(who || '').trim().toLowerCase());
+let root = null, kv = null;
+let events = [], shown = TODAY, open = null, picking = false, clash = null, adding = false, inviting = false;
+let lastMoved = null, lastAdded = null, lastInvite = null, status = '';
+let draft = { title: '', day: '', time: '', to: '', who: '' };
+let before = null; // the last move's starting point, for undo
+let personal = false; // a person's own tap moves focus; the agent's taps leave it on Stop
 
-/** The one event the params mean, asking "Lunch with Mum or Lunch with Sam?" when two match. */
-async function which(p, ctx) {
-  const r = C.resolve(s, p);
-  if (r.ask) {
-    const pick = await ctx.choose(r.ask.question, r.ask.choices.map((c) => ({ label: c.label, id: c.params.id })));
-    if (!pick) throw new Error('Nothing chosen.');
-    return pick.id;
-  }
-  if (r.none) throw new Error(r.none);
-  return r.id;
+// ---------- plain helpers (pure: verify and readback use them on state) ----------
+const mins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const order = (a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || mins(a.time) - mins(b.time);
+/** "today", "tomorrow", "wed", "Wednesday" -> "Wednesday"; null if not a day. */
+export function dayOf(s, today = TODAY) {
+  const q = String(s ?? '').trim().toLowerCase();
+  if (!q || q === 'today') return today;
+  if (q === 'tomorrow') return DAYS[(DAYS.indexOf(today) + 1) % 7];
+  return DAYS.find((d) => q.length >= 3 && d.toLowerCase().startsWith(q.slice(0, 3)) && d.toLowerCase().startsWith(q.replace(/s$/, ''))) ?? null;
 }
-async function pick(ctx, id) {
-  const e = C.event(s, id);
-  if (s.showing !== e.day) await ctx.tap(q(`[data-day="${e.day}"]`));
-  if (s.selected !== id) await ctx.tap(q(`[data-event="${id}"]`));
+/** "7pm", "7:30 pm", "19:00", "10" -> "HH:MM"; null if not a time. */
+export function timeOf(s) {
+  const m = /^\s*(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\s*$/i.exec(String(s ?? ''));
+  if (!m) return null;
+  let h = Number(m[1]); const mm = Number(m[2] ?? 0), pm = /^p/i.test(m[3] ?? '');
+  if (m[3] && (h < 1 || h > 12)) return null;
+  if (m[3]) h = (h % 12) + (pm ? 12 : 0);
+  if (h > 23 || mm > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
-/** After a choice, verify reads the event the person picked (s.selected), as long as the words fit it. */
-const chosen = (st, p) => {
-  const e = C.event(st, p.id || st.selected);
-  return e && (p.id || C.find(st, p.what).some((x) => x.id === e.id)) ? e : null;
-};
-
-const app = {
-  id: 'calendar',
-  name: 'Calendar',
-  async mount(r, o) {
-    root = r; os = o;
-    const saved = await os.kv?.get('state');
-    if (saved?.events) s = saved;
-    root.append(el('h2', { id: 'calendar-h' }, 'Calendar'), body = el('div', { className: 'app-body' }));
-    render();
-  },
-  async seed() { await save(); render(); },
-  async reset() { s = C.fresh(); note = { ok: false, text: '' }; await save(); render(); },
-  state: () => structuredClone(s),
-  read: () => C.read(s),
-  place: () => C.place(s),
-
-  actions: {
-    whatsOn: {
-      describe: "Say what's on for a day of this week, today if none is given",
-      doing: "Checking what's on",
-      params: { type: 'object', properties: { day: { type: 'string', description: 'A weekday, today or tomorrow' } } },
-      gate: null,
-      hint: 'The days of the week are buttons after the plans',
-      async run(p, ctx) {
-        const d = C.dayOf(p.day || 'today', s.today);
-        if (!d) throw new Error(`I don't know ${p.day}.`);
-        await ctx.tap(q(`[data-day="${d}"]`));
-        await ctx.say(C.whatsOn(s, d));
-      },
-      verify: (st, p) => st.showing === C.dayOf(p.day || 'today', st.today) || "That day didn't open.",
-    },
-    add: {
-      describe: 'Add a plan to the calendar on a day and at a time',
-      doing: 'Adding it',
-      params: { type: 'object', properties: { title: { type: 'string' }, day: { type: 'string' }, time: { type: 'string', description: '24-hour HH:MM, 12:00 if not said' } }, required: ['title', 'day'] },
-      gate: null,
-      hint: 'Add a plan is at the end: what, which day, what time, then Add',
-      async run(p, ctx) {
-        for (const [id, v] of [['#cal-title', p.title], ['#cal-day', p.day], ['#cal-time', p.time || '12:00']]) { await ctx.tap(q(id)); await ctx.type(q(id), v); }
-        await ctx.tap(q('#cal-add'));
-        const e = C.event(s, s.selected);
-        if (!e) throw new Error('I need what, the day and a time like 13:00.');
-        await ctx.say(`Added. ${C.line(e)}`);
-      },
-      verify: (st, p) => st.events.some((e) => e.title === String(p.title).trim() && e.day === C.dayOf(p.day, st.today) && e.time === (p.time || '12:00')) || "It didn't go in.",
-    },
-    move: {
-      describe: 'Move a plan to another day, and a new time if given',
-      doing: 'Moving it',
-      params: { type: 'object', properties: { what: { type: 'string', description: 'The plan, as said' }, to: { type: 'string', description: 'A weekday, today or tomorrow' }, time: { type: 'string' } }, required: ['what', 'to'] },
-      gate: null,
-      hint: 'Choose the plan under its day, then the day to move it to',
-      async run(p, ctx) {
-        const id = await which(p, ctx);
-        const to = C.dayOf(p.to, s.today);
-        if (!to) throw new Error(`I don't know ${p.to}.`);
-        await pick(ctx, id);
-        if (p.time) { await ctx.tap(q('#cal-move-time')); await ctx.type(q('#cal-move-time'), p.time); }
-        await ctx.tap(q(`[data-move="${to}"]`));
-        if (!note.ok) throw new Error(note.text);
-        await ctx.say(note.text);
-      },
-      verify: (st, p) => { const e = chosen(st, p); return (!!e && e.day === C.dayOf(p.to, st.today) && (!p.time || e.time === p.time)) || "It didn't move."; },
-    },
-    invite: {
-      describe: 'Send someone an invite to a plan',
-      doing: 'Inviting',
-      params: { type: 'object', properties: { what: { type: 'string' }, who: { type: 'string', enum: Object.values(C.PEOPLE) } }, required: ['what', 'who'] },
-      gate: 'send',
-      hint: 'Choose the plan, then type the name in Invite who, then Send invite',
-      readback: (st, p = {}) => { const list = C.find(st, p.what); return list.length === 1 ? `Send ${p.who} an invite: ${C.line(list[0])}` : `Send ${p.who} an invite to ${p.what}.`; },
-      async run(p, ctx) {
-        const id = await which(p, ctx);
-        await pick(ctx, id);
-        await ctx.tap(q('#cal-who')); await ctx.type(q('#cal-who'), p.who);
-        await ctx.tap(q('#cal-invite'));
-      },
-      verify: (st, p) => { const e = chosen(st, p), k = personOf(p.who); return (!!e && !!k && e.invited.includes(k)) || 'The invite did not go.'; },
-    },
-  },
-};
-export default app;
+/** "12:30" -> "12:30 pm", "19:00" -> "7 pm": how a person says it. */
+export function spoken(t) {
+  const [h, m] = t.split(':').map(Number);
+  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
+}
+/** The best-matching events for what was said ("lunch with Mum", "lunch", "Mum"). Ties come back together. */
+export function matches(list, said) {
+  const q = String(said ?? '').toLowerCase().replace(/\b(the|my|a)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!q) return [];
+  const score = (e) => {
+    const t = e.title.toLowerCase();
+    if (t === q) return 4;
+    if (t.startsWith(q)) return 3;
+    if (t.includes(q) || q.includes(t)) return 2;
+    return e.with && q.includes(e.with.toLowerCase()) ? 1 : 0;
+  };
+  const best = Math.max(0, ...list.map(score));
+  return best ? list.filter((e) => score(e) === best) : [];
+}
+/** Other events on `day` that overlap an event of `len` minutes at `time`. */
+export function clashes(list, id, day, time, len) {
+  const a = mins(time);
+  return list.filter((e) => e.id !== id && e.day === day && a < mins(e.time) + e.mins && mins(e.time) < a + len);
+}
+const nextOf = (list) => list.slice().sort(order).find((e) => DAYS.indexOf(e.day) > DAYS.indexOf(TODAY)
+  || (e.day === TODAY && mins(e.time) >= mins(NOW))) ?? null;
+const at = (e) => `${e.title} at ${spoken(e.time)}`;
+function dayLine(list, day) {
+  const on = list.filter((e) => e.day === day).sort(order);
+  const name = day === TODAY ? 'today' : `on ${day}`;
+  if (on.length) return `${day === TODAY ? 'Today' : day}: ${on.map(at).join(', then ')}.`;
+  const n = nextOf(list);
+  return `Nothing ${name}.${day === TODAY && n ? ` Next is ${n.title} on ${n.day} at ${spoken(n.time)}.` : ''}`;
+}
+const clashLine = (c, e) => `${c.day} has ${c.with.map(at).join(' and ')}. Move ${e.title} anyway?`;
 
 // ---------- the screen ----------
 function el(tag, props = {}, ...kids) {
   const n = root.ownerDocument.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (v == null || v === false) continue;
-    if (k.startsWith('aria-') || k.startsWith('data-') || k === 'for') n.setAttribute(k, String(v));
-    else if (k === 'onclick') n.addEventListener('click', v);
-    else n[k] = v;
-  }
-  for (const k of kids.flat()) if (k != null && k !== false) n.append(typeof k === 'number' ? String(k) : k);
+  for (const [k, v] of Object.entries(props)) if (k.startsWith('aria-') || k === 'for' || k === 'role') n.setAttribute(k, v); else n[k] = v;
+  for (const k of kids) n.append(k);
   return n;
 }
-const button = (text, props = {}) => el('button', { type: 'button', className: 'app-btn', ...props }, text);
-const field = (id, label, props = {}) => [el('label', { for: id, className: 'app-label' }, label), el('input', { id, className: 'app-field', autocomplete: 'off', ...props })];
-
-function render() {
-  if (!body) return;
-  const sel = C.event(s, s.selected);
-  const list = C.byDay(s, s.showing);
-  body.replaceChildren(...[
-    el('h3', { className: 'app-h3' }, s.showing === s.today ? 'Today' : s.showing),
-    el('p', { className: 'app-place' }, C.whatsOn(s, s.showing)),
-    el('ul', { className: 'app-list', 'aria-label': 'Plans' }, list.map((e) => el('li', {},
-      button(`${e.title}, at ${C.spokenTime(e.time)}`, { 'data-event': e.id, 'aria-pressed': String(e.id === s.selected), onclick: () => { s.selected = e.id; save(); render(); } })))),
-    sel && el('div', { className: 'app-card' },
-      el('h4', { className: 'app-h3' }, `Chosen: ${C.line(sel)}`),
-      note.text ? el('p', { className: 'app-done' }, note.text) : null,
-      ...field('cal-move-time', 'New time, if it changes, like 13:00'),
-      el('p', { className: 'app-label' }, 'Move it to'),
-      el('ul', { className: 'app-days', 'aria-label': 'Move it to' }, C.DAYS.filter((d) => d !== sel.day).map((d) => el('li', {},
-        button(d, { 'data-move': d, onclick: (ev) => {
-          const r = C.move(s, sel.id, d, q('#cal-move-time').value || undefined);
-          note = { ok: !!r.say, text: r.say || r.fail };
-          save(); render();
-          if (ev.isTrusted) os.say?.(note.text);
-        } })))),
-      ...field('cal-who', 'Invite who'),
-      button('Send invite', { id: 'cal-invite', className: 'app-btn primary', onclick: () => {
-        // A person's own tap is their yes (contract §7); the agent is gated by the runner before it taps.
-        if (C.invite(s, sel.id, q('#cal-who').value)) { save(); render(); }
-      } })),
-    el('h3', { className: 'app-h3' }, 'The week'),
-    el('ul', { className: 'app-days', 'aria-label': 'The week' }, C.DAYS.map((d) => el('li', {},
-      button(d === s.today ? `${d}, today` : d, { 'data-day': d, 'aria-pressed': String(d === s.showing),
-        onclick: () => { s.showing = d; s.selected = null; note = { ok: false, text: '' }; save(); render(); } })))),
-    el('h3', { className: 'app-h3' }, 'Add a plan'),
-    ...field('cal-title', 'What'),
-    ...field('cal-day', 'Which day'),
-    ...field('cal-time', 'What time, like 13:00', { inputMode: 'numeric' }),
-    button('Add', { id: 'cal-add', onclick: () => {
-      s.selected = null;
-      C.add(s, { title: q('#cal-title').value, day: q('#cal-day').value, time: q('#cal-time').value || undefined });
-      save(); render();
-    } }),
-  ].filter(Boolean));
+const $ = (id) => root.querySelector(`#${id}`);
+function btn(id, text, onClick, cls = 'choice') {
+  const b = el('button', { type: 'button', id, className: cls, textContent: text });
+  b.addEventListener('click', (e) => { personal = !!e?.isTrusted; onClick(); });
+  return b;
 }
+function field(id, label, key, type = 'text') {
+  const i = el('input', { id, type, value: draft[key], autocomplete: 'off' });
+  i.addEventListener('input', () => { draft[key] = i.value; });
+  return [el('label', { for: id, textContent: label }), i];
+}
+const save = () => kv && kv.set('events', events);
+const ev = () => events.find((e) => e.id === open);
+function show(day) { shown = day; open = null; picking = inviting = adding = false; clash = null; status = ''; render('cal-day-h'); }
+
+function doMove(to, time) {
+  const e = ev();
+  lastMoved = { id: e.id, from: e.day, to, time };
+  e.day = to; e.time = time;
+  events.sort(order);
+  shown = to; picking = false; clash = null;
+  status = `Moved to ${to} at ${spoken(time)}.`;
+  save(); render('cal-status');
+}
+function pickDay(to) {
+  const e = ev(), time = timeOf(draft.to) || e.time;
+  const hit = clashes(events, e.id, to, time, e.mins);
+  if (hit.length) { clash = { day: to, time, with: hit }; render('cal-clash'); } else doMove(to, time);
+}
+function addEvent() {
+  const title = draft.title.trim(), day = dayOf(draft.day), time = timeOf(draft.time);
+  status = !title ? 'Say what it is.' : !draft.day.trim() || !day ? 'Say which day.' : !time ? 'Say what time.' : '';
+  if (status) return render('cal-status');
+  let id = title.toLowerCase().replace(/[^a-z0-9]/g, '') || 'event', n = 2;
+  while (events.some((e) => e.id === id)) id = id.replace(/\d*$/, '') + n++;
+  events.push({ id, title, day, time, mins: 60, with: null, invited: [] });
+  events.sort(order);
+  lastAdded = id; adding = false; shown = day; draft.title = draft.day = draft.time = '';
+  status = `Added ${title} on ${day} at ${spoken(time)}.`;
+  save(); render('cal-status');
+}
+function sendInvite() {
+  const e = ev(), who = draft.who.trim();
+  if (!who) { status = 'Say who to invite.'; return render('cal-status'); }
+  if (!e.invited.some((w) => w.toLowerCase() === who.toLowerCase())) e.invited.push(who);
+  lastInvite = { id: e.id, who }; inviting = false; draft.who = '';
+  status = `Invite sent to ${who}.`;
+  save(); render('cal-status');
+}
+
+function render(focusId) {
+  const e = ev();
+  const days = DAYS.map((d) => {
+    const b = btn(`cal-day-${d}`, d === TODAY ? `${d}, today` : d, () => show(d), d === shown && !e && !adding ? 'choice yes' : 'choice');
+    b.setAttribute('aria-pressed', String(d === shown && !e && !adding));
+    return b;
+  });
+  let body;
+  if (adding) {
+    body = [el('h3', { id: 'cal-add-h', tabIndex: -1, textContent: 'Add an event' }),
+      ...field('cal-what', 'What', 'title'), ...field('cal-when-day', 'Day', 'day'), ...field('cal-when-time', 'Time', 'time'),
+      el('div', { className: 'choices' }, btn('cal-save', 'Save', addEvent),
+        btn('cal-cancel', 'Cancel', () => { adding = false; status = ''; render('cal-day-h'); }))];
+  } else if (e) {
+    body = [el('h3', { id: 'cal-ev-h', tabIndex: -1, textContent: e.title }),
+      el('p', { id: 'cal-ev-when', textContent: `${e.day} at ${spoken(e.time)}${e.with ? `, with ${e.with}` : ''}.${e.invited.length ? ` Invited: ${e.invited.join(', ')}.` : ''}` }),
+      el('div', { className: 'choices' },
+        btn('cal-close', 'Close', () => { open = null; picking = inviting = false; clash = null; status = ''; render('cal-day-h'); }),
+        btn('cal-move', 'Move', () => { picking = true; inviting = false; clash = null; draft.to = e.time; render('cal-pick-h'); }),
+        btn('cal-invite', 'Invite', () => { inviting = true; picking = false; clash = null; render('cal-who'); }))];
+    if (clash) {
+      body.push(el('p', { id: 'cal-clash', tabIndex: -1, textContent: clashLine(clash, e) }),
+        el('div', { className: 'choices' }, btn('cal-anyway', 'Move anyway', () => doMove(clash.day, clash.time)),
+          btn('cal-keep', `Keep it on ${e.day}`, () => { clash = null; picking = false; status = `${e.title} stays on ${e.day}.`; render('cal-status'); })));
+    } else if (picking) {
+      body.push(el('h4', { id: 'cal-pick-h', tabIndex: -1, textContent: `Move ${e.title} to` }), ...field('cal-to-time', 'At', 'to'),
+        el('div', { className: 'choices' }, ...DAYS.map((d) => btn(`cal-to-${d}`, d, () => pickDay(d)))));
+    } else if (inviting) {
+      body.push(...field('cal-who', 'Who to invite', 'who'), btn('cal-send', 'Send invite', sendInvite, 'choice yes'));
+    }
+  } else {
+    const on = events.filter((x) => x.day === shown);
+    body = [el('h3', { id: 'cal-day-h', tabIndex: -1, textContent: shown === TODAY ? `${shown}, today` : shown }),
+      el('ol', { id: 'cal-list' }, ...(on.length
+        ? on.map((x) => el('li', {}, btn(`cal-ev-${x.id}`, `${x.title}, ${spoken(x.time)}`, () => { open = x.id; status = ''; render('cal-ev-h'); })))
+        : [el('li', { textContent: 'Nothing on.' })]))];
+  }
+  root.querySelector('#cal-days').replaceChildren(...days);
+  root.querySelector('#cal-body').replaceChildren(...body);
+  $('cal-status').textContent = status;
+  if (focusId && personal) $(focusId)?.focus?.();
+  personal = false;
+}
+
+// ---------- the app ----------
+async function openEvent(ctx, e) {
+  if (open !== e.id) { await ctx.tap($(`cal-day-${e.day}`)); await ctx.tap($(`cal-ev-${e.id}`)); }
+}
+async function pickOne(ctx, said) {
+  const found = matches(events, said);
+  if (!found.length) throw new Error(`There's nothing called ${said} this week.`);
+  if (found.length === 1) return found[0];
+  const c = await ctx.choose(`${found.map((x) => `${x.title} on ${x.day}`).join(' or ')}?`, found.map((x) => ({ label: `${x.title} on ${x.day}`, id: x.id })));
+  if (!c) throw new Error('No event chosen.');
+  return events.find((x) => x.id === c.id);
+}
+const dayParam = { type: 'string', description: 'A day of this week, like Wednesday, or today or tomorrow' };
+
+const app = {
+  id: 'calendar',
+  name: 'Calendar',
+
+  async mount(r, os) {
+    root = r; kv = os.kv;
+    // Tokens only (os/contract.md §2.1); the buttons reuse the shell's .choice.
+    const style = el('style', { textContent: `#app-calendar{padding:0 var(--gutter)}#app-calendar ol{padding:0}
+#app-calendar li{padding:var(--ring) 0}#app-calendar label{display:block;margin-top:var(--ring)}
+#app-calendar .choices{margin:var(--ring) 0}#app-calendar li .choice{width:100%;justify-items:start;text-align:start}
+#app-calendar input{box-sizing:border-box;width:100%;min-height:var(--h-link);font:inherit;font-size:var(--fs-sheet);background:var(--c-board);color:var(--c-ink);border:var(--bw-talk) solid var(--c-ink);border-radius:var(--r-btn)}` });
+    root.append(style, el('h2', { id: 'calendar-h', textContent: 'Calendar' }),
+      el('p', { id: 'cal-status', role: 'status' }),
+      el('div', { className: 'choices' },
+        btn('cal-next', "What's next", () => { const n = nextOf(events); open = n?.id ?? null; adding = picking = inviting = false; clash = null;
+          if (n) shown = n.day; status = n ? '' : 'Nothing else this week.'; render(n ? 'cal-ev-h' : 'cal-status'); }),
+        btn('cal-add', 'Add an event', () => { adding = true; open = null; picking = inviting = false; clash = null; status = ''; render('cal-add-h'); })),
+      el('div', { id: 'cal-days', className: 'choices', role: 'group', 'aria-label': 'Days' }),
+      el('div', { id: 'cal-body' }));
+    events = ((await kv.get('events')) || []).sort(order);
+    render();
+  },
+
+  read() {
+    const e = ev();
+    const s = status ? `${status} ` : '';
+    if (adding) return `${s}Add an event: what, day and time, then Save.`;
+    if (e && clash) return clashLine(clash, e);
+    if (e && picking) return `${s}Moving ${e.title}. Pick a day.`;
+    if (e && inviting) return `${s}Who should I invite to ${e.title}?`;
+    if (e) return `${s}${e.title}, ${e.day} at ${spoken(e.time)}${e.with ? `, with ${e.with}` : ''}.${e.invited.length ? ` Invited: ${e.invited.join(', ')}.` : ''}`;
+    return `${s}${dayLine(events, shown)}`;
+  },
+  place() {
+    const e = ev();
+    if (adding) return { where: 'Calendar, adding an event', item: 'what', next: 'add' };
+    if (e) return { where: e.title, item: `${e.day} at ${spoken(e.time)}`, next: clash || picking ? 'move' : e.with && !e.invited.includes(e.with) ? 'invite' : 'move' };
+    const on = events.filter((x) => x.day === shown);
+    return { where: `Calendar, ${shown}`, item: on[0]?.title, n: on.length ? 1 : undefined, of: on.length || undefined, next: on.length ? 'move' : 'add' };
+  },
+  state() {
+    return {
+      today: TODAY, now: NOW, days: DAYS.slice(), shown, open, picking, clash: clash && { day: clash.day, time: clash.time, with: clash.with.map((x) => x.id) },
+      adding, inviting, events: events.map((e) => ({ ...e, invited: e.invited.slice() })), next: nextOf(events)?.id ?? null,
+      lastMoved: lastMoved && { ...lastMoved }, lastAdded, lastInvite: lastInvite && { ...lastInvite },
+    };
+  },
+  async seed() {
+    if (!events.length) events = SEED.map((e) => ({ ...e, invited: [] }));
+    await kv.set('events', events);
+    render();
+  },
+  async reset() {
+    events = []; shown = TODAY; open = null; picking = adding = inviting = false; clash = null;
+    lastMoved = lastAdded = lastInvite = null; status = ''; before = null;
+    draft = { title: '', day: '', time: '', to: '', who: '' };
+    await kv.set('events', undefined);
+    await this.seed();
+  },
+
+  actions: {
+    whatsOn: {
+      describe: "Say what's on today, or on a named day this week",
+      doing: 'Reading your day',
+      hint: 'The days are buttons under the heading. Pick one to hear it.',
+      params: { type: 'object', properties: { day: dayParam } },
+      async run(p, ctx) {
+        const d = dayOf(p.day);
+        if (!d) throw new Error(`I don't know the day ${p.day}.`);
+        await ctx.tap($(`cal-day-${d}`));
+        await ctx.say(dayLine(events, d));
+      },
+      verify(s, p) {
+        const d = dayOf(p.day, s.today);
+        return (s.shown === d && s.open === null && !s.adding) || `Calendar shows ${s.shown}, not ${d}.`;
+      },
+    },
+    next: {
+      describe: "Say what's next in the calendar",
+      doing: "Finding what's next",
+      hint: "What's next is the first button under the heading.",
+      params: { type: 'object', properties: {} },
+      async run(p, ctx) {
+        await ctx.tap($('cal-next'));
+        const e = ev();
+        await ctx.say(e ? `Next is ${e.title}, ${e.day} at ${spoken(e.time)}.` : 'Nothing else this week.');
+      },
+      verify: (s) => s.open === s.next || "Calendar didn't open what's next.",
+    },
+    add: {
+      describe: 'Add an event to the calendar',
+      doing: 'Adding to your calendar',
+      hint: 'Add an event is the second button under the heading. Fill in what, day and time, then Save.',
+      params: {
+        type: 'object',
+        properties: { title: { type: 'string', description: 'What it is, like Coffee with Ana' }, day: dayParam,
+          time: { type: 'string', description: 'The time, like 10am or 14:30' } },
+        required: ['title', 'day', 'time'],
+      },
+      async run(p, ctx) {
+        await ctx.tap($('cal-add'));
+        for (const [id, v] of [['cal-what', p.title], ['cal-when-day', p.day], ['cal-when-time', p.time]]) { await ctx.tap($(id)); await ctx.type($(id), v); }
+        await ctx.tap($('cal-save'));
+        if (adding) throw new Error(status || "It didn't save.");
+        await ctx.say(status);
+      },
+      verify(s, p) {
+        const e = s.events.find((x) => x.id === s.lastAdded);
+        return (e && e.title === p.title.trim() && e.day === dayOf(p.day, s.today) && e.time === timeOf(p.time)) || "The event isn't in the calendar.";
+      },
+    },
+    move: {
+      describe: 'Move an event to another day, and optionally another time',
+      doing: 'Moving an event',
+      hint: 'Open the event, then Move is the second button, then pick the day',
+      params: {
+        type: 'object',
+        properties: { event: { type: 'string', description: 'The event as the person said it, like lunch with Mum' }, day: dayParam,
+          time: { type: 'string', description: 'A new time, only if the person said one' } },
+        required: ['event', 'day'],
+      },
+      async run(p, ctx) {
+        const to = dayOf(p.day);
+        if (!to) throw new Error(`I don't know the day ${p.day}.`);
+        if (p.time && !timeOf(p.time)) throw new Error(`I don't know the time ${p.time}.`);
+        const e = await pickOne(ctx, p.event);
+        const time = timeOf(p.time) || e.time;
+        if (e.day === to && e.time === time) throw new Error(`${e.title} is already on ${to} at ${spoken(time)}.`);
+        before = { id: e.id, day: e.day, time: e.time };
+        await openEvent(ctx, e);
+        await ctx.tap($('cal-move'));
+        if (p.time) { await ctx.tap($('cal-to-time')); await ctx.type($('cal-to-time'), time); }
+        const hit = clashes(events, e.id, to, time, e.mins);
+        if (!hit.length) await ctx.say(events.some((x) => x.day === to && x.id !== e.id) ? `${to} at ${spoken(time)} is free.` : `${to}'s free.`);
+        await ctx.tap($(`cal-to-${to}`));
+        if (clash) {
+          const c = await ctx.choose(clashLine(clash, e), [{ label: 'Move anyway' }, { label: `Keep it on ${e.day}` }]);
+          if (c?.label !== 'Move anyway') { await ctx.tap($('cal-keep')); throw new Error(`Not moved. ${e.title} stays on ${e.day}.`); }
+          await ctx.tap($('cal-anyway'));
+        }
+        await ctx.say(e.with ? `Moved. Tell ${e.with}?` : 'Moved.');
+      },
+      verify(s, p) {
+        const m = s.lastMoved, d = dayOf(p.day, s.today);
+        const e = m && s.events.find((x) => x.id === m.id);
+        if (!e || !matches(s.events, p.event).some((x) => x.id === e.id)) return 'Nothing was moved.';
+        if (e.day !== d || m.to !== d) return `${e.title} is on ${e.day}, not ${d}.`;
+        return (!p.time || e.time === timeOf(p.time)) || `${e.title} is at ${spoken(e.time)}.`;
+      },
+      async undo(ctx) {
+        if (!before) return;
+        const e = events.find((x) => x.id === before.id);
+        await openEvent(ctx, e);
+        await ctx.tap($('cal-move'));
+        await ctx.tap($('cal-to-time')); await ctx.type($('cal-to-time'), before.time);
+        await ctx.tap($(`cal-to-${before.day}`));
+        if (clash) await ctx.tap($('cal-anyway'));
+        before = null;
+      },
+    },
+    invite: {
+      describe: 'Send someone an invite to an event, or tell them its new time',
+      doing: 'Sending an invite',
+      gate: 'send',
+      hint: 'Open the event, then Invite is the third button. Say who, then Send invite.',
+      params: {
+        type: 'object',
+        properties: { event: { type: 'string', description: 'The event as the person said it' }, who: { type: 'string', description: 'Who gets the invite, like Mum' } },
+        required: ['event', 'who'],
+      },
+      readback(s, p) {
+        const e = matches(s.events, p.event)[0];
+        return e ? `Send ${p.who} an invite: ${e.title}, ${e.day} at ${spoken(e.time)}.` : `There's nothing called ${p.event} this week.`;
+      },
+      async run(p, ctx) {
+        const e = matches(events, p.event)[0]; // the same event the readback named
+        if (!e) throw new Error(`There's nothing called ${p.event} this week.`);
+        await openEvent(ctx, e);
+        await ctx.tap($('cal-invite'));
+        await ctx.tap($('cal-who')); await ctx.type($('cal-who'), p.who);
+        await ctx.tap($('cal-send'));
+      },
+      verify(s, p) {
+        const e = matches(s.events, p.event)[0], i = s.lastInvite, who = String(p.who).trim().toLowerCase();
+        return (e && i && i.id === e.id && i.who.toLowerCase() === who && e.invited.some((w) => w.toLowerCase() === who)) || "The invite didn't send.";
+      },
+    },
+  },
+};
+export default app;

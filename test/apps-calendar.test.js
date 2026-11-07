@@ -1,74 +1,131 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as C from '../public/apps/calendar/model.js';
-import app from '../public/apps/calendar/index.js';
+import { readFileSync } from 'node:fs';
+import { createBus, createRegistry, createCtx, controlName, appKv, mountApp, runAction } from '../public/sdk/index.js';
+import { browserKV } from '../public/ports/browser-kv.js';
+import calendar, { dayOf, timeOf, matches } from '../public/apps/calendar/index.js';
+import appIds from '../public/apps/apps.js';
+import { fakeDocument, fakeStorage } from './fake-dom.js';
 
-const A = app.actions;
+const example = JSON.parse(readFileSync(new URL('../public/apps/calendar/state.example.json', import.meta.url)));
 
-test('the app object has the §3.3 shape; invite asks first', () => {
-  for (const k of ['id', 'name', 'mount', 'read', 'place', 'state', 'seed', 'reset']) assert.ok(app[k], k);
-  for (const [name, a] of Object.entries(A)) {
-    assert.ok(a.describe && a.hint && a.params && typeof a.run === 'function' && typeof a.verify === 'function', name);
+// One phone with only Calendar on it. answers: the ask-first sheet's yes/no; picks: the choice sheet's labels.
+async function phone({ answers = [], picks = [] } = {}) {
+  const doc = fakeDocument(), bus = createBus(), registry = createRegistry();
+  registry.register(calendar);
+  const port = browserKV({ storage: fakeStorage(), prefix: 'murmur' });
+  const kv = appKv('calendar', port);
+  const root = await mountApp(calendar, doc.body, { kv, bus, say: (text) => bus.emit('say', { text }) });
+  await calendar.reset();
+  const ask = async () => answers.shift() ?? false;
+  const choose = async ({ choices }) => { const want = picks.shift(); const i = choices.findIndex((c) => c === want); return i < 0 ? null : i; };
+  const ctxFor = (app) => createCtx({ app, root, bus, kv, cursor: { async moveTo() {}, hide() {} }, ask, choose, signal: new AbortController().signal });
+  const run = (name, params) => runAction({ registry, name, params, bus, ctxFor, n: 1, of: 1 });
+  const said = () => bus.log.filter((e) => e.name === 'say').map((e) => e.payload?.text ?? e.text);
+  const last = (name) => bus.log.filter((e) => e.name === name).at(-1);
+  return { root, bus, run, said, last, ctxFor, s: () => calendar.state() };
+}
+const ev = (s, id) => s.events.find((e) => e.id === id);
+
+test('calendar: is on the board, and the seeded state is exactly state.example.json', async () => {
+  assert.ok(appIds.includes('calendar'));
+  const { s } = await phone();
+  assert.deepEqual(s(), example);
+});
+
+test('calendar: real heading, named day buttons with pressed state, every action has doing, describe and hint', async () => {
+  const { root } = await phone();
+  assert.equal(root.querySelector('h2').textContent, 'Calendar');
+  assert.equal(controlName(root.querySelector('#cal-day-Monday')), 'Monday, today');
+  assert.equal(root.querySelector('#cal-day-Monday').getAttribute('aria-pressed'), 'true');
+  assert.equal(controlName(root.querySelector('#cal-next')), "What's next");
+  for (const [k, a] of Object.entries(calendar.actions)) {
+    assert.ok(a.describe && a.hint, k);
+    assert.ok(a.doing.split(' ').length >= 2 && a.doing.split(' ').length <= 5, k);
   }
-  assert.equal(A.invite.gate, 'send');
-  assert.deepEqual(Object.entries(A).filter(([, a]) => a.gate).map(([k]) => k), ['invite']);
+  assert.equal(calendar.actions.move.hint, 'Open the event, then Move is the second button, then pick the day');
+  assert.equal(calendar.actions.invite.gate, 'send');
 });
 
-test("what's on, in words", () => {
-  const s = C.fresh();
-  assert.equal(C.whatsOn(s), 'Today: Choir at six, then Quiz with Sam at half past seven.');
-  assert.equal(C.whatsOn(s, 'Tuesday'), 'Tuesday: Lunch with Mum at one.');
-  assert.equal(C.whatsOn(s, 'wed'), 'Wednesday is free.');
-  assert.equal(C.whatsOn(s, 'Blursday'), "I don't know Blursday.");
-  s.showing = 'Tuesday';
-  assert.equal(A.whatsOn.verify(s, { day: 'Tuesday' }), true);
-  assert.notEqual(A.whatsOn.verify(s, {}), true);
+test("calendar: what's on today, on a named day, and what's next", async () => {
+  const { run, said, s } = await phone();
+  assert.equal((await run('calendar__whatsOn', {})).ok, true);
+  assert.equal(said().at(-1), 'Nothing today. Next is Lunch with Mum on Tuesday at 12:30 pm.');
+  assert.equal((await run('calendar__whatsOn', { day: 'thursday' })).ok, true);
+  assert.equal(said().at(-1), 'Thursday: Book club at 7 pm.');
+  assert.equal(calendar.read(), 'Thursday: Book club at 7 pm.');
+  assert.equal((await run('calendar__whatsOn', { day: 'Someday' })).ok, false);
+  assert.equal((await run('calendar__next', {})).ok, true);
+  assert.equal(s().open, 'lunch');
+  assert.equal(said().at(-1), 'Next is Lunch with Mum, Tuesday at 12:30 pm.');
 });
 
-test('the demo: move lunch with Mum to Wednesday', () => {
-  const s = C.fresh();
-  const r = C.resolve(s, { what: 'lunch with Mum' });
-  assert.deepEqual(r, { id: 'lunch-mum' });
-  assert.notEqual(A.move.verify(s, { what: 'lunch with Mum', to: 'Wednesday' }), true);
-  assert.deepEqual(C.move(s, r.id, 'Wednesday'), { say: "Wednesday's free. Moved. Tell Mum?" });
-  assert.equal(A.move.verify(s, { what: 'lunch with Mum', to: 'Wednesday' }), true);
-  assert.equal(C.line(C.event(s, 'lunch-mum')), 'Lunch with Mum, Wednesday at one.');
-  assert.deepEqual(C.place(s), { where: 'Calendar, Wednesday', item: 'Lunch with Mum', n: 1, of: 1, next: 'move' });
+test('calendar: "Move lunch with Mum to Wednesday" is free, moved, verified, offers to tell Mum, and undoes', async () => {
+  const p = await phone();
+  const r = await p.run('calendar__move', { event: 'lunch with Mum', day: 'Wednesday' });
+  assert.deepEqual(r.ok, true, r.reason);
+  assert.deepEqual(p.said().slice(-2), ["Wednesday's free.", 'Moved. Tell Mum?']);
+  assert.equal(ev(p.s(), 'lunch').day, 'Wednesday');
+  assert.deepEqual(p.s().lastMoved, { id: 'lunch', from: 'Tuesday', to: 'Wednesday', time: '12:30' });
+  assert.equal(p.last('step:verified').action, 'calendar__move');
+  assert.equal(calendar.place().next, 'invite');
+  await calendar.actions.move.undo(p.ctxFor(calendar));
+  assert.equal(ev(p.s(), 'lunch').day, 'Tuesday');
+  // the verify is the app's truth: a state where it didn't move fails with a reason
+  assert.equal(typeof calendar.actions.move.verify(calendar.state(), { event: 'lunch', day: 'Wednesday' }), 'string');
 });
 
-test('a clash is said, never overwritten', () => {
-  const s = C.fresh();
-  const r = C.move(s, 'dentist', 'Saturday', '18:00');
-  assert.equal(r.fail, 'Saturday has Choir at six. Pick another time?');
-  assert.equal(C.event(s, 'dentist').day, 'Thursday');
-  assert.deepEqual(C.move(s, 'dentist', 'Friday'), { say: "Friday's free. Moved." });
+test('calendar: a clash is said and asked; keep fails in words, move anyway moves', async () => {
+  const keep = await phone({ picks: ['Keep it on Friday'] });
+  const r = await keep.run('calendar__move', { event: 'Call Sam', day: 'Thursday' });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /Not moved/);
+  assert.equal(keep.last('ask').payload?.question ?? keep.last('ask').question, 'Thursday has Book club at 7 pm. Move Call Sam anyway?');
+  assert.equal(ev(keep.s(), 'callsam').day, 'Friday');
+  const go = await phone({ picks: ['Move anyway'] });
+  assert.equal((await go.run('calendar__move', { event: 'Call Sam', day: 'Thursday' })).ok, true);
+  assert.equal(ev(go.s(), 'callsam').day, 'Thursday');
+  // a new time that avoids the clash is just free
+  const t = await phone();
+  assert.equal((await t.run('calendar__move', { event: 'call sam', day: 'Thursday', time: '5pm' })).ok, true);
+  assert.equal(ev(t.s(), 'callsam').time, '17:00');
+  assert.equal(t.said().at(-2), 'Thursday at 5 pm is free.');
+  assert.equal((await t.run('calendar__move', { event: 'the dentist', day: 'Monday' })).ok, false);
 });
 
-test('find: every word must match; two matches ask', () => {
-  const s = C.fresh();
-  assert.deepEqual(C.resolve(s, { what: 'the quiz' }).none, "I can't find the quiz this week.");
-  assert.deepEqual(C.resolve(s, { what: 'quiz' }), { id: 'quiz' });
-  C.add(s, { title: 'Quiz final', day: 'Sunday', time: '20:00' });
-  const r = C.resolve(s, { what: 'quiz', to: 'Monday' });
-  assert.equal(r.ask.question, 'Quiz with Sam or Quiz final?');
-  assert.deepEqual(r.ask.choices[1].params, { what: 'quiz', to: 'Monday', id: 'quiz-final-sun' });
+test('calendar: invite is gated with a readback from state; no means nothing sent', async () => {
+  const no = await phone({ answers: [false] });
+  const r = await no.run('calendar__invite', { event: 'lunch with Mum', who: 'Mum' });
+  assert.equal(r.ok, false);
+  assert.equal(r.cancelled, true);
+  assert.deepEqual(ev(no.s(), 'lunch').invited, []);
+  const yes = await phone({ answers: [true] });
+  await yes.run('calendar__move', { event: 'lunch with Mum', day: 'Wednesday' });
+  assert.equal((await yes.run('calendar__invite', { event: 'lunch with Mum', who: 'Mum' })).ok, true);
+  const c = yes.last('confirm');
+  assert.equal(c.payload?.readback ?? c.readback, 'Send Mum an invite: Lunch with Mum, Wednesday at 12:30 pm.');
+  assert.deepEqual(ev(yes.s(), 'lunch').invited, ['Mum']);
+  assert.deepEqual(yes.s().lastInvite, { id: 'lunch', who: 'Mum' });
 });
 
-test('add and invite verify on the app truth', () => {
-  const s = C.fresh();
-  assert.equal(C.add(s, { title: '', day: 'Monday', time: '10:00' }), null);
-  assert.equal(C.add(s, { title: 'Haircut', day: 'Mon', time: '10am' }), null);
-  C.add(s, { title: 'Haircut', day: 'Mon', time: '10:00' });
-  assert.equal(A.add.verify(s, { title: 'Haircut', day: 'Monday', time: '10:00' }), true);
-  C.move(s, 'lunch-mum', 'Wednesday');
-  assert.equal(A.invite.readback(s, { what: 'lunch with Mum', who: 'Mum' }), 'Send Mum an invite: Lunch with Mum, Wednesday at one.');
-  assert.notEqual(A.invite.verify(s, { what: 'lunch with Mum', who: 'Mum' }), true);
-  assert.ok(C.invite(s, 'lunch-mum', 'mum'));
-  assert.equal(A.invite.verify(s, { what: 'lunch with Mum', who: 'Mum' }), true);
-  assert.equal(C.invite(s, 'lunch-mum', 'Bob'), false, 'only people in the phone');
+test('calendar: add an event, a bad day fails in words, and reset brings the seed back', async () => {
+  const p = await phone();
+  assert.equal((await p.run('calendar__add', { title: 'Coffee with Ana', day: 'wed', time: '10am' })).ok, true);
+  assert.deepEqual(ev(p.s(), 'coffeewithana'), { id: 'coffeewithana', title: 'Coffee with Ana', day: 'Wednesday', time: '10:00', mins: 60, with: null, invited: [] });
+  const bad = await p.run('calendar__add', { title: 'Swim', day: 'Blursday', time: '8am' });
+  assert.equal(bad.ok, false);
+  assert.match(bad.reason, /which day/);
+  await calendar.reset();
+  assert.deepEqual(calendar.state(), example);
 });
 
-test('spoken times', () => {
-  assert.deepEqual(['13:00', '09:30', '10:15', '19:45', '00:00', '08:40'].map(C.spokenTime),
-    ['one', 'half past nine', 'quarter past ten', 'quarter to eight', 'twelve', 'eight 40']);
+test('calendar: day, time and event matching', () => {
+  assert.equal(dayOf('tomorrow'), 'Tuesday');
+  assert.equal(dayOf('Weds'), 'Wednesday');
+  assert.equal(dayOf('nope'), null);
+  assert.equal(timeOf('7:30 pm'), '19:30');
+  assert.equal(timeOf('12am'), '00:00');
+  assert.equal(timeOf('25:00'), null);
+  assert.deepEqual(matches(example.events, 'Mum').map((e) => e.id), ['lunch']);
+  assert.deepEqual(matches(example.events, 'my book club').map((e) => e.id), ['bookclub']);
 });
