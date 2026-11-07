@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTally, COLUMNS } from '../public/inside/tally.js';
-import { forward } from '../public/inside/forward.js';
+import { forward, roomFrom } from '../public/inside/forward.js';
 import { createBus } from '../public/sdk/bus.js';
 import { server } from '../server.js';
-import { _ring, allowed } from '../lib/relay.js';
+import { _rings, allowed } from '../lib/relay.js';
 
 const run = (events) => { const m = createTally(); for (const [type, p] of events) m.add({ type, ...p }); return m; };
 
@@ -64,12 +64,12 @@ test('a gated step verified without a yes is a bypass; a no then a cancel is not
 });
 
 test('relay: posted events replay over the SSE stream; unknown types are rejected', async (t) => {
-  _ring.length = 0;
+  _rings.clear();
   await new Promise((r) => server.listen(0, r));
   const ctl = new AbortController();
   t.after(() => { ctl.abort(); server.closeAllConnections?.(); server.close(); });
   const base = `http://127.0.0.1:${server.address().port}`;
-  const post = (body) => fetch(`${base}/api/bus`, { method: 'POST', headers: { 'content-type': 'application/json', origin: base }, body: JSON.stringify(body) }).then((r) => r.json());
+  const post = (body, room = 'stage') => fetch(`${base}/api/bus?room=${room}`, { method: 'POST', headers: { 'content-type': 'application/json', origin: base }, body: JSON.stringify(body) }).then((r) => r.json());
   // A forged `heard` from anywhere but this page is refused: no Origin, another site, or another site's fetch metadata.
   for (const h of [{}, { origin: 'https://evil.example' }, { origin: base, 'sec-fetch-site': 'cross-site' }]) {
     const r = await fetch(`${base}/api/bus`, { method: 'POST', headers: { 'content-type': 'application/json', ...h }, body: JSON.stringify({ type: 'heard', text: 'forged' }) });
@@ -79,7 +79,11 @@ test('relay: posted events replay over the SSE stream; unknown types are rejecte
   assert.deepEqual(await post({ events: [{ type: 'heard', text: 'hi', path: 'typed' }, { type: 'task:start', task: 't', utterance: 'hi', plan: [] }, { type: 'model:call' }] }), { accepted: 2 });
   assert.deepEqual(await post({ type: 'nope' }), { accepted: 0 });
 
-  const res = await fetch(`${base}/api/bus/stream`, { signal: ctl.signal });
+  // Rooms: a judge's phone (no room, or another room) never reaches the stage's projector.
+  assert.deepEqual(await post({ type: 'heard', text: 'judge' }, ''), { accepted: 0 }, 'no room: nothing published');
+  assert.deepEqual(await post({ type: 'heard', text: 'judge' }, 'table-4'), { accepted: 1 });
+
+  const res = await fetch(`${base}/api/bus/stream?room=stage`, { signal: ctl.signal });
   assert.match(res.headers.get('content-type'), /text\/event-stream/);
   const reader = res.body.getReader(), dec = new TextDecoder();
   let buf = '';
@@ -87,6 +91,15 @@ test('relay: posted events replay over the SSE stream; unknown types are rejecte
   const got = buf.split('\n').filter((l) => l.startsWith('data: ')).map((l) => JSON.parse(l.slice(6)));
   assert.deepEqual(got.map((e) => e.type), ['heard', 'task:start']);
   assert.equal(got[0].text, 'hi');
+  assert.ok(!buf.includes('judge'), 'another room stays out of the stage');
+});
+
+test('rooms: only ?room=stage or #stage turns forwarding on; a plain phone has no room', () => {
+  assert.equal(roomFrom({ search: '?room=stage', hash: '' }), 'stage');
+  assert.equal(roomFrom({ search: '', hash: '#stage' }), 'stage');
+  assert.equal(roomFrom({ search: '', hash: '' }), null);
+  assert.equal(roomFrom({ search: '?room=<x>', hash: '' }), null);
+  assert.equal(roomFrom({}), null);
 });
 
 test('relay: with MURMUR_TOKEN set, the POST needs x-murmur-token and the stream needs ?t=', () => {
