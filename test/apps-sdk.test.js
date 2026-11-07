@@ -164,7 +164,7 @@ test('Mine: explain, and delete only after the yes; running is the OS run_workfl
   assert.ok(r.ok, r.reason);
   assert.equal(p.asked[1].readback, "Delete 'My morning'?");
   assert.equal(mine.state().workflows.length, 0);
-  assert.equal(mine.read(), 'Mine. Nothing saved yet. Do something once, then say "save that as" and a name.');
+  assert.equal(mine.read(), 'Nothing saved yet. Do something once, then say "save that as" and a name.');
 });
 
 test('Mine reads the agent store: skills with recipe.actions, slots said as someone', async () => {
@@ -177,7 +177,7 @@ test('Mine reads the agent store: skills with recipe.actions, slots said as some
   const heard = [];
   const os = { kv: null, bus: createBus(), say() {}, hear: (t) => heard.push(t), agent: { runWorkflow: async (n) => heard.push(`runWorkflow ${n}`) }, confirm: async () => true, workflows: { all: async () => skills, remove: async (n) => { removed = n; } } };
   await mountApp(mine, host, os);
-  assert.equal(mine.read(), 'Mine, 1 saved: Message someone.');
+  assert.equal(mine.read(), '1 saved: Message someone.');
   assert.equal(host.querySelector('[data-explain="Message someone"]').textContent, "What's in Message someone");
   host.querySelector('[data-run="Message someone"]').click();
   assert.deepEqual(heard, [], 'an agent tap on Run does not start a second task');

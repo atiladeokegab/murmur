@@ -52,8 +52,8 @@ export function explain(w, describeOf = () => '') {
 export const gated = (w, gateOf = () => null) => w.steps.some((st) => gateOf(st) || /^(send|invite|pay|call|delete)$/.test(st.action));
 
 export function read(s) {
-  if (!s.workflows.length) return 'Mine. Nothing saved yet. Do something once, then say "save that as" and a name.';
-  return `Mine, ${s.workflows.length} saved: ${s.workflows.map((w) => w.name).join(', ')}.`;
+  if (!s.workflows.length) return 'Nothing saved yet. Do something once, then say "save that as" and a name.';
+  return `${s.workflows.length} saved: ${s.workflows.map((w) => w.name).join(', ')}.`;
 }
 
 export function place(s) {

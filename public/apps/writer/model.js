@@ -111,7 +111,7 @@ export function newChapter(s, title) {
 
 export function read(s) {
   const ch = current(s);
-  return `The Writer: ${s.title}. ${s.chapters.length} chapters. Open: chapter ${s.chapter + 1}, ${ch.title}, ${count(s)} sentences.`;
+  return `${s.title}. ${s.chapters.length} chapters. Open: chapter ${s.chapter + 1}, ${ch.title}, ${count(s)} sentences.`;
 }
 
 export function place(s) {
