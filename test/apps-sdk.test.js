@@ -7,9 +7,8 @@ import { fakeDocument, fakeStorage } from './fake-dom.js';
 import messages from '../public/apps/messages/index.js';
 import writer from '../public/apps/writer/index.js';
 import mine from '../public/apps/mine/index.js';
-import calendar from '../public/apps/calendar/index.js';
 
-const APPS = [messages, writer, mine, calendar];
+const APPS = [messages, writer, mine];
 
 async function phone({ answers = [], picks = [], stopAfter = Infinity } = {}) {
   const doc = fakeDocument();
@@ -36,7 +35,7 @@ async function phone({ answers = [], picks = [], stopAfter = Infinity } = {}) {
 test('every app registers, mounts with an h2, and every tool exists', async () => {
   const p = await phone();
   const names = p.registry.tools().map((t) => t.name);
-  for (const t of ['messages__openChat', 'messages__send', 'writer__readLastPage', 'writer__where', 'mine__delete', 'calendar__move', 'calendar__invite']) assert.ok(names.includes(t), t);
+  for (const t of ['messages__openChat', 'messages__send', 'writer__readLastPage', 'writer__where', 'mine__delete']) assert.ok(names.includes(t), t);
   for (const a of APPS) assert.ok(p.roots[a.id].querySelector('h2'), a.id);
   assert.match(p.registry.tools().find((t) => t.name === 'messages__send').description, /asked first: send/);
 });
@@ -143,36 +142,6 @@ test('the Writer: dictate, change, new chapter, open chapter', async () => {
   assert.equal(r.reason, "There's no chapter 9. The book has 3.");
 });
 
-test('Calendar: what is on, move lunch with Mum to Wednesday, invite Mum behind the gate', async () => {
-  const p = await phone({ answers: [true] });
-  let r = await p.run('calendar__whatsOn', {});
-  assert.ok(r.ok, r.reason);
-  assert.equal(p.said.at(-1), 'Today: Choir at six, then Quiz with Sam at half past seven.');
-  r = await p.run('calendar__move', { what: 'lunch with Mum', to: 'Wednesday' });
-  assert.ok(r.ok, r.reason);
-  assert.equal(p.said.at(-1), "Wednesday's free. Moved. Tell Mum?");
-  r = await p.run('calendar__invite', { what: 'lunch with Mum', who: 'Mum' });
-  assert.ok(r.ok, r.reason);
-  assert.equal(p.asked[0].readback, 'Send Mum an invite: Lunch with Mum, Wednesday at one.');
-  assert.deepEqual(calendar.state().events[0].invited, ['mum']);
-  r = await p.run('calendar__add', { title: 'Haircut', day: 'tomorrow', time: '10:00' });
-  assert.ok(r.ok, r.reason);
-  assert.equal(p.said.at(-1), 'Added. Haircut, Sunday at ten.');
-});
-
-test('Calendar: a clash fails in words and two matches ask', async () => {
-  const p = await phone({ picks: [1] });
-  let r = await p.run('calendar__move', { what: 'dentist', to: 'Saturday', time: '18:00' });
-  assert.equal(r.reason, 'Saturday has Choir at six. Pick another time?');
-  assert.equal(calendar.state().events[1].day, 'Thursday');
-  r = await p.run('calendar__add', { title: 'Lunch with Sam', day: 'Friday', time: '13:00' });
-  assert.ok(r.ok, r.reason);
-  r = await p.run('calendar__move', { what: 'lunch', to: 'Monday' });
-  assert.ok(r.ok, r.reason);
-  assert.equal(p.chose[0].question, 'Lunch with Mum or Lunch with Sam?');
-  assert.equal(calendar.state().events.find((e) => e.title === 'Lunch with Sam').day, 'Monday');
-});
-
 test('Mine: explain, run, and delete only after the yes', async () => {
   const p = await phone({ answers: [false, true] });
   let r = await p.run('mine__explain', { name: 'my morning' });
@@ -197,10 +166,13 @@ test('Mine reads the agent store: skills with recipe.actions, slots said as some
   const skills = [{ name: 'Message someone', murmur: true, recipe: { adapters: [], actions: [
     { tool: 'messages__openChat', app: 'messages', action: 'openChat', params: { who: '$who' }, gate: null },
     { tool: 'messages__send', app: 'messages', action: 'send', params: {}, gate: 'send' }] } }];
-  const os = { kv: null, bus: createBus(), say() {}, workflows: { all: async () => skills, remove: async (n) => { removed = n; } } };
+  const heard = [];
+  const os = { kv: null, bus: createBus(), say() {}, hear: (t) => heard.push(t), workflows: { all: async () => skills, remove: async (n) => { removed = n; } } };
   await mountApp(mine, host, os);
   assert.equal(mine.read(), 'Mine, 1 saved: Message someone.');
   assert.equal(host.querySelector('[data-explain="Message someone"]').textContent, "What's in Message someone");
+  host.querySelector('[data-run="Message someone"]').click();
+  assert.deepEqual(heard, [], 'an agent tap on Run does not start a second task');
   host.querySelector('[data-delete="Message someone"]').click();
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(removed, 'Message someone');
@@ -232,9 +204,8 @@ test('state.example.json matches what state() returns', async () => {
     messages: { steps: [['messages__openChat', { who: 'Sam' }], ['messages__reply', { text: "I'm ten minutes late." }], ['messages__send', {}]], opts: { picks: [0], answers: [true] } },
     writer: { steps: [['writer__readLastPage', {}]], opts: { stopAfter: 4 } },
     mine: { steps: [['mine__explain', { name: 'My morning' }]], proposal: 'You message Mum most mornings. Add a tile?' },
-    calendar: { steps: [['calendar__move', { what: 'lunch with Mum', to: 'Wednesday' }]] },
   };
-  const apps = { messages, writer, mine, calendar };
+  const apps = { messages, writer, mine };
   for (const [id, c] of Object.entries(cases)) {
     const p = await phone(c.opts);
     const app = apps[id];
