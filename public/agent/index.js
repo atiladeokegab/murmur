@@ -27,13 +27,14 @@ if (globalThis.window) installToken(); // /api/* carries the device token from h
  * @param {(step)=>'ask'|'just'|'teach'} [o.agency]
  * @param {()=>'short'|'detailed'} [o.answers]  Your look's Answers row: Detailed says a result's longer answer straight away
  * @param {(gate)=>boolean} [o.risky]  send/call need the fingerprint too (screen just locked, earphone out)
+ * @param {()=>void} [o.onStop]  cut the line being played now (the shell's hush): said Stop and Undo call it
  */
 export const ACK = 'On it.';
 export const NARRATION_HOLD_MS = 150; // a question this soon after a step starts replaces the step's line
 
 export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, fingerprint = async () => false,
   agency = () => 'ask', answers = () => 'short', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
-  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {} }) {
+  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {}, onStop = () => {} }) {
   const appsList = () => (Array.isArray(registry) ? registry : typeof registry?.list === 'function' ? registry.list() : Object.values(registry || {}));
   const app = (id) => (typeof registry?.get === 'function' ? registry.get(id) : appsList().find((a) => a.id === id));
   let lastSaid = '', lastMore = ''; // lastMore: the last result's longer answer ("tell me more")
@@ -53,10 +54,11 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     const go = () => (out() ? false : o?.narration ? hold(o.ack).then(() => (out() ? false : start())) : start());
     const p = pending ? chain.then(go) : Promise.resolve(go()); // nothing being said: start now, not a tick later
     pending++;
-    chain = p.catch(() => {}).finally(() => { pending--; });
+    chain = p.catch(() => {}).finally(() => { if (g === gen) pending--; });
     return p;
   };
-  const hush = () => { gen++; };
+  // Stop and Undo: drop the queue, cut the line playing now, and let the next line start at once, not after it.
+  const hush = () => { gen++; pending = 0; chain = Promise.resolve(); try { onStop(); } catch { /* the shell's own */ } };
   const say = (text, o) => {
     if (!text) return Promise.resolve();
     const said = () => { lastSaid = text; bus.emit('say', { text }); };
@@ -175,7 +177,7 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
       case 'stop': hush(); choice?.resolve(null); runner.stop(); return;
       case 'take_over': choice?.resolve(null); runner.takeOver(); return;
       case 'where': await where(); return;
-      case 'undo': await runner.undo(); return;
+      case 'undo': hush(); await runner.undo(); return; // "Undone." now, not after the stale lines
       case 'carry_on': {
         const a = app(current());
         const x = a && (a.actions.carryOn ? 'carryOn' : a.actions.resume ? 'resume' : null);
