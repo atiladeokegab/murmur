@@ -55,3 +55,24 @@ html.stage-emu #board .tile[data-app="audible"] .what::before { content: "A"; ba
 html.stage-emu body { min-height: 100svh; }
 html.stage-emu footer { margin-top: auto; }
 html.stage-emu #board .tile[data-app="calendar"] .what::before { display: grid; }
+
+/* One UI style skin (/stage only): flat black page, grey rounded cards, a big title high up and content lower for one-handed reach, a system sans */
+html.stage-emu { --f-read: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif; --r-card: 26px; }
+html.stage-emu:not([data-theme="light"]):not([data-theme="yellow"]) { --c-page: #000; --c-board: #1E1E20; --c-slat: #2C2C2F; }
+html.stage-emu[data-theme="light"] { --c-page: #F2F2F4; --c-board: #FCFCFD; }
+html.stage-emu body { background: var(--c-page); font-family: var(--f-read); }
+html.stage-emu .statusbar { padding-inline: 1.4rem; font-weight: 600; font-size: 0.85rem; letter-spacing: 0; }
+html.stage-emu body::before { top: 11px; width: 11px; height: 11px; margin-left: -5.5px; box-shadow: 0 0 0 1.5px #1a1a1a; }
+/* home: a big title high up, then the squircle grid lower down */
+html.stage-emu #board-view .top { padding: 2.5rem 1.5rem 1.5rem; }
+html.stage-emu #board-view .top h1 { font-size: 2.4rem; font-weight: 300; letter-spacing: -0.01em; color: var(--c-ink); }
+html.stage-emu #board .tile .what::before { --s-icon: 56px; --r-icon: 30%; box-shadow: none; }
+html.stage-emu #board .tile .title, html.stage-emu #board li:not(.now) .title { font-weight: 400; font-size: 0.74rem; }
+html.stage-emu #board-view::after { background: transparent; }
+/* inside an app: a large title in the header bar, list rows on a rounded card */
+html.stage-emu .app > h2 { margin: 0 -1rem 0.5rem; padding: 0.6rem 1rem 0.6rem 2.5rem; font-size: 1.6rem; line-height: 1.4; font-weight: 600; background: var(--c-page); border: 0; } /* a large title, kept to the old height: mirror rings use the real phone's coordinates */
+html.stage-emu .app > h2::before { color: var(--c-ink); }
+html.stage-emu .app-list { border-radius: var(--r-card); background: var(--c-board); }
+html.stage-emu .app-list li + li { border-top-color: var(--c-slat) !important; }
+html.stage-emu .app-list .app-btn { padding: 1rem 2.25rem 1rem 1.4rem !important; }
+html.stage-emu .app-list .app-btn::after { content: none; }
