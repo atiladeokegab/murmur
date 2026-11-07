@@ -45,6 +45,12 @@ function frame(e) {
   if (typeof e.html !== 'string') return;
   const d = mirror.contentDocument;
   if (!d?.body || d.URL !== 'about:srcdoc' || d.readyState !== 'complete') { pending = e; return; }
+  lastFrame = Date.now(); // a frame waiting in the queue still means the phone is here
+  queue.push(e); if (queue.length > 40) queue.splice(0, queue.length - 40);
+  if (!playing) play();
+}
+function render(e) {
+  const d = mirror.contentDocument;
   lastFrame = Date.now();
   show('mirror');
   if (Number(e.w) > 0 && Number(e.h) > 0 && (e.w !== size.w || e.h !== size.h)) size = { w: Number(e.w), h: Number(e.h) };
@@ -58,9 +64,7 @@ function frame(e) {
   body.querySelectorAll('meta, base, iframe, frame, object, embed').forEach((n) => n.remove()); // a forged frame cannot refresh or embed
   d.body.replaceWith(d.adoptNode(body));
   d.defaultView.scrollTo(0, Number(e.sy) || 0);
-  const has = Number.isFinite(e.cx) && Number.isFinite(e.cy);
-  cursor.hidden = !has;
-  if (has) ring(e.cx - 28, e.cy - 28, 56, 56, s); // a frame carries only the centre: a ring around it
+  return body.querySelector('#apps > .app:not([hidden])')?.dataset.app || 'home';
 }
 setInterval(() => { if (Date.now() - lastFrame > 8000) show('live'); }, 1000);
 
@@ -98,10 +102,64 @@ function ring(x, y, w, h, s = Number(phone.style.getPropertyValue('--s')) || 1) 
   cursor.style.transform = `translate(${(BEZEL + x) * s}px, ${(BEZEL + y) * s}px)`;
 }
 // Laptop copy: follow the phone's own .agent-cursor (same origin) and draw the stage ring on its box.
-setInterval(() => {
-  if (mode !== 'live') return;
-  const r = live.contentDocument?.querySelector('.agent-cursor');
-  if (!r || r.hidden || live.contentDocument.querySelector('dialog[open]')) { cursor.hidden = true; return; }
-  const v = (k) => parseFloat(r.style.getPropertyValue(k)) || 0;
+// The app runs live here, so the open and the presses are shown as they happen (its own cursor sets the pace).
+let liveApp = 'home', liveAt = null, icons = {}, busy = false;
+setInterval(async () => {
+  if (mode !== 'live' || busy) return;
+  const d = live.contentDocument;
+  if (!d?.body) return;
+  const app = d.querySelector('#apps > .app:not([hidden])')?.dataset.app || 'home';
+  if (app === 'home') d.querySelectorAll('#board .tile[data-app] .what').forEach((w) => { const r = w.getBoundingClientRect(); if (r.width) icons[w.closest('.tile').dataset.app] = r; });
+  if (app !== liveApp) {
+    const r = icons[app]; liveApp = app;
+    if (app !== 'home' && r) { busy = true; ring(r.left + r.width / 2 - 34, r.top - 6, 68, 68); tap(); open(live); await sleep(BEAT.open); busy = false; }
+  }
+  const c = d.querySelector('.agent-cursor');
+  if (!c || c.hidden || d.querySelector('dialog[open]')) { cursor.hidden = true; liveAt = null; return; }
+  const v = (k) => parseFloat(c.style.getPropertyValue(k)) || 0, at = ['--x', '--y', '--w', '--h'].map(v).join();
   ring(v('--x'), v('--y'), v('--w'), v('--h'));
+  if (at !== liveAt) { liveAt = at; setTimeout(tap, BEAT.glide); }
 }, 50);
+
+// The show: each thing Murmur does gets its own beat, so the eye can follow. Home, the icon tap, the app opening
+// from that icon, then the ring to each control with a press. Mirror frames queue and play out at this pace.
+const still = matchMedia('(prefers-reduced-motion: reduce)');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const BEAT = { glide: 380, press: 420, open: 520 }; // ms: the ring lands, the press reads, the app settles
+const queue = [];
+let playing = false, shownApp = 'home', lastAt = null, home = null; // home: the last home-screen frame
+function tap() { cursor.classList.remove('tap'); void cursor.offsetWidth; cursor.classList.add('tap'); }
+function center() { const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(cursor.style.transform) || [0, 0, 0]; return `${Number(m[1]) + cursor.offsetWidth / 2}px ${Number(m[2]) + cursor.offsetHeight / 2}px`; }
+function open(el) { // the app grows out of the icon that was tapped
+  if (still.matches) return;
+  el.style.transformOrigin = center();
+  el.animate([{ transform: 'scale(0.2)', opacity: 0.3, borderRadius: '30%' }, { transform: 'scale(1)', opacity: 1 }], { duration: BEAT.open, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+}
+async function iconTap(doc, app) { // ring onto the home icon, press it; false when there is no icon to show
+  const r = doc?.querySelector(`#board .tile[data-app="${CSS.escape(app)}"] .what`)?.getBoundingClientRect();
+  if (!r?.width) return false;
+  ring(r.left + r.width / 2 - 34, r.top - 6, 68, 68); await sleep(BEAT.glide);
+  tap(); await sleep(BEAT.press);
+  return true;
+}
+async function play() {
+  playing = true;
+  while (queue.length) {
+    const e = queue.shift();
+    const app = (() => { try { return new DOMParser().parseFromString(e.html, 'text/html').body.querySelector('#apps > .app:not([hidden])')?.dataset.app || 'home'; } catch { return 'home'; } })();
+    const opening = app !== shownApp && app !== 'home';
+    if (app === 'home') home = e;
+    if (opening && shownApp !== 'home' && home) { // app to app: back out to the home screen first, so the icon tap shows
+      cursor.hidden = true; render(home); open(mirror); await sleep(BEAT.open);
+    }
+    if (opening) await iconTap(mirror.contentDocument, app);
+    render(e);
+    if (opening) { open(mirror); await sleep(BEAT.open); }
+    shownApp = app;
+    const has = Number.isFinite(e.cx) && Number.isFinite(e.cy), at = has ? `${e.cx},${e.cy}` : null;
+    if (!has) { cursor.hidden = true; lastAt = null; continue; }
+    ring(e.cx - 28, e.cy - 28, 56, 56); // a frame carries only the centre: a ring around it
+    if (at !== lastAt) { lastAt = at; await sleep(BEAT.glide); tap(); await sleep(BEAT.press); }
+  }
+  playing = false;
+}
