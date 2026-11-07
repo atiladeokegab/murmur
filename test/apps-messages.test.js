@@ -18,7 +18,7 @@ test('seed: Mum asks about Tuesday, three chats', () => {
   app.seed();
   const s = app.state();
   assert.equal(M.chatOf(s, 'mum').messages.at(-1).text, 'Lunch on Tuesday?');
-  assert.equal(app.read(), 'Messages, 3 chats. Mum wrote: Lunch on Tuesday? Sam wrote: Are you still coming to the quiz tonight? We start at seven.');
+  assert.equal(app.read(), '3 chats. Mum wrote: Lunch on Tuesday? Sam wrote: Are you still coming to the quiz tonight? We start at seven.');
   assert.deepEqual(app.place(), { where: 'Messages', item: 'your chats', n: 0, of: 3, next: 'openChat' });
 });
 

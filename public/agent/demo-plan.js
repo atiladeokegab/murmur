@@ -90,7 +90,8 @@ export function demoPlan(utterance, apps, context = {}) {
 function plan(said, apps, context, dry) {
   // Asides that only say what not to do: the plan already does only what was asked.
   let raw = said.trim().replace(/[.,]?\s*(?:don't|do not) (?:book|buy|pay|send) anything\.?$/i, '').replace(/\s+without paying\.?$/i, '');
-  raw = raw.replace(/^(?:yes,?\s+)?(?:just\s+)?do it[:,.]?\s+(?=\S)/i, ''); // "Do it: move lunch" after a teach offer
+  raw = raw.replace(/^(?:yes,?\s+)?(?:just\s+)?do it[:,.]?\s+(?=\S)/i, '');
+  raw = raw.replace(/^(?:can|could|would) you (?:please )?/i, '').replace(/,?\s+please([.!?]*)$/i, '$1'); // "Can you order my usual please"
   let here = context.app && apps.some((a) => a.id === context.app) ? context.app : null;
   let m;
   if ((m = raw.match(/^in\s+(?:my\s+)?(?:reply|message|draft|chat)\s+(?:to|with)\s+\w+[,:]?\s+(.+)$/i))) { here = 'messages'; raw = m[1]; }
@@ -108,7 +109,7 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^save (?:that|this|it) as\s+(.+)$/i))) {
     return task([{ tool: 'save_workflow', params: { name: cap(m[1]), slot: /\b(someone|somebody|anyone|a person)\b/i.test(m[1]) } }]);
   }
-  if ((m = t.match(/^what'?s in\s+(.+)$/i)) || (m = t.match(/^what does\s+(.+?)\s+do$/i))) return task([{ tool: 'explain', params: { name: m[1] } }]);
+  if ((m = t.match(/^what'?s in\s+(?!(?:my |the )?basket$)(.+)$/i)) || (m = t.match(/^what does\s+(.+?)\s+do$/i))) return task([{ tool: 'explain', params: { name: m[1] } }]);
   if ((m = t.match(/^(?:change|edit)\s+(.+?)[:,]?\s+(?:drop|remove|take out|skip)\s+(?:the\s+)?(.+)$/i))) {
     return task([{ tool: 'edit_workflow', params: { name: m[1], drop: m[2] } }]);
   }
@@ -185,6 +186,13 @@ function plan(said, apps, context, dry) {
   if (/^send(?: it| that| the reply)?$/i.test(t)) return task([step(here || 'messages', ['send'])]);
   if ((m = t.match(/^(?:call|ring|phone)\s+(\w+)$/i))) return task([step('messages', ['call'], { who: name(m[1]) })]);
 
+  // Clock: the timer, the alarm and the time
+  if ((m = t.match(/^(?:set|start)\s+(?:a\s+|the\s+|my\s+)?timer\s+(?:for\s+)?(.+)$/i)) || (m = t.match(/^(?:set\s+)?(?:a\s+)?timer\s+for\s+(.+)$/i))) return task([step('clock', ['setTimer'], { length: m[1] })]);
+  if (/^how (?:long|much time)(?:'s| is| have i got)? (?:left|remaining)(?: on (?:the |my )?timer)?$/i.test(t)) return task([step('clock', ['timeLeft'])]);
+  if (/^(?:cancel|stop|end|clear)\s+(?:the\s+|my\s+)?timer$/i.test(t)) return task([step('clock', ['cancelTimer'])]);
+  if ((m = t.match(/^(?:wake me(?: up)?|set (?:an |my |the )?alarm)\s+(?:at|for)\s+(.+)$/i))) return task([step('clock', ['setAlarm'], { time: m[1] })]);
+  if (/^(?:what time is it|what'?s the time)(?: now)?$/i.test(t)) return task([step('clock', ['time'])]);
+
   // Calendar (before the generic "change X to Y")
   if ((m = t.match(/^invite\s+(\w+)\s+to\s+(.+)$/i))) return task([step('calendar', ['invite'], { who: name(m[1]), event: clean(m[2]) })]);
   if ((m = t.match(/^(?:move|reschedule|shift)\s+(?:my\s+)?(.+?)\s+(?:to|until)\s+(.+)$/i)) && (here === 'calendar' || !here || /lunch|meeting|dinner|appointment|coffee|event/i.test(m[1]))) {
@@ -216,18 +224,20 @@ function plan(said, apps, context, dry) {
   if (/^read (?:it|that|this)$/i.test(t)) return task([step(here || 'messages', ['read'])]);
 
   // Shop
-  if ((m = t.match(/^(?:order|get|buy)\s+(?:me\s+)?(?:my|the)\s+usual(?:\s+(?!from\b|at\b)\w+)?(?:\s+(?:from|at)\s+(.+))?$/i)) ||
-      /^(?:order|reorder)\s+(?:the\s+)?(?:same|last)(?:\s+again)?$/i.test(t)) {
+  if (/^(?:re-?order(?:\s+(?:my|the)\s+last(?:\s+order)?)?|(?:order\s+)?(?:the\s+)?same(?:\s+again)?|(?:order|reorder)\s+(?:the\s+)?last(?:\s+(?:order|one))?(?:\s+again)?|order what i had last time)$/i.test(t)) {
+    return task([step('shop', ['reorderLast', 'reorder']), step('shop', ['pay', 'checkout'])]);
+  }
+  if ((m = t.match(/^(?:(?:order|get|buy)\s+(?:me\s+)?|i(?:'d like| want)\s+)?(?:my|the)\s+usual(?:\s+(?!from\b|at\b)\w+)?(?:\s+(?:from|at)\s+(.+))?$/i))) {
     return task([step('shop', ['orderUsual', 'usual', 'reorder', 'order'], m?.[1] ? { shop: m[1] } : {}), step('shop', ['pay', 'checkout'])]);
   }
-  if ((m = t.match(/^(?:add|put)\s+(one|two|three|four|five|six|an?|\d+)?\s*([^,]+?)(?:\s+(?:at|from)\s+([^,]+?))?(?:\s+(?:to|in)\s+(?:my\s+|the\s+)?basket)?$/i)) && !/\bon (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)$/i.test(t)) {
+  if ((m = t.match(/^(?:add|put|buy|(?:get|order)(?= (?:me )?(?:one|two|three|four|five|six|an?|\d+) (?!taxi|cab)))\s+(?:me\s+)?(one|two|three|four|five|six|an?|\d+)?\s*([^,]+?)(?:\s+(?:at|from)\s+([^,]+?))?(?:\s+(?:to|in)\s+(?:my\s+|the\s+)?basket)?$/i)) && !/\bon (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)$/i.test(t)) {
     const slots = { item: cap(m[2]), quantity: Number(m[1]) || NUM[String(m[1] || 'one').toLowerCase()] || 1 };
     if (m[3]) slots.shop = m[3];
     return task([step('shop', ['add', 'addToBasket', 'addItem'], slots)]);
   }
-  if (/^read (?:me )?(?:my |the )?basket$/i.test(t) || /^what'?s in (?:my |the )?basket$/i.test(t)) return task([step('shop', ['readBasket', 'basket', 'read'])]);
-  if (/^(?:pay|check ?out)$/i.test(t)) return task([step('shop', ['pay', 'checkout'])]);
-  if (/^(?:track|where'?s) my order$/i.test(t)) return task([step('shop', ['track'])]);
+  if (/^read (?:me )?(?:my |the )?basket$/i.test(t) || /^what'?s in (?:my |the )?basket$/i.test(t)) return task([{ tool: 'open_app', params: { app: 'shop' } }, { tool: 'read_screen', params: {} }]);
+  if (/^(?:pay|check ?out)(?:\s+(?:for\s+)?(?:it|that|this|the basket|my (?:order|basket|coffee)))?(?:\s+now)?$/i.test(t)) return task([step('shop', ['pay', 'checkout'])]);
+  if (/^(?:track|where'?s) my order$|^is my (?:order|coffee) ready$|^when (?:will|is) my (?:order|coffee) (?:be )?ready$/i.test(t)) return task([step('shop', ['track'])]);
 
   // Places (read-only). "Directions to" stays Transit's while Transit is on the phone.
   if (apps.some((a) => a.id === 'places')) {
@@ -240,12 +250,24 @@ function plan(said, apps, context, dry) {
         (m = t.match(/^(?:what are )?(?:the )?opening (?:hours|times) (?:for|of|at)\s+(.+)$/i))) return at(['hours'], m[1]);
   }
 
+  // Weather (read-only). An optional "today", "this afternoon", "tonight" or "tomorrow" on the end.
+  if (apps.some((a) => a.id === 'weather')) {
+    const W = '(?:\\s+(?:for\\s+)?((?:today|now|tonight|tomorrow(?: morning| afternoon)?|this (?:morning|afternoon|evening))))?';
+    const sky = (names, when) => task([step('weather', names, when ? { when: when.toLowerCase() } : {})]);
+    if ((m = t.match(new RegExp(`^(?:what'?s|what is|how'?s|how is) the (?:weather|forecast)(?: like)?${W}$|^(?:the )?weather${W}$`, 'i')))) return sky(['forecast'], m[1] || m[2]);
+    if ((m = t.match(new RegExp(`^(?:do|will|should) i (?:need|take|want) (?:a |my )?(?:coat|jacket|umbrella|brolly)${W}$`, 'i')))) return sky(['coat'], m[1]);
+    if ((m = t.match(new RegExp(`^(?:will|is) it (?:going to )?rain${W}$|^is (?:it|there) (?:any )?rain(?: coming)?${W}$`, 'i')))) return sky(['rain'], m[1] || m[2]);
+  }
+
   // Transit
   if ((m = t.match(/\bnext bus(?:\s+to\s+(?:the\s+)?([a-z' ]+?))?(?:,|\s+and\b|$)/i)) || /^bus to work$/i.test(t)) {
     return task([step('transit', ['nextBus', 'next', 'bus'], m?.[1] ? { place: cap(m[1].trim()) } : {})]);
   }
-  if ((m = t.match(/^(?:directions|take me|get me|get)\s+(?:to\s+)?(?:the\s+)?(.+)$/i))) return task([step('transit', ['directions', 'route'], { place: cap(m[1]) })]);
-  if ((m = t.match(/when (?:should|do|can) i leave(?:\s+(?:for|to)\s+(?:the\s+)?([a-z' ]+))?$/i))) return task([step('transit', ['whenToLeave', 'leave'], m[1] ? { place: cap(m[1].trim()) } : {})]);
+  if ((m = t.match(/^(?:(?:when'?s|when is|what time is)\s+)?the\s+next\s+(?:number\s+)?(\d+)(?:\s+bus)?$|^next\s+(?:number\s+)?(\d+)$|^when does the (?:number )?(\d+) (?:leave|come|go)$/i))) {
+    return task([step('transit', ['nextBus'], { route: m[1] || m[2] || m[3] })]);
+  }
+  if ((m = t.match(/^(?:directions(?:\s+to)?|take me(?:\s+to)?|(?:get|get me)\s+to|show me the way to)\s+(?:the\s+)?(.+)$/i))) return task([step('transit', ['directions', 'route'], { place: cap(m[1]) })]);
+  if ((m = t.match(/(?:when|what time) (?:should|do|can|must) i (?:need to |have to )?leave(?:\s+(?:for|to)\s+(?:the\s+)?([a-z' ]+))?$/i))) return task([step('transit', ['whenToLeave', 'leave'], m[1] ? { place: cap(m[1].trim()) } : {})]);
 
   // Taxi (a plug-in) and the Bank
   if ((m = t.match(/^(?:book|get|call|order)\s+(?:me\s+)?(?:a\s+)?(?:taxi|cab)(?:\s+(?:to\s+)?(?:the\s+)?(.+))?$/i))) {
@@ -259,7 +281,8 @@ function plan(said, apps, context, dry) {
 
   // Travel
   if ((m = t.match(/^(?:pick|choose|take|book|hold)\s+(?:the\s+)?(\d{1,2}[:.]\d\d)(?:\s+(?:flight|one))?$/i))) return task([step('travel', ['hold', 'book', 'pick'], { flight: m[1].replace('.', ':') })]);
-  if ((m = t.match(/^(?:find|search|look for)\s+(?:me\s+)?(?:a\s+)?flights?\s+(?:from\s+(\w+)\s+)?to\s+(\w+)(?:\s+(?:for|on)\s+(.+))?$/i))) {
+  if ((m = t.match(/^(?:(?:pick|choose|take|show me)\s+)?(?:the\s+)?(first|second|third|cheapest|earliest|latest|direct)(?:\s+(?:flight|one))?$/i))) return task([step('travel', ['pick'], { flight: m[1] })]);
+  if ((m = t.match(/^(?:(?:find|search(?: for)?|look for|get|i need|i want)\s+(?:me\s+)?(?:a\s+)?)?flights?\s+(?:from\s+(\w+)\s+)?to\s+(\w+)(?:\s+(?:(?:for|on|this|next)\s+)?(.+))?$/i))) {
     const slots = { place: cap(m[2]) };
     if (m[1]) slots.origin = cap(m[1]);
     if (m[3]) slots.day = m[3];
@@ -268,7 +291,8 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:book|hold)\s+(?:the\s+)?(.+)$/i))) return task([step('travel', ['hold', 'book', 'pick'], { flight: m[1] })]);
 
   if ((m = t.match(/^(?:open|go to|show|play|start)\s+(?:the\s+|my\s+)?(.+?)(?:\s+and\s+.+)?$/i))) {
-    const app = apps.find((a) => [a.id, a.name.toLowerCase(), a.name.toLowerCase().replace(/^the\s+/, '')].includes(m[1].toLowerCase()));
+    const said = m[1].toLowerCase().replace(/\s+app$/, ''); // "open the travel app"
+    const app = apps.find((a) => [a.id, a.name.toLowerCase(), a.name.toLowerCase().replace(/^the\s+/, '')].includes(said));
     if (app) return task([{ tool: 'open_app', params: { app: app.id } }]);
     if (/^(?:open|go to)\b/i.test(t)) return { kind: 'unknown', plan: [], say: `I don't have ${cap(m[1])} on this phone.` };
   }
