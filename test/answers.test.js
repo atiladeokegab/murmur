@@ -11,6 +11,7 @@ import { createBus, createRegistry, runAction } from '../public/sdk/index.js';
 import { moreLine } from '../public/apps/calendar/index.js';
 import { settings } from '../public/apps/look/index.js';
 import { phone, memoryKV } from './agent-fixtures.js';
+import { agoWords } from '../public/apps/messages/model.js';
 
 const tick = () => new Promise((r) => setImmediate(r));
 
@@ -71,7 +72,12 @@ test('1. Messages more: who it is from, what came before, who else is waiting', 
   const s = await setup();
   await s.agent.hear("Read Mum's last message");
   await s.agent.hear('tell me more');
-  assert.equal(s.spoken.at(-1), 'From Mum, message 3 of 3 in the chat. Before it, you said: Yes, all fine. Love you. New messages also from Sam. Say "reply" and your words to answer, or "read Sam\'s messages".');
+  assert.equal(s.spoken.at(-1), 'From Mum, two minutes ago, message 3 of 3 in the chat. Before it, you said: Yes, all fine. Love you. New messages also from Sam. Say "reply" and your words to answer, or "read Sam\'s messages".');
+});
+
+test('1. a message says when it came, in words', () => {
+  assert.deepEqual([0, 1, 2, 45, 90, 180, 1500, 4320, undefined].map(agoWords),
+    ['just now', 'a minute ago', 'two minutes ago', '45 minutes ago', 'an hour ago', 'three hours ago', 'yesterday', 'three days ago', '']);
 });
 
 test('1 and 3. Look: a change has a longer answer, and Answers is a row the voice can set', async () => {
@@ -105,6 +111,10 @@ test('3. the planner maps "give me longer answers" and "keep it short" to the An
   for (const [t, length] of [['give me longer answers', 'detailed'], ['detailed answers', 'detailed'], ['keep it short', 'short'], ['short answers', 'short']]) {
     assert.deepEqual(demoPlan(t, apps).plan, [{ tool: 'look__answers', params: { length } }], t);
   }
+  // the lines Look's longer answer tells people to say all plan
+  for (const [t, tool] of [['yellow on black', 'look__colours'], ['voice faster', 'look__voiceFaster'], ['keep it short', 'look__answers']]) {
+    assert.equal(demoPlan(t, apps).plan[0]?.tool, tool, t);
+  }
 });
 
 test('3. Your look has an Answers row a person can press: Short or Detailed, pressed state shown', async () => {
@@ -118,4 +128,11 @@ test('3. Your look has an Answers row a person can press: Short or Detailed, pre
   assert.equal(settings().answers, 'detailed');
   assert.equal(detailed.getAttribute('aria-pressed'), 'true');
   await p.registry.get('look').reset();
+});
+
+test('3. Look\'s longer answer falls back to the default on a saved value that is not an option', async () => {
+  const { default: lookApp } = await import('../public/apps/look/index.js');
+  const line = lookApp.actions.answers.more({ size: 100, rate: 1.15, theme: 'neon', speaker: 'nobody', agency: 'ask', answers: 'huge' });
+  assert.match(line, /colours, now match my phone/);
+  assert.match(line, /who speaks, now murmur/);
 });
