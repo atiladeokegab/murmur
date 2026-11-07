@@ -5,6 +5,8 @@
 export const SEP = '__';
 
 // Murmur's own tools, beside one per app action (spec §3.1).
+import { INSTALL_APP } from '../sdk/plugin.js';
+
 export const BUILTINS = {
   open_app: { describe: 'Open an app', params: { type: 'object', properties: { app: { type: 'string' } }, required: ['app'] } },
   read_screen: { describe: 'Read what is on screen', params: { type: 'object', properties: {} } },
@@ -15,8 +17,20 @@ export const BUILTINS = {
   run_workflow: { describe: 'Run a saved tile', params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   explain: { describe: "Say what's in a saved tile", params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   edit_workflow: { describe: 'Drop a step from a saved tile', params: { type: 'object', properties: { name: { type: 'string' }, drop: { type: 'string' } }, required: ['name', 'drop'] } },
+  install_app: INSTALL_APP,
+  // shortcut: REMOVE_APP's literal from plugin.js (branch plugin-voice-remove); import it once that is on main
+  remove_app: { describe: 'Take an added app off the phone, by its name', params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   recall: { describe: 'Say what Murmur remembers about you', params: { type: 'object', properties: {} } },
+  list_workflows: { describe: 'Say the saved tiles', params: { type: 'object', properties: {} } },
+  remove_workflow: { describe: 'Remove a saved tile (asks first)', params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+  go_home: { describe: 'Go back to the home board', params: { type: 'object', properties: {} } },
+  sound: { describe: 'Turn sounds and vibration on or off', params: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] } },
+  // The OS's own verbs, also reserved words: a plan of just one of these runs as the word, never as a task.
+  stop: { describe: 'Stop what Murmur is doing', params: { type: 'object', properties: {} } },
+  undo: { describe: 'Undo the last change', params: { type: 'object', properties: {} } },
+  carry_on: { describe: 'Carry on where you left off', params: { type: 'object', properties: {} } },
 };
+export const WORD_TOOLS = new Set(['stop', 'undo', 'carry_on']);
 
 /**
  * The serialisable view of the registry: what the planner sees. Accepts the SDK registry as an array of apps,

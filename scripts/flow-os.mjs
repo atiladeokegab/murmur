@@ -80,24 +80,41 @@ check('the Done line offers Undo with focus', (await focused()) === 'undo');
 await page.goBack(); await page.waitForTimeout(100);
 check('Back after a task goes home', await page.evaluate(() => !document.querySelector('#board-view').hidden));
 
-// Your look rows
-await page.locator('#look-link').click(); await page.waitForSelector('[data-k="speaker-murmur"]');
-for (const k of ['speaker-murmur', 'speaker-reader', 'agency-ask', 'agency-just', 'agency-teach', 'bigger', 'theme-yellow', 'learn', 'nolook']) {
-  check(`Your look has ${k}`, await page.locator(`[data-k="${k}"]`).count() === 1);
+// Your look is an app (build-look's), opened from the link under the board
+await page.locator('#look-link').click(); await page.waitForSelector('#app-look:not([hidden])');
+check('Your look opens as an app with focus on its heading', await page.evaluate(() => document.activeElement?.id === 'look-h'));
+for (const k of ['speaker-murmur', 'speaker-reader', 'agency-ask', 'agency-just', 'agency-teach', 'size-more', 'theme-yellow', 'learning']) {
+  check(`Your look has ${k}`, await page.locator(`#look-${k}`).count() === 1);
 }
-await page.locator('[data-k="agency-just"]').click(); await page.waitForTimeout(100);
-check('agency is stored', await page.evaluate(() => window.murmur.host.agency()) === 'just');
-await page.locator('[data-k="speaker-reader"]').click(); await page.waitForTimeout(100);
+await page.locator('#look-agency-just').click(); await page.waitForTimeout(150);
+check('agency reaches the shell', await page.evaluate(() => window.murmur.host.agency()) === 'just');
+await page.locator('#look-speaker-reader').click(); await page.waitForTimeout(150);
 check('screen reader mode makes the status region polite', await page.locator('#say').getAttribute('aria-live') === 'polite');
-await page.locator('[data-k="speaker-murmur"]').click(); await page.waitForTimeout(100);
+await page.locator('#look-speaker-murmur').click(); await page.waitForTimeout(150);
 check('Murmur mode turns the region off', await page.locator('#say').getAttribute('aria-live') === 'off');
 await page.goBack(); await page.waitForTimeout(100);
-check('Back closes Your look', !(await page.evaluate(() => document.querySelector('#sheet').open)));
+check('Back closes Your look', await page.evaluate(() => !document.querySelector('#board-view').hidden));
+check('Your look is not a board tile', await page.locator('#board .tile[data-app="look"]').count() === 0);
+check('Phone settings are one tap from the board', await page.locator('#phone-link').count() === 1);
+const native = await page.evaluate(async () => {
+  const { runAction } = await import('/sdk/index.js');
+  const { bus, registry, host } = window.murmur;
+  const c = new AbortController();
+  const run = (name, params) => runAction({ registry, name, params, bus, ctxFor: (app) => host.ctxFor(app, c.signal) });
+  const off = await run('phone__sound', { on: false });
+  const muted = registry.get('phone').state().sound === false;
+  const on = await run('phone__sound', { on: true });
+  const where = await run('phone__where', {});
+  const names = registry.tools().map((t) => t.name).filter((n) => n.startsWith('phone__') || n.startsWith('look__'));
+  window.murmur.home();
+  return { ok: off.ok && muted && on.ok && where.ok, names };
+});
+check('the agent reaches the shell settings as tools (phone__*, look__*)', native.ok && native.names.includes('phone__noLook') && native.names.includes('phone__stop') && native.names.some((n) => n.startsWith('look__')), native.names.join(' '));
 
-// Demo controls: three taps on the day
+// Demo controls: three taps on the day (build-look's panel)
 for (let i = 0; i < 3; i++) await page.locator('#day').click();
-check('three taps on the day open the demo controls', /Demo/.test(await page.locator('#sheet-title').textContent()));
-await page.getByRole('button', { name: 'Reset' }).click(); await page.waitForTimeout(200);
+check('three taps on the day open the demo controls', await page.locator('#demo-panel').isVisible());
+await page.locator('#demo-reset').click(); await page.waitForTimeout(300);
 check('reset empties the hello app', await page.evaluate(() => window.murmur.registry.get('hello').state().draft === ''));
 
 // 400%

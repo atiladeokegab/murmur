@@ -223,3 +223,8 @@ The shell imports `public/agent/index.js` and calls `createAgent(host)` once, af
 pick(i), workflows }`. The shell calls `stop` for the Stop bar, Back during a task and the "stop" verb;
 `undo` for the Done line's Undo; `takeOver` when the person touches an app mid-task; `carryOn` for "carry
 on" and the swipe right.
+
+**Native access.** Every setting the shell owns is a tool. The shell registers an app, `phone`
+(`public/os/phone.js`, left off the board), whose actions are `phone__sound {on}`, `phone__noLook {on}`,
+`phone__where` and `phone__stop`. Your look's rows are the look app's `look__*` tools. The runner presses these
+through ctx like any other app, so the cursor shows them and verify proves them.

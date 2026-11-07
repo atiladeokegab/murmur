@@ -9,7 +9,7 @@ const SEED = [
   { id: 'callsam', title: 'Call Sam', day: 'Friday', time: '19:00', mins: 30, with: 'Sam', invited: [] },
 ];
 
-let root = null, kv = null, osConfirm = null;
+let root = null, kv = null, osConfirm = null, osSay = null;
 let events = [], shown = TODAY, open = null, picking = false, clash = null, adding = false, inviting = false;
 let lastMoved = null, lastAdded = null, lastInvite = null, status = '';
 let draft = { title: '', day: '', time: '', to: '', who: '' };
@@ -81,11 +81,14 @@ function el(tag, props = {}, ...kids) {
   return n;
 }
 const $ = (id) => root.querySelector(`#${id}`);
-function btn(id, text, onClick, cls = 'choice') {
+function btn(id, text, onClick, cls = 'choice', label) {
   const b = el('button', { type: 'button', id, className: cls, textContent: text });
+  if (label) b.setAttribute('aria-label', label);
   b.addEventListener('click', (e) => { personal = !!e?.isTrusted; pressed = b; onClick(); });
   return b;
 }
+// Short visible names so a day never breaks mid-word at 400%; the full name stays in the accessible name.
+const dayBtn = (id, d, tail, onClick) => btn(id, d.slice(0, 3) + tail, onClick, 'choice', d + tail);
 function field(id, label, key, type = 'text') {
   const i = el('input', { id, type, value: draft[key], autocomplete: 'off' });
   i.addEventListener('input', () => { draft[key] = i.value; });
@@ -177,7 +180,7 @@ function render(focusId) {
   const e = ev();
   const days = DAYS.map((d) => {
     const on = d === shown && !adding;
-    const b = btn(`cal-day-${d}`, d === TODAY ? `${d}, today` : d, () => show(d), on ? 'choice yes' : 'choice');
+    const b = dayBtn(`cal-day-${d}`, d, d === TODAY ? ', today' : '', () => show(d));
     b.setAttribute('aria-pressed', String(on));
     return b;
   });
@@ -202,7 +205,7 @@ function render(focusId) {
     } else if (picking) {
       body.push(el('h4', { id: 'cal-pick-h', tabIndex: -1, textContent: `Move ${e.title} to` }), ...field('cal-to-time', 'At', 'to'),
         el('div', { className: 'cal-grid', role: 'group', 'aria-label': 'Days' }, ...DAYS.map((d) => {
-          const b = btn(`cal-to-${d}`, d === e.day ? `${d}, now` : d, () => pickDay(d));
+          const b = dayBtn(`cal-to-${d}`, d, d === e.day ? ', now' : '', () => pickDay(d));
           if (d === e.day) b.setAttribute('aria-current', 'true');
           return b;
         })));
@@ -218,7 +221,9 @@ function render(focusId) {
   }
   root.querySelector('#cal-days').replaceChildren(...days);
   root.querySelector('#cal-body').replaceChildren(...body);
-  $('cal-status').textContent = status;
+  // One voice: inside the OS, a person's result goes to the shell's #say (the one live region); the agent's own run says it via ctx.say.
+  $('cal-status').textContent = osSay ? '' : status;
+  if (osSay && personal && status) osSay(status);
   const target = focusId && $(focusId);
   target?.scrollIntoView?.({ block: focusId === 'cal-pick-h' ? 'start' : 'nearest', behavior: still() ? 'auto' : 'smooth' });
   if (target && personal) target.focus?.({ preventScroll: true });
@@ -244,20 +249,21 @@ const app = {
   name: 'Calendar',
 
   async mount(r, os) {
-    root = r; kv = os.kv; osConfirm = os.confirm || null;
+    root = r; kv = os.kv; osConfirm = os.confirm || null; osSay = os.say || null;
     // Tokens only (os/contract.md §2.1); the buttons reuse the shell's .choice.
     const style = el('style', { textContent: `#app-calendar{padding:0 var(--gutter)}#app-calendar ol{padding:0}
-#app-calendar li{padding:var(--ring) 0}#app-calendar label,#app-calendar h4{display:block;margin-top:var(--gutter)}
-#app-calendar .choices{margin:var(--ring) 0}#app-calendar li .choice{width:100%;justify-items:start;text-align:start}
-#app-calendar .cal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,8rem),1fr));gap:calc(var(--ring) * 2);margin:var(--ring) 0}
+#app-calendar li{padding:0.25rem 0}#app-calendar label,#app-calendar h4{display:block;margin-top:var(--gutter)}
+#app-calendar .choices{margin:0.25rem 0}#app-calendar li .choice{width:100%;justify-items:start;text-align:start}
+#app-calendar .cal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,8rem),1fr));gap:0.5rem;margin:0.25rem 0}
+#app-calendar .choice{border-color:var(--c-slat)}#app-calendar .choice{overflow-wrap:anywhere;hyphens:auto}#app-calendar .choice[aria-pressed="true"]{border-color:var(--c-ink);border-width:calc(var(--bw-talk) * 2);background:var(--c-board-press);color:var(--c-ink);text-decoration:underline;text-decoration-thickness:calc(var(--bw-talk) * 1.5);text-underline-offset:0.3em}#app-calendar .choice.yes{border-color:var(--c-accent)}
 #app-calendar .cal-grid .choice[aria-current]{border-style:dashed}
-#app-calendar h3,#app-calendar h4{font-size:var(--fs-title);margin:var(--gutter) 0 var(--ring)}
+#app-calendar h3,#app-calendar h4{font-size:var(--fs-title);margin:var(--gutter) 0 0.25rem}
 #app-calendar label,#app-calendar p{font-size:var(--fs-sheet)}#cal-status:empty{margin:0}
-#app-calendar mark.changed{background:var(--c-mark);color:var(--c-on-mark);border-radius:var(--ring);padding:0 var(--ring)}
+#app-calendar mark.changed{background:var(--c-mark);color:var(--c-on-mark);border-radius:var(--r-cell);padding:0 0.25rem}
 .cal-fly{position:fixed;z-index:20;pointer-events:none;padding:var(--pad-tile);border-radius:var(--r-btn);background:var(--c-accent);color:var(--c-on-accent);font-weight:700;font-size:var(--fs-sheet);white-space:nowrap}
 #app-calendar input{box-sizing:border-box;width:100%;padding:0 var(--gutter);min-height:var(--h-link);font:inherit;font-size:var(--fs-sheet);background:var(--c-board);color:var(--c-ink);border:var(--bw-talk) solid var(--c-ink);border-radius:var(--r-btn)}` });
     root.append(style, el('h2', { id: 'calendar-h', textContent: 'Calendar' }),
-      el('p', { id: 'cal-status', role: 'status' }),
+      el('p', { id: 'cal-status' }),
       el('div', { className: 'choices' },
         btn('cal-next', "What's next", () => { const n = nextOf(events); open = n?.id ?? null; adding = picking = inviting = false; clash = null;
           if (n) shown = n.day; status = n ? '' : 'Nothing else this week.'; render(n ? 'cal-ev-h' : 'cal-status'); }),

@@ -197,7 +197,10 @@ li.now { border: 0; }
 /* ---------- talk bar ---------- */
 footer { position: sticky; bottom: 0; z-index: 3; flex: none; container: bar / inline-size; padding: 8px var(--gutter) max(12px, env(safe-area-inset-bottom)); background: var(--c-page); border-top: 1px solid var(--c-slat); }
 footer > * { width: min(100%, var(--w-column)); margin-inline: auto; }
-.say { display: flex; gap: 0.5rem; align-items: baseline; margin-top: 0; margin-bottom: 0.5rem; padding: 0 1rem; min-height: 1.4em; font-size: var(--fs-say); max-height: 5.6em; overflow-y: auto; }
+.say { display: flex; gap: 0.5rem; align-items: baseline; margin-top: 0; margin-bottom: 0.5rem; padding: 0 1rem; font-size: var(--fs-say); line-height: 1.4;
+  block-size: min(2.8em, 14svh); overflow-y: auto; } /* fixed: a longer sentence scrolls in place, the screen above never moves */
+/* Big text: the talk bar keeps to its job, so the screen above it still has room to read and scroll. */
+@container bar (max-width: 22em) { .talk .hint { display: none; } .talk { min-height: var(--h-link); padding-block: 0.4rem; } }
 .say #say { min-width: 0; }
 .say .who { color: var(--c-accent); font-weight: 700; white-space: nowrap; }
 .say #say:not(:empty)::before { content: "\201C"; }
@@ -227,12 +230,15 @@ footer > * { width: min(100%, var(--w-column)); margin-inline: auto; }
 /* ---------- ask-first sheet and reader ---------- */
 dialog {
   /* Not modal: the talk bar stays live under it, so you can talk to a note or a reply. The menu goes inert. */
-  position: fixed; inset: auto 0 calc(var(--footer-h, 160px) + var(--gap)) 0; z-index: 5; margin: 0 auto; padding: 0;
-  width: min(100% - 2 * var(--gutter), var(--w-column)); max-height: calc(100svh - var(--footer-h, 160px) - 2 * var(--gap) - max(0px, 96px - (1rem - 16px) * 2)); /* the gap above shrinks as text grows: 96px at 100%, none at 400% */ overflow-y: auto;
+  /* It rises from the talk bar, under the work panel, so the place line, the step and Stop stay in sight. */
+  position: fixed; inset: auto 0 calc(var(--footer-h, 160px) + var(--gutter)) 0; z-index: 5; margin: 0 auto; padding: 0;
+  width: min(100% - 2 * var(--gutter), var(--w-column)); overflow-y: auto;
+  max-height: max(40svh, calc(100svh - var(--footer-h, 160px) - var(--work-h, 0px) - 2 * var(--gutter)),
+    calc(100svh - var(--footer-h, 160px) - 2 * var(--gap) - clamp(0px, (32px - 1rem) * 100, 100svh))); /* from 200% text: the whole space above the bar */
   scrollbar-width: thin; scrollbar-color: var(--c-quiet) transparent;
   border: var(--bw-talk) solid var(--c-accent); border-radius: var(--r-sheet); background: var(--c-sheet); color: var(--c-ink);
 }
-body:has(dialog[open]) main { opacity: var(--o-behind); filter: grayscale(1); } /* grey, not tan: dimmed amber reads as muddy on the light page */
+body:has(dialog[open]) :is(#board-view, #apps) { opacity: var(--o-behind); filter: grayscale(1); } /* grey, not tan: dimmed amber reads as muddy on the light page */
 dialog::backdrop { background: var(--c-scrim); }
 .sheet { display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem; font-variant-numeric: normal; }
 .sheet::after { content: ""; position: sticky; bottom: 0; flex: none; height: 1.25rem; margin-bottom: -1.25rem; background: linear-gradient(transparent, var(--c-sheet)); pointer-events: none; } /* the scroll hint: sits in the padding at the end, fades the cut row while there is more */
@@ -340,31 +346,52 @@ dialog { container: sheet / inline-size; }
   position: fixed; left: 0; top: 0; z-index: 20; pointer-events: none; box-sizing: border-box;
   width: var(--w); height: var(--h); transform: translate(var(--x), var(--y));
   border: var(--ring) solid var(--c-focus); border-radius: var(--r-btn);
-  transition: transform var(--t-glide) ease-out, width var(--t-glide) ease-out, height var(--t-glide) ease-out;
+  transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), width 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 280ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 160ms ease-out; /* shortcut: literal until design's motion tokens land */
 }
 .agent-cursor[hidden] { display: none; }
-@media (prefers-reduced-motion: reduce) { .agent-cursor { transition: none; } }
+.agent-cursor[data-press] { animation: press 180ms ease-out; }
+@keyframes press { 40% { scale: 0.92; } }
+@media (prefers-reduced-motion: reduce) {
+  /* No glide: the ring fades out where it was and in where it lands. */
+  .agent-cursor { transition: opacity 120ms linear; }
+  .agent-cursor[data-press] { animation: none; }
+}
 
 /* ---------- the work panel: where you are, the step now, Stop, the Done line (os/shell.js) ---------- */
-.work { padding: clamp(10px, 2.4vh, 20px) var(--gutter) 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.work { position: sticky; top: 0; z-index: 2; background: var(--c-page); padding: clamp(10px, 2.4vh, 20px) var(--gutter) 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .work .place { margin: 0; font-size: var(--fs-place); color: var(--c-quiet); }
 .work .step { margin: 0; font: 700 var(--fs-step)/1.05 var(--f-read); color: var(--c-accent); }
+.slot-a { min-block-size: calc(2 * 1.05 * var(--fs-step)); display: grid; align-content: start; }
+.slot-b { min-block-size: var(--h-stop); display: grid; }
+.slot[hidden] { display: none; }
+.work .step, .done-line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.work .step[hidden], .done-line[hidden] { display: none; }
 .stop {
   all: unset; box-sizing: border-box; cursor: pointer; display: grid; place-items: center; width: 100%; min-height: var(--h-stop);
   border: var(--bw-now) solid var(--c-ink); border-radius: var(--r-btn); background: var(--c-ink); color: var(--c-page);
   font: 700 var(--fs-sheet-h)/1 var(--f-read);
 }
 .stop:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-in); } /* full width: ring inside, never past the gutter */
+.done[hidden] { display: none; }
 .done { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 1.125rem; border: var(--bw-now) solid var(--c-accent); border-radius: var(--r-now); }
 .done-line { margin: 0; font: 700 var(--fs-title)/1.2 var(--f-read); }
 .done .undo { width: 100%; min-width: 0; min-height: var(--h-btn); font-size: var(--fs-sheet); }
 .done-ms { margin: 0; font: 500 var(--fs-hint)/1.2 var(--f-read); color: var(--c-quiet); }
-.work .ticks, .work .lines { padding: 0; display: flex; flex-direction: column; gap: 0.25rem; font-size: var(--fs-why); }
-.work .ticks li::before { content: "\2713\00A0"; color: var(--c-accent); }
-.work .ticks li.no::before { content: "\2717\00A0"; }
+.work .ticks { margin: 0; padding: 0; list-style: none; display: flex; gap: 0.4rem; block-size: 1.4em; overflow: hidden; font: 700 var(--fs-why)/1.4 var(--f-read); }
+.work .ticks:empty { visibility: hidden; } /* the row keeps its height before the first tick */
+.work .ticks li::before { content: "\2713"; color: var(--c-accent); }
+.work .ticks li.no::before { content: "\2717"; color: var(--c-ink); }
+.work .slot-a[hidden] + .ticks { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  /* A tick draws in on the frame its earcon plays. */
+  .work .ticks li { transition: scale 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 160ms ease-out; }
+  @starting-style { .work .ticks li { scale: 0.2; opacity: 0; } }
+}
+.work .lines { margin: 0; list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; font-size: var(--fs-why); }
 .work .lines li { color: var(--c-quiet); }
 .work .lines li:last-child { color: var(--c-ink); }
-.work .lines:empty, .work .ticks:empty { display: none; }
+.work .lines:empty { display: none; }
 .top { display: flex; }
 .top .day { cursor: default; }
 
@@ -404,4 +431,17 @@ dialog { container: sheet / inline-size; }
 @container board (max-width: 15em) {
   .work, #apps { --fs-step: 1rem; --fs-place: 0.75rem; --fs-title: 0.875rem; --fs-sheet: 0.75rem; --fs-why: 0.625rem; --fs-h1: 1rem; --fs-sheet-h: 1rem; padding-inline: 6px; }
   .app-btn.primary, .done .undo { min-height: 64px; }
+}
+
+/* ---------- motion: the sheet rises, apps arrive, all on transform and opacity (no layout, no CLS) ---------- */
+/* shortcut: literal durations until design-murmur's motion tokens land */
+@media (prefers-reduced-motion: no-preference) {
+  dialog[open] { transition: translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 140ms ease-out; }
+  @starting-style { dialog[open] { translate: 0 2.5rem; opacity: 0; } }
+  .app:not([hidden]), #board-view:not([hidden]) { transition: translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease-out; }
+  @starting-style { .app:not([hidden]), #board-view:not([hidden]) { translate: 0 0.75rem; opacity: 0.4; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog[open], .app:not([hidden]) { transition: opacity 120ms linear; }
+  @starting-style { dialog[open], .app:not([hidden]) { opacity: 0.4; } }
 }
