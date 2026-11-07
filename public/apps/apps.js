@@ -8,5 +8,6 @@ export default [
   'shop',
   'transit',
   'travel',
+  'places',
   'bank',
 ];

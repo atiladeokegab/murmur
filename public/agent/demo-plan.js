@@ -150,6 +150,8 @@ function plan(said, apps, context, dry) {
     if (/^(?:you speak|murmur speaks?|speak (?:to me )?again|talk to me again)$/i.test(t)) return look(['whoSpeaks'], { who: 'murmur' });
     if (/^(?:just do it|do things? (?:for me|without asking)|stop asking)(?: from now on)?$/i.test(t)) return look(['howMuch'], { mode: 'just' });
     if (/^(?:ask me(?: first)?(?: before you do things)?|always ask)$/i.test(t)) return look(['howMuch'], { mode: 'ask' });
+    if (/^(?:give me |i want |use )?(?:longer|detailed|more detailed|long) answers$|^(?:tell me|say) more (?:every time|from now on)$/i.test(t)) return look(['answers'], { length: 'detailed' });
+    if (/^(?:keep it short|(?:give me |i want |use )?(?:short|shorter|brief) answers|be brief)$/i.test(t)) return look(['answers'], { length: 'short' });
     if (/^teach me(?: (?:from now on|how to do things|instead))?$/i.test(t)) return look(['howMuch'], { mode: 'teach' });
     if (/^(?:stop|pause|turn off) learning$|^don'?t learn\b/i.test(t)) return look(['learning'], { on: false });
     if (/^(?:start|resume|turn on) learning(?: again)?$/i.test(t)) return look(['learning'], { on: true });
@@ -225,6 +227,17 @@ function plan(said, apps, context, dry) {
   if (/^read (?:me )?(?:my |the )?basket$/i.test(t) || /^what'?s in (?:my |the )?basket$/i.test(t)) return task([step('shop', ['readBasket', 'basket', 'read'])]);
   if (/^(?:pay|check ?out)$/i.test(t)) return task([step('shop', ['pay', 'checkout'])]);
   if (/^(?:track|where'?s) my order$/i.test(t)) return task([step('shop', ['track'])]);
+
+  // Places (read-only). "Directions to" stays Transit's while Transit is on the phone.
+  if (apps.some((a) => a.id === 'places')) {
+    const at = (names, said) => task([step('places', names, said ? { place: clean(said.trim()) } : {})]);
+    if ((m = t.match(/^how far(?: away)? is\s+(.+?)(?:\s+from here)?$/i))) return at(['howFar'], m[1]);
+    if ((m = t.match(/^(?:what'?s |what is |tell me )?(?:the )?(?:route|way|walking route)\s+to\s+(.+)$/i)) ||
+        ((m = t.match(/^directions\s+to\s+(.+)$/i)) && !apps.some((a) => a.id === 'transit'))) return at(['route'], m[1]);
+    if (/^(?:what'?s|what is|anything) (?:nearby|near (?:me|here)|around here)$/i.test(t)) return at(['nearby']);
+    if ((m = t.match(/^is\s+(.+?)\s+open(?: now| today)?$/i)) || (m = t.match(/^when (?:does|do)\s+(.+?)\s+(?:open|close)$/i)) ||
+        (m = t.match(/^(?:what are )?(?:the )?opening (?:hours|times) (?:for|of|at)\s+(.+)$/i))) return at(['hours'], m[1]);
+  }
 
   // Transit
   if ((m = t.match(/\bnext bus(?:\s+to\s+(?:the\s+)?([a-z' ]+?))?(?:,|\s+and\b|$)/i)) || /^bus to work$/i.test(t)) {
