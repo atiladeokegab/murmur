@@ -13,7 +13,8 @@ export function reduce(s, name, e = {}) {
     case 'step:start': return { ...s, step: e.label || s.step, n: e.n, of: e.of };
     case 'step:verified': return { ...s, ticks: [...s.ticks, { label: s.step, ok: true }] };
     case 'step:failed': return { ...s, step: e.reason, ticks: [...s.ticks, { label: s.step, ok: false }] };
-    case 'say': return s.on ? { ...s, lines: [...s.lines, e.text] } : s;
+    case 'say': // a line outside any task ends the last task's panel: no stale ticks under a new answer
+      return s.on ? { ...s, lines: [...s.lines, e.text] } : s.done && !e.task ? { ...IDLE, place: s.place } : s;
     case 'place': return { ...s, place: placeLine(e) };
     case 'task:done': return { ...s, on: false, ok: !!e.ok, step: e.line || (e.ok ? 'Done.' : e.reason || 'Stopped.'),
       done: { line: e.line || (e.ok ? 'Done.' : e.reason || 'Stopped.'), undo: e.undo || null } };
