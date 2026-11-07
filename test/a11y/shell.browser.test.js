@@ -110,3 +110,26 @@ test('Back dismisses a confirmation as No and leaves the app unchanged', async (
     assert.equal(await page.locator('#sheet[open]').count(), 0);
   } finally { await page.close(); }
 });
+
+test('a read-only task keeps the previous change available through its Undo button', async () => {
+  const page = await shellPage();
+  try {
+    const until = await page.evaluate(async () => {
+      await murmur.agent.runner.run({ utterance: 'write', steps: [
+        { tool: 'hello__write', app: 'hello', action: 'write', params: { text: 'Lunch on Tuesday.' } },
+      ] });
+      return murmur.bus.log.filter((e) => e.name === 'task:done').at(-1).undo.until;
+    });
+    assert.ok(await page.locator('#undo').isVisible());
+    const nextUntil = await page.evaluate(async () => {
+      await murmur.agent.runner.run({ utterance: 'open Mum', steps: [
+        { tool: 'messages__openChat', app: 'messages', action: 'openChat', params: { id: 'mum' } },
+      ] });
+      return murmur.bus.log.filter((e) => e.name === 'task:done').at(-1).undo?.until;
+    });
+    assert.equal(nextUntil, until, 'the original expiry is preserved');
+    assert.ok(await page.locator('#undo').isVisible());
+    await page.locator('#undo').click();
+    await page.waitForFunction(() => murmur.registry.get('hello').state().draft === '');
+  } finally { await page.close(); }
+});
