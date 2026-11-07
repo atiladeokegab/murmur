@@ -5,7 +5,7 @@ const MAX = 200 * 1024;
 
 // The phone as markup: scripts dropped, typed values copied into attributes so typing shows on the laptop.
 export function frameOf(doc) {
-  const live = doc.body, copy = live.cloneNode(true);
+  const live = doc.body, copy = live.cloneNode(true), win0 = doc.defaultView;
   const from = live.querySelectorAll('input, textarea, select'), to = copy.querySelectorAll('input, textarea, select');
   from.forEach((el, i) => {
     const c = to[i];
@@ -14,6 +14,9 @@ export function frameOf(doc) {
     else if (el.type === 'checkbox' || el.type === 'radio') c.toggleAttribute('checked', el.checked);
     else if (el.type !== 'password') c.setAttribute('value', el.value);
   });
+  // Only what is on screen: a hidden or inactive app (a Writer draft) never leaves the phone, markup or value.
+  const all = live.querySelectorAll('*'), mine = copy.querySelectorAll('*');
+  all.forEach((el, i) => { if (el.checkVisibility ? !el.checkVisibility() && win0.getComputedStyle(el).display !== 'contents' : el.closest('[hidden]')) mine[i].remove(); });
   copy.querySelectorAll('script, .agent-cursor').forEach((s) => s.remove()); // the laptop draws the ring from cx, cy
   copy.querySelectorAll('input[type=password]').forEach((el) => el.removeAttribute('value'));
   for (const el of copy.querySelectorAll('*')) for (const a of [...el.attributes]) {

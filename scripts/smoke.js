@@ -32,6 +32,20 @@ async function browserBoot() {
     await page.goto(`${base}/?quiet`);
     await page.waitForSelector('html[data-ready="true"]', { timeout: 10000 }).catch(() => errors.push('never ready'));
     assert.deepEqual(errors, [], 'the shell boots in a browser with no page errors');
+    // Mirror privacy: a hidden (or display:none) Writer draft never appears in a frame; what is on screen does.
+    const leak = await page.evaluate(async () => {
+      const { frameOf } = await import('/os/mirror.js');
+      const pane = Object.assign(document.createElement('section'), { id: 'app-writer-test', hidden: true });
+      const off = Object.assign(document.createElement('div'), { style: 'display:none' });
+      const a = document.createElement('textarea'), b = document.createElement('div');
+      a.value = 'SECRET-DRAFT-1'; b.contentEditable = 'true'; b.textContent = 'SECRET-DRAFT-2';
+      pane.append(a); off.append(b);
+      const shown = Object.assign(document.createElement('p'), { textContent: 'VISIBLE-LINE' });
+      document.body.append(pane, off, shown);
+      const f = frameOf(document); pane.remove(); off.remove(); shown.remove();
+      return { leaked: /SECRET-DRAFT/.test(f.html), shown: f.html.includes('VISIBLE-LINE') };
+    });
+    assert.deepEqual(leak, { leaked: false, shown: true }, 'a hidden draft never leaves the phone in a mirror frame');
     console.log('smoke: browser boot ok');
   } finally { await browser.close(); }
 }
