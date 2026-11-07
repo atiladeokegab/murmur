@@ -27,7 +27,7 @@ body.inside[data-link="on"] #link::before { background: var(--c-ink); }
 .inside section > ol { list-style: none; margin: 0; padding: 0 .9rem; overflow-y: auto; flex: 1; scrollbar-width: thin; scrollbar-color: var(--c-slat) transparent; }
 .inside section > ol > li { padding: .7rem 0; border-bottom: 1px solid var(--c-slat); }
 .inside section > ol > li:last-child { border-bottom: 0; }
-.inside li.old { opacity: .32; }
+.inside li.old, .inside li.old * { color: var(--c-quiet); } /* dim by colour, not opacity: --c-quiet is 8.5:1 on the board */
 .inside li.old .heard, .inside li.old .read { font-size: var(--fs-hint); }
 .inside p { margin: 0; }
 .inside p + p { margin-top: .2rem; }
@@ -63,9 +63,14 @@ body.inside[data-link="on"] #link::before { background: var(--c-ink); }
 /* Below laptop width the page scrolls as one column instead. */
 @media (max-width: 1100px) {
   body.inside { height: auto; overflow: visible; }
-  .inside header { grid-template-columns: 1fr; }
+  .inside header { grid-template-columns: minmax(0, 1fr); }
+  .inside h1 { font-size: min(var(--fs-now-title), 17vw); }
   .inside #tally { grid-column: 1; grid-row: auto; justify-self: start; flex-wrap: wrap; }
-  .inside main { grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+  .inside main { grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); }
+  body.inside { padding: 1rem min(2rem, 4vw); }
+  .inside #tally div { min-width: 0; flex: 1 1 6rem; }
+  .inside #tally dt { white-space: normal; text-align: center; }
+  .inside #tally dd { min-width: 0; }
   .inside section { max-height: 70vh; }
 }
 
@@ -75,7 +80,7 @@ body.inside[data-link="on"] #link::before { background: var(--c-ink); }
   .inside li.done .tick path { stroke-dasharray: 16; animation: draw 380ms cubic-bezier(.3,.7,.2,1) both; }
   .inside .spin { animation: turn .8s linear infinite; }
   .inside .flip { animation: flip 460ms cubic-bezier(.3,.7,.2,1) backwards; }
-  .inside li.old { transition: opacity 600ms ease; }
+  .inside li.old { transition: color 600ms ease; }
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
   @keyframes settle { from { background: var(--c-board-press); } }
   @keyframes draw { from { stroke-dashoffset: 16; } to { stroke-dashoffset: 0; } }

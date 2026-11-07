@@ -32,9 +32,14 @@ export function createTravel() {
   const sel = () => s.results.find((f) => f.id === s.selected);
   // The flight a hold means: the one named ("book the 9:40"), else the one open. Thrown words are spoken.
   const target = (st, p) => {
-    const f = (p.flight && pickOf(p.flight, st.results)) || st.results.find((x) => x.id === st.selected);
+    const list = () => `There's the ${st.results.map((x) => x.time).join(', the ')}.`;
+    const named = p.flight && st.results.length ? pickOf(p.flight, st.results) : null;
+    if (named) return named;
+    // A time that isn't on the list ("the 11:00") never falls back to the open flight; "it" still means the open one.
+    if (named === undefined && /\d/.test(p.flight)) throw new Error(`The ${p.flight.replace(/^the /i, '')} isn't on the list. ${list()}`);
+    const f = st.results.find((x) => x.id === st.selected);
     if (f) return f;
-    throw new Error(st.results.length ? `Which flight? There's the ${st.results.map((x) => x.time).join(', the ')}.` : 'Find the flights first.');
+    throw new Error(st.results.length ? `Which flight? ${list()}` : 'Find the flights first.');
   };
 
   // Hold is a pay gate (spec §3.7): a person's own tap asks through os.confirm (fingerprint included);

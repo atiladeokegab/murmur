@@ -76,6 +76,10 @@ test('travel: "book the 9:40" picks and holds in one step; "hold it" with nothin
   assert.equal(none.ok, false); assert.equal(none.reason, 'Find the flights first.'); assert.equal(asked.length, 0);
   await run('travel__findFlights', { to: 'Lisbon', day: 'Friday' });
   assert.match((await run('travel__hold', { flight: 'it' })).reason, /^Which flight\? There's the 06:55, the 09:40, the 14:20\.$/);
+  await run('travel__pick', { flight: 'the 9:40' });
+  const off = await run('travel__hold', { flight: 'the 11:00' });
+  assert.equal(off.reason, "The 11:00 isn't on the list. There's the 06:55, the 09:40, the 14:20.", 'not a silent 9:40');
+  assert.equal(app.state().held, null); assert.equal(asked.length, 0);
   assert.ok((await run('travel__hold', { flight: 'the 9:40' })).ok);
   assert.equal(app.state().held.id, 'TA311');
   assert.match(asked[0].readback, /^Tagus Air, Friday at nine forty from Heathrow/);
