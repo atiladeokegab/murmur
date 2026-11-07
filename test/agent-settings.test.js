@@ -36,7 +36,7 @@ const SETTINGS = [
   ['Speak slower', { rate: 1 }],
   ['Let my screen reader speak', { speaker: 'reader' }],
   ['Murmur speaks', { speaker: 'murmur' }],
-  ['Just do it', { agency: 'do' }],
+  ['Just do it', { agency: 'just' }],
   ['Teach me', { agency: 'teach' }],
   ['Ask me first', { agency: 'ask' }],
   ['Stop learning', { learning: false }],

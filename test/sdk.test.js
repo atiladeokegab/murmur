@@ -53,7 +53,10 @@ test('registry: refuses a malformed app, and tools are generated from what apps 
   const names = tools.map((t) => t.name);
   for (const b of ['open_app', 'read_screen', 'where', 'say', 'ask', 'save_workflow', 'run_workflow', 'explain']) assert.ok(names.includes(b), b);
   assert.ok(names.includes('hello__write') && names.includes('hello__send'));
-  assert.deepEqual(tools.find((t) => t.name === 'open_app').parameters.properties.app.enum, appIds);
+  const enumIds = tools.find((t) => t.name === 'open_app').parameters.properties.app.enum;
+  assert.deepEqual(enumIds, r.list().map((a) => a.id));
+  assert.deepEqual(enumIds, appIds.filter((id) => r.get(id)), 'every app that loaded, in board order');
+  assert.ok(enumIds.includes('hello'));
   assert.match(tools.find((t) => t.name === 'hello__send').description, /asked first: send/);
   assert.equal(r.resolve('hello__delete'), null, 'an action nobody declared does not exist');
   assert.equal(r.resolve('hello__write__x'), null);
@@ -209,4 +212,11 @@ test('review fixes: no typing into a read-only box, no prototype keys through va
   app.actions.write.run = realRun;
   assert.deepEqual([r.ok, r.stopped], [false, true]);
   assert.ok(!bus.log.some((e) => e.name === 'step:verified'));
+});
+
+test('loadApps: an app that fails to load is skipped and the rest still register', async () => {
+  const r = createRegistry();
+  const err = console.error; console.error = () => {};
+  try { await loadApps(r, ['hello', 'no-such-app']); } finally { console.error = err; }
+  assert.deepEqual(r.list().map((a) => a.id), ['hello']);
 });
