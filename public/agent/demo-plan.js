@@ -115,6 +115,42 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:run|start|do)\s+(.+)$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'run_workflow', params: { name: m[1] } }]);
   if (/what do you (know|remember) about me/i.test(t)) return task([{ tool: 'recall', params: {} }]);
 
+  // The OS's own verbs
+  if (/^(?:what are |list |say )?(?:my |the )?(?:tiles|routines|workflows)$/i.test(t) || /^what (?:tiles|routines) do i have$/i.test(t)) return task([{ tool: 'list_workflows', params: {} }]);
+  if ((m = t.match(/^(?:remove|delete|forget)\s+(?:the\s+|my\s+)?(.+?)(?:\s+(?:tile|routine|workflow))?$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'remove_workflow', params: { name: m[1] } }]);
+  if (/^(?:go )?(?:home|back to (?:the )?(?:board|home))$|^(?:show|open) (?:the )?(?:board|home)$/i.test(t)) return task([{ tool: 'go_home', params: {} }]);
+  if ((m = t.match(/^(?:turn |switch )?(?:the )?(?:sounds?|haptics|vibrations?|sounds? and (?:haptics|vibrations?))\s+(on|off)$/i)) ||
+      (m = t.match(/^(?:turn|switch)\s+(on|off)\s+(?:the )?(?:sounds?|haptics|vibrations?)/i))) return task([{ tool: 'sound', params: { on: m[1].toLowerCase() === 'on' } }]);
+  if (/^(?:mute|be quiet with the sounds|no (?:more )?sounds)$/i.test(t)) return task([{ tool: 'sound', params: { on: false } }]);
+  if (/^undo (?:the )?last (?:thing|change|step)$/i.test(t)) return task([{ tool: 'undo', params: {} }]);
+
+  // Your look: every setting is a step on its visible row.
+  if (apps.some((a) => a.id === 'look')) {
+    const look = (names, slots) => task([step('look', names, slots)]);
+    if ((m = t.match(/^(?:set|make)\s+(?:the\s+)?text(?:\s+size)?\s+(?:to\s+)?(\d{3})\s*(?:%|percent)?$/i))) return look(['setText'], { percent: Number(m[1]) });
+    // Anchored, so content ("text Sam I'm speeding up", "tell Mum to turn off the light") never changes a setting.
+    const TXT = '(?:make |turn |set )?(?:the |my )?(?:text|writing|font|letters|words)(?: size)?';
+    const VOX = '(?:make |set )?(?:the |your )?(?:voice|speech|talking)';
+    if (new RegExp(`^${TXT} (?:bigger|larger|up)$|^(?:bigger|larger) text$|^zoom in$`, 'i').test(t)) return look(['textBigger']);
+    if (new RegExp(`^${TXT} (?:smaller|down)$|^smaller text$|^zoom out$`, 'i').test(t)) return look(['textSmaller']);
+    if (new RegExp(`^${VOX} (?:faster|quicker)$|^(?:speak|talk) (?:faster|quicker|more quickly)$|^speed up$`, 'i').test(t)) return look(['voiceFaster']);
+    if (new RegExp(`^${VOX} slower$|^(?:speak|talk) (?:slower|more slowly)$|^slow down$`, 'i').test(t)) return look(['voiceSlower']);
+    if ((m = t.match(/^(?:(?:switch|change|make|use|set|turn|go)(?:\s+(?:it|everything|the|screen|phone|colou?rs?|theme|to|into))*\s+)?(yellow on black|yellow|high contrast|dark|light|white|black)(?:\s+(?:mode|theme|colou?rs?))?$/i)) &&
+        (/^(?:switch|change|make|use|set|turn|go)\b/i.test(t) || /\s(?:mode|theme|colou?rs?)$|^yellow on black$|^high contrast$/i.test(t))) {
+      const c = m[1].toLowerCase(), colours = /yellow|contrast/.test(c) ? 'yellow' : /light|white/.test(c) ? 'light' : 'dark';
+      return look(['colours'], { colours });
+    }
+    if (/^(?:let |use |switch to )?(?:my |the )?(?:screen ?reader|talkback)(?: speak| talk)?$/i.test(t)) return look(['whoSpeaks'], { who: 'reader' });
+    if (/^(?:you speak|murmur speaks?|speak (?:to me )?again|talk to me again)$/i.test(t)) return look(['whoSpeaks'], { who: 'murmur' });
+    if (/^(?:just do it|do things? (?:for me|without asking)|stop asking)(?: from now on)?$/i.test(t)) return look(['howMuch'], { mode: 'just' });
+    if (/^(?:ask me(?: first)?(?: before you do things)?|always ask)$/i.test(t)) return look(['howMuch'], { mode: 'ask' });
+    if (/^teach me(?: (?:from now on|how to do things|instead))?$/i.test(t)) return look(['howMuch'], { mode: 'teach' });
+    if (/^(?:stop|pause|turn off) learning$|^don'?t learn\b/i.test(t)) return look(['learning'], { on: false });
+    if (/^(?:start|resume|turn on) learning(?: again)?$/i.test(t)) return look(['learning'], { on: true });
+    if (/^forget (?:that|it|the first thing)$/i.test(t)) return look(['forget']);
+    if (/^(?:open |show )?(?:my |your )?(?:look|settings)$/i.test(t)) return task([{ tool: 'open_app', params: { app: 'look' } }]);
+  }
+
   // Messages. "Draft" stops at the draft; "text", "message", "tell" go on to the send gate.
   const msg = (who, text, send) => {
     const steps = [step('messages', ['openChat', 'open'], { who: name(who) })];
