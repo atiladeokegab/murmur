@@ -57,6 +57,9 @@
   --h-talk: 88px;
   --h-btn: 96px;
   --h-link: 64px;
+  --h-stop: 96px;
+  --fs-step: var(--fs-now-title);
+  --fs-place: var(--fs-now-why);
   --t-glide: 200ms;          /* the agent cursor glide */
   --nl-room: 40svh;         /* no-look: room so the band never hides the pointed tile */
   --fs-race-clock: clamp(3rem, 12vw, 7rem);
@@ -111,7 +114,7 @@ button { font: inherit; color: inherit; }
 main { flex: 1; overflow-y: auto; overscroll-behavior: contain; container: board / inline-size; }
 .column { width: min(100%, var(--w-column)); margin: 0 auto; padding-bottom: 1rem; }
 
-header { padding: clamp(14px, 3.2vh, 28px) var(--gutter) 0.75rem; }
+.top { padding: clamp(14px, 3.2vh, 28px) var(--gutter) 0.75rem; }
 h1 { margin: 0; display: flex; flex-direction: column-reverse; gap: 0.15rem; font-weight: 400; }
 h1 .menu { font: 700 var(--fs-h1)/1.1 var(--f-read); }
 h1 .day { font-size: var(--fs-day); color: var(--c-quiet); }
@@ -252,7 +255,7 @@ dialog::backdrop { background: var(--c-scrim); }
 }
 /* big text (about 250% and up on a phone): Now fills the screen, heading and date drop, one column */
 @container board (max-width: 15em) {
-  header { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); padding: 0; }
+  .top { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); padding: 0; }
   .column { --fs-now-title: 1.25rem; --fs-title: 1rem; --fs-why: 0.75rem; --fs-now-why: 0.75rem; --fs-badge: 0.75rem; --fs-flap: 0.625rem; --fs-time: 0.625rem; }
   ol { padding-top: 6px; }
   .tile, .now .tile { grid-template-columns: 1fr; padding: 0.4rem 0.6rem; gap: 0.25rem; min-height: 0; }
@@ -330,3 +333,63 @@ dialog { container: sheet / inline-size; }
 }
 .agent-cursor[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) { .agent-cursor { transition: none; } }
+
+/* ---------- the work panel: where you are, the step now, Stop, the Done line (os/shell.js) ---------- */
+.work { padding: clamp(10px, 2.4vh, 20px) var(--gutter) 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.work .place { margin: 0; font-size: var(--fs-place); color: var(--c-quiet); }
+.work .step { margin: 0; font: 700 var(--fs-step)/1.05 var(--f-read); color: var(--c-accent); }
+.stop {
+  all: unset; box-sizing: border-box; cursor: pointer; display: grid; place-items: center; width: 100%; min-height: var(--h-stop);
+  border: var(--bw-now) solid var(--c-ink); border-radius: var(--r-btn); background: var(--c-ink); color: var(--c-page);
+  font: 700 var(--fs-sheet-h)/1 var(--f-read);
+}
+.stop:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-off); }
+.done { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+.done-line { margin: 0; flex: 1 1 12rem; font: 700 var(--fs-title)/1.2 var(--f-read); }
+.done .undo { min-height: var(--h-btn); min-width: 8rem; font-size: var(--fs-sheet); }
+.done-ms { margin: 0; flex-basis: 100%; font: 500 var(--fs-hint)/1.2 var(--f-time); color: var(--c-quiet); }
+.work .ticks, .work .lines { padding: 0; display: flex; flex-direction: column; gap: 0.25rem; font-size: var(--fs-why); }
+.work .ticks li::before { content: "\2713\00A0"; color: var(--c-accent); }
+.work .ticks li.no::before { content: "\2717\00A0"; }
+.work .lines li { color: var(--c-quiet); }
+.work .lines li:last-child { color: var(--c-ink); }
+.work .lines:empty, .work .ticks:empty { display: none; }
+.top { display: flex; }
+.top .day { cursor: default; }
+
+/* ---------- the app frame: shared by every app (apps write no colours or sizes) ---------- */
+#apps { padding: 0 var(--gutter) 1rem; }
+.app { display: flex; flex-direction: column; gap: 0.75rem; }
+.app h2, .app-h { margin: 0.5rem 0 0; font: 700 var(--fs-h1)/1.1 var(--f-read); }
+.app-h3 { margin: 0.5rem 0 0; font-size: var(--fs-why); font-weight: 600; color: var(--c-quiet); }
+.app-btn {
+  all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; justify-content: center; gap: 0.15rem;
+  width: 100%; min-height: var(--h-link); padding: 0.5rem 1rem; border: var(--bw-talk) solid var(--c-slat); border-radius: var(--r-btn);
+  background: var(--c-board); color: var(--c-ink); font-size: var(--fs-title); font-weight: 600;
+}
+.app-btn:hover { background: var(--c-board-hover); }
+.app-btn:focus-visible { outline: var(--ring) solid var(--c-focus); outline-offset: var(--ring-off); }
+.app-btn.primary { min-height: var(--h-btn); background: var(--c-accent); color: var(--c-on-accent); border-color: var(--c-accent); align-items: center; }
+.app-btn.quiet { background: none; border-color: transparent; font-weight: 400; text-decoration: underline; text-underline-offset: 0.25em; }
+.app-btn:disabled { opacity: 0.6; cursor: default; }
+.app-list, .app-chat, .app-sentences, .app-days { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.app-title { font-size: var(--fs-title); font-weight: 700; }
+.app-why, .app-place { margin: 0; font-size: var(--fs-why); font-weight: 400; color: var(--c-quiet); }
+.app-chat li { padding: 0.5rem 0.75rem; border-radius: var(--r-btn); background: var(--c-board); font-size: var(--fs-sheet); }
+.app-chat li.me { border: 1px solid var(--c-slat); background: none; }
+.app-who { display: block; font-size: var(--fs-hint); color: var(--c-accent); font-weight: 700; }
+.app-sentences li { padding: 0.25rem 0.5rem; font-size: var(--fs-sheet); border-radius: var(--r-cell); }
+.app-sentences li.is-current { background: var(--c-mark); color: var(--c-on-mark); }
+.app-changed, mark.changed { background: none; color: inherit; font-weight: 700; text-decoration: underline 3px; text-underline-offset: 0.2em; }
+.app-label { font-size: var(--fs-why); font-weight: 600; }
+.app-field {
+  width: 100%; min-height: 4.5em; padding: 0.75rem; font: inherit; font-size: var(--fs-sheet);
+  background: var(--c-board); color: var(--c-ink); border: var(--bw-talk) solid var(--c-ink); border-radius: var(--r-btn);
+}
+.app-done { margin: 0; font-size: var(--fs-sheet); font-weight: 700; color: var(--c-accent); }
+.app-card, .app-body { display: flex; flex-direction: column; gap: 0.5rem; }
+.app-card { padding: 0.75rem; border: 1px solid var(--c-slat); border-radius: var(--r-btn); background: var(--c-board); }
+@container board (max-width: 15em) {
+  .work, #apps { --fs-step: 1rem; --fs-place: 0.75rem; --fs-title: 0.875rem; --fs-sheet: 0.75rem; --fs-why: 0.625rem; --fs-h1: 1rem; --fs-sheet-h: 1rem; padding-inline: 6px; }
+  .app-btn.primary, .done .undo { min-height: 64px; }
+}
