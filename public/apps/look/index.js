@@ -92,7 +92,7 @@ async function save(change, sentence) {
   if (librarian && change.row === 'learning') { try { await librarian.setMemoryPaused(!look.learning); } catch { /* said below either way */ } }
   apply();
   render();
-  await os.say(sentence);
+  if (!byAgent) await os.say(sentence);
 }
 
 function step(key, dir) {
@@ -166,7 +166,9 @@ async function forget() {
 const on = (b, fn) => b.addEventListener('click', () => { pending = pending.then(fn, fn); });
 
 // Every action presses a row's control through ctx, then waits for that row to apply.
-const press = async (ctx, key) => { await ctx.tap(btn[key]); await pending; };
+// The agent's press keeps quiet: its done line says the change once ("Text 150 percent."). A tap by hand still hears it.
+let byAgent = false;
+const press = async (ctx, key) => { byAgent = true; try { await ctx.tap(btn[key]); await pending; } finally { byAgent = false; } };
 // Undo: press the row's own controls until it is back where it was before the action ran (the same door).
 const before = {};
 async function pressTo(ctx, row, value) {
