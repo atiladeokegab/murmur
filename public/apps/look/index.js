@@ -5,7 +5,7 @@ import { loadLook, writeLook, applyLook, PHONE_LIGHT } from '../../look.js';
 
 export const STEPS = {
   size: { label: 'Text', more: 'bigger', less: 'smaller', values: [100, 150, 200, 300, 400], words: (v) => `${v} percent` },
-  rate: { label: 'Voice', more: 'faster', less: 'slower', values: [0.75, 1, 1.15, 1.25, 1.5, 2], words: (v) => (v === 1 ? 'normal speed' : `${v} times`) },
+  rate: { label: 'Voice', more: 'faster', less: 'slower', values: [0.75, 1, 1.15, 1.25, 1.5, 2, 2.5, 3, 4, 5], words: (v) => (v === 1 ? 'normal speed' : `${Math.round(v * 100)} percent`) }, // 1.15 stays: the default
 };
 export const CHOICES = {
   theme: { label: 'Colours', options: { auto: 'Match my phone', dark: 'Dark', light: 'Light', yellow: 'Yellow on black' } },
@@ -198,6 +198,8 @@ function rowLine(row, s) {
   const words = CHOICES[row].options[s[row]];
   return row === 'speaker' ? `${words} speaks.` : `${CHOICES[row].label}: ${words.toLowerCase()}.`;
 }
+// A planner may send a value off the list (350): the nearest step, so a run always ends.
+const near = (vals, x) => vals.reduce((a, b) => (Math.abs(b - x) < Math.abs(a - x) ? b : a));
 const stepper = (key, dir) => undoable(key, {
   describe: `Make the ${key === 'size' ? 'text' : 'voice'} ${STEPS[key][dir]}`,
   doing: `${key === 'size' ? 'Text' : 'Voice'} ${STEPS[key][dir]}`,
@@ -298,11 +300,23 @@ const app = {
       hint: 'Text: bigger and Text: smaller are the first row in Your look.',
       params: { type: 'object', properties: { percent: { type: 'integer', enum: STEPS.size.values } }, required: ['percent'] },
       async run(p, ctx) {
-        const v = STEPS.size.values;
-        while (look.size !== p.percent) await press(ctx, v.indexOf(look.size) < v.indexOf(p.percent) ? 'size-more' : 'size-less');
+        const v = STEPS.size.values, to = near(v, p.percent);
+        for (let i = 0; look.size !== to && i < v.length; i++) await press(ctx, v.indexOf(look.size) < v.indexOf(to) ? 'size-more' : 'size-less');
       },
-      verify: (s, p) => s.size === p.percent || 'The text size did not change.',
+      verify: (s, p) => s.size === near(STEPS.size.values, p.percent) || 'The text size did not change.',
     }),
+    setVoice: { ...undoable('rate', {
+      describe: 'Set the voice speed in percent',
+      say: 'speak at 200 percent',   // what a person would say (offer.js)
+      doing: 'Changing the voice speed',
+      hint: 'Voice: faster and Voice: slower are the voice row in Your look.',
+      params: { type: 'object', properties: { percent: { type: 'integer', enum: STEPS.rate.values.map((v) => Math.round(v * 100)) } }, required: ['percent'] },
+      async run(p, ctx) {
+        const v = STEPS.rate.values, to = near(v, p.percent / 100);
+        for (let i = 0; look.rate !== to && i < v.length; i++) await press(ctx, v.indexOf(look.rate) < v.indexOf(to) ? 'rate-more' : 'rate-less');
+      },
+      verify: (s, p) => s.rate === near(STEPS.rate.values, p.percent / 100) || 'The voice speed did not change.',
+    }), done: (s) => `This is ${Math.round(s.rate * 100)} percent.${s.rate === STEPS.rate.values.at(-1) ? ' That is the fastest.' : ''}` },
     voiceFaster: stepper('rate', 'more'),
     voiceSlower: stepper('rate', 'less'),
     colours: { ...chooser('theme', 'colours', 'Change the colours: match my phone, dark, light, or yellow on black', 'Changing the colours', 'Colours is the third row in Your look.'), say: 'use dark mode' },

@@ -89,7 +89,7 @@ test('1 and 3. Look: a change has a longer answer, and Answers is a row the voic
   s.spoken.length = 0;
   await s.agent.hear('Make the text bigger');
   assert.equal(s.spoken.at(-2), 'Text 150 percent.', 'the short line first');
-  assert.match(s.spoken.at(-1), /^You can also change voice, now 1\.15 times; colours, now .*; and answers, now detailed\./, 'Detailed: the longer answer straight away');
+  assert.match(s.spoken.at(-1), /^You can also change voice, now 115 percent; colours, now .*; and answers, now detailed\./, 'Detailed: the longer answer straight away');
   await s.agent.hear('keep it short');
   assert.equal(settings().answers, 'short');
   s.spoken.length = 0;
