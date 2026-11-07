@@ -5,6 +5,7 @@ import { TILES, CONTACTS, SHOP, MUM_MESSAGE, MUM_DRAFT, NOTE, byId } from './lib
 import { daypart, dailyMenu, usualTime, reason, proposals, seedWeek, dayKey } from './lib/menu.js';
 import { buildLink } from './lib/links.js';
 import { sentences, whereAmI, replaceWord } from './lib/notes.js';
+import { createLive, playPcm, stopAudio, audioOut } from './live.js';
 
 const $ = (s) => document.querySelector(s);
 function el(tag, props = {}, ...kids) {
@@ -43,14 +44,29 @@ const entries = async () => ((await datastore.get('mine.episodicLog'))?.entries 
 const logTap = (tile, via) => librarian.logObservation({ type: 'saved-action', data: { tile, via }, text: byId(tile)?.title || tile })
   .catch(() => {});
 
-// ---------- speaking ----------
+// ---------- speaking: Gemini Live, else Gemini TTS, else the browser's voice ----------
 const status = $('#say');
+const caps = await fetch('/health').then((r) => r.json()).catch(() => ({}));
 let speechToken = 0;
+let liveQuiet = false, lastLine = '', live = null, liveBroken = !caps.live;
 function voices() { return speechSynthesis.getVoices().filter((v) => /^en/i.test(v.lang)); }
-export function speak(text, { show = true, onend } = {}) {
+export function speak(text, { show = true, onend, local = false } = {}) {
   if (show) status.textContent = text;
+  if (liveQuiet && !local) { lastLine = text; if (onend) live.afterTurn(onend); return; } // Live says it in its own voice
   const token = ++speechToken;
-  if (!look.voice || !('speechSynthesis' in window) || !text) { onend && setTimeout(() => token === speechToken && onend(), 0); return; }
+  if (!look.voice || !text) { onend && setTimeout(() => token === speechToken && onend(), 0); return; }
+  if (caps.tts && !local) {
+    fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('tts'))))
+      .then((a) => token === speechToken && playPcm(a.audio, a.rate))
+      .then(() => token === speechToken && onend && onend())
+      .catch(() => token === speechToken && browserSpeak(text, token, onend));
+    return;
+  }
+  browserSpeak(text, token, onend);
+}
+function browserSpeak(text, token, onend) {
+  if (!('speechSynthesis' in window)) { onend && onend(); return; }
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'en-GB'; u.rate = look.rate;
@@ -58,7 +74,7 @@ export function speak(text, { show = true, onend } = {}) {
   u.onend = () => token === speechToken && onend && onend();
   speechSynthesis.speak(u);
 }
-function hush() { speechToken++; if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+function hush() { speechToken++; stopAudio(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
 
 // ---------- the menu ----------
 const menuEl = $('#menu');
@@ -178,13 +194,14 @@ function readFrom(i) {
   const all = sentences(reader.text);
   if (i >= all.length) { reader.reading = false; speak('That was the last one.'); return; }
   reader.index = i; reader.reading = true; renderDoc();
-  speak(all[i], { show: false, onend: () => reader.reading && readFrom(i + 1) });
+  speak(all[i], { show: false, local: true, onend: () => reader.reading && readFrom(i + 1) });
 }
 
 // ---------- tiles ----------
 export async function runTile(id, btn, via) {
   const t = byId(id);
   if (!t) return;
+  if (caps.tts && via === 'tile') audioOut(); // unlock audio inside the tap (iOS)
   logTap(id, via);
   const a = t.action;
   try {
@@ -259,6 +276,7 @@ function hold(on) {
   talk.setAttribute('aria-pressed', String(on));
   if (on) {
     hush();
+    if (!liveBroken) { startLive(); return; }
     if (!Rec) { held = false; talk.setAttribute('aria-pressed', 'false'); showTyped(); return; }
     heard = '';
     rec = new Rec(); rec.lang = 'en-GB'; rec.interimResults = true; rec.continuous = true;
@@ -271,8 +289,45 @@ function hold(on) {
     talkLabel.textContent = 'Listening';
     status.textContent = 'Listening';
   } else {
+    if (live && live.connected && !liveBroken) { live.stop(); talkLabel.textContent = 'Heard you'; return; }
     if (rec) rec.stop();
     talkLabel.textContent = 'Heard you';
+  }
+}
+
+// ---------- Gemini Live ----------
+const TOOL_ACTIONS = {
+  open_tile: (a) => ({ type: 'open', tile: a.tile }),
+  read_note: () => (dialog.open && (reader.docEl || reader.area) ? { type: 'read' } : { type: 'open', tile: 'notes' }),
+  where_am_i: () => ({ type: 'where' }), stop_reading: () => ({ type: 'stop' }), carry_on: () => ({ type: 'resume' }),
+  edit_text: (a) => ({ type: 'edit', from: String(a.from || ''), to: String(a.to ?? '') }),
+  draft_message: (a) => ({ type: 'draft', to: 'mum', text: a.text || '' }),
+  send: () => ({ type: 'send' }), cancel: () => ({ type: 'no' }), start_pay: () => ({ type: 'pay', item: 'beans' }),
+};
+async function onTool(name, args) {
+  const make = TOOL_ACTIONS[name];
+  if (!make) return { error: 'unknown tool' };
+  liveQuiet = true; lastLine = '';
+  try { await act({ action: make(args) }); } finally { liveQuiet = false; }
+  return { say: lastLine || 'Done.' };
+}
+async function startLive() {
+  live ||= createLive({
+    onTool,
+    onCaption: (text) => { status.textContent = text; },
+    onHeard: (text) => { talkLabel.textContent = text; },
+    onTurnEnd: () => { if (!held) talkLabel.textContent = 'Hold to talk'; },
+  });
+  talkLabel.textContent = 'Listening';
+  status.textContent = 'Listening';
+  try {
+    await live.start();
+    if (!held) live.stop(); // let go before the line opened
+  } catch (e) {
+    console.warn('Live unavailable, using the browser voice', e.message);
+    liveBroken = true;
+    // Same hold, simpler ears: switch to the browser's speech recognition at once.
+    if (held) { held = false; hold(true); } else { talk.setAttribute('aria-pressed', 'false'); talkLabel.textContent = 'Hold to talk'; }
   }
 }
 talk.addEventListener('pointerdown', (e) => { e.preventDefault(); hold(true); });
@@ -299,7 +354,7 @@ export function act({ say = '', action } = {}) {
   const inDoc = dialog.open && (reader.docEl || reader.area);
   switch (a.type) {
     case 'open': return byId(a.tile) ? runTile(a.tile, null, 'talk') : speak(say);
-    case 'draft': return openDraft(a.text);
+    case 'draft': return openDraft(a.text || undefined);
     case 'pay': return openPay();
     case 'yes': case 'send': return sheet && sheet.yes ? sheet.yes() : speak("There's nothing to send right now.");
     case 'no': if (dialog.open) closeSheet(); return speak(say || 'Okay, I left it.');
