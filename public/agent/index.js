@@ -26,12 +26,17 @@ if (globalThis.window) installToken(); // /api/* carries the device token from h
  * @param {(step)=>'ask'|'just'|'teach'} [o.agency]
  * @param {(gate)=>boolean} [o.risky]  send/call need the fingerprint too (screen just locked, earphone out)
  */
+export const ACK = 'On it.';
+export const ACK_MS = 250;
+
 export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, fingerprint = async () => false,
   agency = () => 'ask', risky = () => false, clock = { now: () => Date.now() }, sleep, plan = planUtterance, planOpts = {},
-  speak = async () => {}, onGate = () => {}, onChoose = () => {} }) {
+  speak: rawSpeak = async () => {}, onGate = () => {}, onChoose = () => {}, ackMs = ACK_MS }) {
   const appsList = () => (Array.isArray(registry) ? registry : typeof registry?.list === 'function' ? registry.list() : Object.values(registry || {}));
   const app = (id) => (typeof registry?.get === 'function' ? registry.get(id) : appsList().find((a) => a.id === id));
-  let lastSaid = '';
+  let lastSaid = '', acking = null;
+  // Whatever is said next waits for the short ack to finish, so two lines never talk over each other.
+  const speak = async (text, signal) => { const a = acking; acking = null; if (a) await a; return rawSpeak(text, signal); };
   const say = (text) => { if (!text) return Promise.resolve(); lastSaid = text; bus.emit('say', { text }); return Promise.resolve(speak(text)).catch(() => {}); };
   const describeStep = (s) => {
     const x = s.app && app(s.app)?.actions?.[s.action];
@@ -181,8 +186,10 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     }
     offer = null;
 
-    const context = { app: current(), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [] };
-    const p = await plan(rest, describeRegistry(appsList()), context, planOpts);
+    // The first sound within 300 ms of the last word: the shell's heard earcon, then "On it." if the plan is slow.
+    const ackT = ackMs >= 0 ? setTimeout(() => { bus.emit('say', { text: ACK }); acking = Promise.resolve(rawSpeak(ACK)).catch(() => {}); }, ackMs) : null;
+    let p;
+    try { p = await planFor(rest); } finally { clearTimeout(ackT); }
     if (!p.steps.length) { say(p.say || p.dropped.find((d) => d.say)?.say || "I can't do that one yet."); return { status: p.kind === 'refuse' ? 'refused' : 'unknown', say: p.say }; }
     const unsaid = p.dropped.find((d) => d.say);
     if (unsaid) say(unsaid.say);
@@ -198,11 +205,41 @@ export function createAgent({ registry, bus, ctxFor, librarian = null, os = {}, 
     if (p.steps.length === 1 && WORD_TOOLS.has(p.steps[0].tool)) { await reservedWord({ kind: p.steps[0].tool }); return { status: 'reserved' }; }
     const wf = p.steps.find((s) => s.tool === 'run_workflow');
     if (wf) return runWorkflow(wf.params.name, rest);
-    return runPlan(rest, p.steps, null, { provider: p.provider, ...(p.model ? { model: p.model } : {}) });
+    return runPlan(rest, p.steps, null, { provider: p.provider, ...(p.model ? { model: p.model } : {}), ...(p.late ? { late: p.late } : {}) });
+  }
+
+  // Speculative planning: the shell calls prefetch(interim) once the words have held still ~400 ms; hear() reuses
+  // the plan when the final words and the open app match. Anything else plans afresh.
+  let early = null;
+  const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
+  async function contextNow() { return { app: current(), workflows: workflows ? (await workflows.all()).map((w) => w.name) : [] }; }
+  async function planFor(text) {
+    const context = await contextNow();
+    if (early && early.text === norm(text) && early.app === context.app) { const e = early; early = null; return e.plan; }
+    early = null;
+    return plan(text, describeRegistry(appsList()), context, planOpts);
+  }
+  async function prefetch(text) {
+    const { rest } = reserved(text, { gate: gates.current, now: clock.now() });
+    if (!rest || gates.current || choice || question || offer || proposal || norm(rest) === early?.text) return;
+    const context = await contextNow();
+    const p = plan(rest, describeRegistry(appsList()), context, planOpts);
+    early = { text: norm(rest), app: context.app, plan: p };
+    p.catch(() => { if (early?.plan === p) early = null; });
+  }
+  /** At boot: wake the server and the model, and list the fixed lines the shell can turn into audio ahead of time. */
+  async function warm() {
+    plan("What's on today", describeRegistry(appsList()), { app: null, workflows: [] }, planOpts).catch(() => {});
+    return fixedLines();
+  }
+  function fixedLines() {
+    const lines = new Set([ACK, 'Done.', 'Not sent.', 'Undone.', 'Nothing to undo.', 'Yes, or no?', 'Check your fingerprint.', 'Stopped.']);
+    for (const a of appsList()) for (const x of Object.values(a.actions || {})) if (x.doing) lines.add(x.doing);
+    return [...lines];
   }
 
   return {
-    hear,
+    hear, prefetch, warm, fixedLines,
     runner, gates, memory, workflows,
     /** The Yes and No buttons on the ask-first sheet. */
     yes: () => gates.yes({ button: true }),

@@ -17,7 +17,7 @@ export function gerund(describe) {
 
 const PAST = { send: 'sent', pay: 'paid', call: 'called', delete: 'deleted' };
 export const UNDO_MS = 8000;
-export const BEAT_MS = 1200;
+export const BEAT_MS = 700; // the lead's bar: never more than 700 ms of silence in a task
 
 /** Wrap the bus so every event of this task carries its id (contract §6). */
 const tagged = (bus, task) => ({ ...bus, emit: (name, p = {}) => bus.emit(name, { task, ...p }), on: bus.on, log: bus.log });
