@@ -238,7 +238,7 @@ function plan(said, apps, context, dry) {
     const cant = /^i can'?t (?:read|see) (?:this|that|it|anything)(?: properly| very well)?[,.]?\s*/i;
     if (cant.test(t) && !t.replace(cant, '')) return look(['textBigger']);
     if (cant.test(t)) t = t.replace(cant, ''); // "I can't read this, make it bigger"
-    if (/^(?:make )?(?:it|everything|things) (?:bigger|larger)$|^(?:bigger|larger) (?:writing|letters|words|font)$/i.test(t)) return look(['textBigger']);
+    if (/^(?:make )?(?:it|everything|things)(?: (?:a lot|a bit|a little|much|even|way))? (?:bigger|larger)$|^(?:bigger|larger) (?:writing|letters|words|font)$/i.test(t)) return look(['textBigger']);
     if ((m = t.match(/^(?:set|make)\s+(?:the\s+)?text(?:\s+size)?\s+(?:to\s+)?(\d{3})\s*(?:%|percent)?$/i))) return look(['setText'], { percent: Number(m[1]) });
     // Anchored, so content ("text Sam I'm speeding up", "tell Mum to turn off the light") never changes a setting.
     const TXT = '(?:make |turn |set )?(?:the |my )?(?:text|writing|font|letters|words)(?: size)?';
@@ -321,6 +321,22 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(new RegExp(`^(?:add|put)\\s+(.+?)\\s+(?:on|for)\\s+${DAY}(?:\\s+at\\s+(.+))?$`, 'i')))) {
     const at = m[3] && clock(m[3]);
     return task([step('calendar', ['add', 'create'], { event: cap(m[1].replace(/^an?\s+/i, '')), day: cap(m[2]), ...(at ? { time: at } : {}) })]);
+  }
+  // "Remind me to take my medicine at eight tonight": a plain calendar add, today unless tomorrow is said
+  if ((m = t.match(/^remind me (?:to\s+)?(.+?)\s+at\s+(.+?)(?:\s+(tonight|this evening|today|tomorrow(?: morning| evening| night)?))?$/i)) && clock(m[2])) {
+    let at = clock(m[2]);
+    if (/night|evening/i.test(m[3] || '') && /am$/.test(at) && parseInt(at, 10) < 12) at = at.replace(/am$/, 'pm');
+    return task([step('calendar', ['add', 'create'], { event: cap(m[1]), day: /tomorrow/i.test(m[3] || '') ? 'Tomorrow' : 'Today', ...(at ? { time: at } : {}) })]);
+  }
+  if ((m = t.match(/^(?:do i have|have i got|is there) anything (?:on )?(tomorrow|today)?\s*(?:this )?(?:morning|afternoon|evening|tonight|later)?$/i))) {
+    return task([step('calendar', ['whatsOn', 'today', 'list', 'read'], { day: cap(m[1] || 'today') })]);
+  }
+  if (/^(?:i (?:want|would like|'d like) to |let me |can i )?(?:write|jot|note)(?: down)? something(?: down)?$|^(?:start|make|take|write|begin) a (?:new )?note$|^new note$/i.test(t)) {
+    return { ...task([{ tool: 'open_app', params: { app: 'writer' } }, { tool: 'ask', params: { question: 'What should I write?' } }]), asked: 'write' };
+  }
+  if (/^who(?:'?s| is| was)? (?:my )?(?:latest|last|newest|new) message (?:from|by)$|^who (?:has |just )?(?:messaged|texted|written to|wrote to) me$/i.test(t)) return task([step('messages', ['read'], { new: true })]);
+  if (/^(?:(?:hello|hi|hey)(?: there| murmur)?[,.!]?\s*)?(?:is (?:any ?one|somebody|someone) there)?$|^(?:i can'?t see the screen[,.]?\s*)?how (?:do i|can i) (?:start|begin|use (?:this|it|murmur))$|^i can'?t see the screen$/i.test(t) && t) {
+    return task([{ tool: 'say', params: { text: "Hello, I'm Murmur. Just say what you'd like, like \"read my messages\" or \"what's on today\". Say \"what can I do\" to hear more, and \"stop\" any time." } }]);
   }
 
   if (/^read (?:me )?(?:the )?next (?:one|message)$/i.test(t)) return task([step('messages', ['read'], { new: true })]);

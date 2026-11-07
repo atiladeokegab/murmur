@@ -77,7 +77,7 @@ test('end to end: "get a price", "the station" quotes the taxi', async () => {
 
 // build-calendar's blind probe: wrong plans pre-empt Gemini, so they go first.
 test('a bare "start" or "do" is not a routine unless one has that name', () => {
-  for (const u of ['start over', 'do I have anything this afternoon']) assert.match(tool(u), /^I can't do that one yet/, u);
+  for (const u of ['start over']) assert.match(tool(u), /^I can't do that one yet/, u);
   assert.notEqual(tool('start a new note').split('{')[0], 'run_workflow');
   assert.equal(tool('run my morning', null, { workflows: ['My morning'] }), 'run_workflow{"name":"my morning"}');
 });
@@ -115,10 +115,20 @@ test('"open a chapter" with Writer open asks for the number, and "two" opens it'
 
 test('blind 60 regressions: no claim on a verb alone, another app\'s noun, or a guessed optional slot', () => {
   for (const open of [null, 'messages', 'writer', 'look', 'mine']) {
-    for (const u of ['Delete that message', 'Delete the last word', 'Who is my latest message from', 'New paragraph']) {
+    for (const u of ['Delete that message', 'Delete the last word', 'New paragraph']) {
       assert.match(tool(u, open), /^I can't do that one yet/, `${u} (${open})`);
     }
     assert.equal(tool('Use a dark background', open), 'look__colours{"colours":"dark"}', open);
   }
   assert.equal(tool('delete the morning tile'), 'mine__delete{"name":"morning"}', 'its own noun still plans it');
+});
+
+test('blind 60 misses, round 2: remind, this afternoon, a new note, a lot bigger, hello, who wrote', () => {
+  assert.equal(tool('Remind me to take my medicine at eight tonight'), 'calendar__add{"title":"Take my medicine","day":"Today","time":"8pm"}');
+  assert.equal(tool('Do I have anything this afternoon'), 'calendar__whatsOn{"day":"Today"}');
+  for (const u of ['I want to write something', 'Start a new note']) assert.equal(tool(u), 'open_app{"app":"writer"} > ask{"question":"What should I write?"}', u);
+  assert.equal(tool('Buy milk', 'writer', { asked: 'write' }), 'writer__dictate{"text":"Buy milk"}');
+  assert.equal(tool('Make it a lot bigger'), 'look__textBigger{}');
+  for (const u of ['Hello', 'Hi, is anyone there', "I can't see the screen, how do I start"]) assert.match(tool(u), /^say\{"text":"Hello, I'm Murmur\./, u);
+  assert.equal(tool('Who is my latest message from'), 'messages__read{"new":true}');
 });
