@@ -45,6 +45,9 @@ export function createCtx({ app, root, bus, kv, cursor, ask, choose = async () =
     async type(el, text) {
       live(); own(el, 'text box');
       if (!('value' in el)) throw new Error(`${app.name}: that isn't a text box.`);
+      if (el.disabled || el.readOnly || el.getAttribute('aria-disabled') === 'true' || el.getAttribute('aria-readonly') === 'true') {
+        throw new Error(`${app.name}: ${controlName(el) || 'that box'} can't be changed right now.`);
+      }
       if (el.focus) el.focus({ preventScroll: true });
       el.value = String(text);
       el.dispatchEvent(new Event('input', { bubbles: true }));

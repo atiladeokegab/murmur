@@ -38,6 +38,7 @@ export async function runAction({ registry, name, params, bus, ctxFor, n = 1, of
     }
     await r.action.run(v.params, ctx);
     const res = await r.action.verify(r.app.state(), v.params);
+    if (ctx.signal?.aborted) throw Object.assign(new Error('Stopped'), { name: 'AbortError' }); // no tick after Stop
     if (res === true) {
       bus.emit('step:verified', { ...base, ms: Math.round(now() - t0) });
       bus.emit('place', { app: r.app.id, ...r.app.place() });
