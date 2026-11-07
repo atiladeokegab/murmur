@@ -216,6 +216,13 @@ function plan(said, apps, context, dry) {
     return { tool: `${appId}${SEP}${x ? x.name : names[0]}`, params: fill(x, slots) };
   };
   const task = (p) => ({ kind: 'task', plan: p });
+  // Your apps (Spotify, Uber...): an action's own example said word for word, or a reply "on WhatsApp saying ...".
+  const flat = (x) => x.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  for (const a of apps.filter((x) => x.id === 'yourapps')) {
+    if ((m = t.match(/^reply (?:on |to (?:\w+ on )?)(whatsapp|instagram)(?: saying|,|:)?\s+(.+)$/i))) return task([{ tool: `yourapps${SEP}${m[1].toLowerCase()}Reply`, params: { text: body(m[2]) } }]);
+    const x = a.actions.find((y) => y.say && y.name !== 'whatsappReply' && y.name !== 'instagramReply' && flat(y.say) === flat(t));
+    if (x) return task([{ tool: `yourapps${SEP}${x.name}`, params: {} }]);
+  }
 
   if ((m = t.match(/^save (?:that|this|it) as\s+(.+)$/i))) {
     return task([{ tool: 'save_workflow', params: { name: cap(m[1]), slot: /\b(someone|somebody|anyone|a person)\b/i.test(m[1]) } }]);

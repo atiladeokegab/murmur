@@ -12,4 +12,5 @@ export default [
   'weather',
   'clock',
   'bank',
+  'yourapps',
 ];
