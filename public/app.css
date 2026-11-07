@@ -71,7 +71,7 @@
   --r-talk: 48px;
   --r-sheet: 22px;
   --r-btn: 16px;
-  --ring: 3px;
+  --ring: 3px;              /* the focus ring and the agent cursor: 3 px, 2 px off the edge, never wider */
   --ring-off: 2px;
   --bw-now: 2px;
   --bw-talk: 1.5px;
@@ -89,10 +89,10 @@
   /* paper: warm-neutral page, white cards, a dark honey accent that still clears 7:1 on white */
   --c-page: #F5F5F7; --c-board: #FFF; --c-board-hover: #F2F3F5; --c-board-press: #E9EBEF;
   --c-now-top: #FFF; --c-now-bottom: #FFF8EB; --c-slat: #E3E5EA; --c-cell: transparent; --c-cell-line: transparent;
-  --c-accent: #7A4800;      /* 7.6:1 on #FFF, 7.1:1 on the page */
+  --c-accent: #734300;      /* 8.3:1 on #FFF, 7.5:1 on a hovered card (Hermes measured the old #8A4B00 at 6.8:1) */
   --c-on-accent: #FFF; --c-ink: #111318; --c-quiet: #4B5160; /* 7.9:1 on #FFF, 7.2:1 hovered */
-  --c-focus: #7A4800; --c-bar: #FFF; --c-bar-on: #111318; --c-on-bar-on: #FFF;
-  --c-scrim: rgb(17 19 24 / 0.4); --o-behind: 0.4; --c-sheet: #FFF; --c-mark: #7A4800; --c-on-mark: #FFF;
+  --c-focus: #734300; --c-bar: #FFF; --c-bar-on: #111318; --c-on-bar-on: #FFF;
+  --c-scrim: rgb(17 19 24 / 0.4); --o-behind: 0.4; --c-sheet: #FFF; --c-mark: #734300; --c-on-mark: #FFF;
   color-scheme: light;
 }
 
