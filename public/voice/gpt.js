@@ -16,16 +16,19 @@ export async function handleEvent(ev, { onTool, onHeard, onCaption }) {
 }
 
 export function createGpt(hooks) {
-  let pc = null, dc = null, mic = null, audio = null;
+  let pc = null, dc = null, mic = null, audio = null, gen = 0;
   const send = (m) => dc?.readyState === 'open' && dc.send(JSON.stringify(m));
   async function connect() {
+    const my = ++gen, alive = () => { if (my !== gen) throw new Error('gpt closed'); }; // close() during connect wins
     const r = await fetch('/api/openai-session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
     if (!r.ok) throw new Error(`gpt session ${r.status}`);
     const { token } = await r.json();
+    alive();
     pc = new RTCPeerConnection();
     audio = Object.assign(document.createElement('audio'), { autoplay: true });
     pc.ontrack = (e) => { audio.srcObject = e.streams[0]; hooks.onStream?.('out', e.streams[0]); };
     mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    alive();
     pc.addTrack(mic.getTracks()[0]);
     hooks.onStream?.('mic', mic);
     dc = pc.createDataChannel('oai-events');
@@ -35,8 +38,10 @@ export function createGpt(hooks) {
     await pc.setLocalDescription(await pc.createOffer());
     const sdp = await fetch(CALLS, { method: 'POST', body: pc.localDescription.sdp, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/sdp' } });
     if (!sdp.ok) throw new Error(`gpt call ${sdp.status}`);
+    alive();
     await pc.setRemoteDescription({ type: 'answer', sdp: await sdp.text() });
     await opened;
+    alive();
   }
   return {
     get connected() { return dc?.readyState === 'open'; },
@@ -45,7 +50,7 @@ export function createGpt(hooks) {
     say(text) { send({ type: 'response.create', response: { instructions: `Say exactly this, nothing else: ${text}` } }); },
     hush() { send({ type: 'response.cancel' }); send({ type: 'output_audio_buffer.clear' }); },
     mute(on) { if (mic) mic.getTracks()[0].enabled = !on; },
-    close() { mic?.getTracks().forEach((t) => t.stop()); dc?.close(); pc?.close(); pc = dc = mic = null; if (audio) audio.srcObject = null; },
+    close() { gen++; mic?.getTracks().forEach((t) => t.stop()); dc?.close(); pc?.close(); pc = dc = mic = null; if (audio) audio.srcObject = null; },
   };
 }
 
