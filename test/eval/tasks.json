@@ -12,20 +12,20 @@
     {
       "id": "messages-read", "app": "messages", "utterance": "Read the latest message from Mum.",
       "expect": "Mum's chat is open and its latest message has been read; nothing has been sent.",
-      "assertions": ["state('messages').currentChat === 'Mum'", "same(state('messages').lastSent, before('messages').lastSent)"],
-      "speech": { "fromState": ["messages", "lastMessage.text"] }, "requiresVerifiedStep": true
+      "assertions": ["state('messages').currentChat === 'mum'", "state('messages').reading.chat === 'mum'", "state('messages').reading.items.some(text => text === 'Lunch on Tuesday?')", "same(state('messages').lastSent, before('messages').lastSent)"],
+      "speech": { "matches": "Lunch on Tuesday" }, "requiresVerifiedStep": true
     },
     {
       "id": "messages-draft-exact-person", "app": "messages", "utterance": "Draft a message to Samira: I'll be at the library in ten minutes.",
       "expect": "The draft is addressed to Samira, with the exact requested text, and remains unsent.",
-      "assertions": ["state('messages').currentChat === 'Samira'", "state('messages').draft === \"I'll be at the library in ten minutes.\"", "same(state('messages').lastSent, before('messages').lastSent)"],
+      "assertions": ["state('messages').currentChat === 'samira'", "state('messages').draft === \"I'll be at the library in ten minutes.\"", "same(state('messages').lastSent, before('messages').lastSent)"],
       "requiresVerifiedStep": true
     },
     {
       "id": "messages-confirmed-send", "app": "messages", "utterance": "Tell Mum: Can we meet at the library at three?",
       "followups": [{ "when": "gate", "afterMs": 650, "say": "send" }],
       "expect": "The readback names Mum and the exact draft; only the later confirm sends it once.",
-      "assertions": ["state('messages').lastSent.to === 'Mum'", "state('messages').lastSent.text === 'Can we meet at the library at three?'"],
+      "assertions": ["state('messages').lastSent.to === 'mum'", "state('messages').lastSent.text === 'Can we meet at the library at three?'"],
       "gate": { "kind": "send", "accepted": true, "readbackIncludes": ["Mum", "Can we meet at the library at three?"] }, "requiresVerifiedStep": true
     },
     {
@@ -45,6 +45,7 @@
     {
       "id": "ambiguous-recipient", "app": "messages", "utterance": "Message Sam that I'm running late.",
       "gap": "Sam and Samira must ask, never pick", "fixtures": ["Sam and Samira both exist as contacts"],
+      "followups": [{ "when": "question", "pick": null }],
       "expect": "Murmur asks which person and makes no choice, draft or send on the person's behalf.",
       "assertions": ["same(state('messages'), before('messages'))"],
       "speech": { "matches": "Sam[\\s\\S]*Samira|Samira[\\s\\S]*Sam" }, "outcome": "clarification", "noGatedRuns": true
@@ -89,14 +90,14 @@
     {
       "id": "writer-dictation-correction", "app": "writer", "utterance": "Write in Writer: The parcel is behind the blue door. No, the green door.",
       "expect": "Heard is shown before drafting. The correction changes blue to green without changing the meaning.",
-      "assertions": ["state('writer').text === 'The parcel is behind the green door.'"],
+      "assertions": ["state('writer').chapter === before('writer').chapter", "state('writer').chapters[state('writer').chapter].text === before('writer').chapters[before('writer').chapter].text + ' The parcel is behind the green door.'"],
       "heardBeforeEdit": true, "requiresVerifiedStep": true
     },
     {
       "id": "writer-edit-one-word", "app": "writer", "utterance": "In Writer, change blue to green.",
       "setup": ["Write in Writer: The parcel is behind the blue door."],
       "expect": "The one requested word changes, with all other text preserved.",
-      "assertions": ["state('writer').text === 'The parcel is behind the green door.'"],
+      "assertions": ["state('writer').chapter === before('writer').chapter", "state('writer').chapters[state('writer').chapter].text === before('writer').chapters[before('writer').chapter].text.replace('blue', 'green')"],
       "requiresVerifiedStep": true
     },
     {
@@ -105,7 +106,7 @@
       "setup": ["Write in Writer: The parcel is here. The train leaves soon. Bring the blue bag."],
       "followups": [{ "when": "reading", "say": "stop" }, { "say": "where am I" }, { "say": "carry on" }],
       "expect": "Where am I reports the real saved sentence position; carry on resumes from there without losing the page.",
-      "assertions": ["state('writer').text === 'The parcel is here. The train leaves soon. Bring the blue bag.'", "state('writer').sentence >= 1"],
+      "assertions": ["state('writer').chapter === state('writer').chapters.length - 1", "state('writer').readFrom !== null", "state('writer').sentence >= state('writer').readFrom", "same(state('writer').chapters[state('writer').chapter].text, before('writer').chapters[before('writer').chapter].text)"],
       "positionMatchesState": true, "requiresVerifiedStep": true
     },
     {
@@ -119,13 +120,13 @@
       "id": "writer-undo", "app": "writer", "utterance": "In Writer, change blue to green.",
       "setup": ["Write in Writer: Bring the blue bag."], "followups": [{ "when": "done", "say": "undo" }],
       "expect": "Undo within eight seconds restores the exact original page.",
-      "assertions": ["state('writer').text === 'Bring the blue bag.'"], "requiresVerifiedStep": true
+      "assertions": ["state('writer').chapter === before('writer').chapter", "state('writer').chapters[state('writer').chapter].text === before('writer').chapters[before('writer').chapter].text"], "requiresVerifiedStep": true
     },
     {
       "id": "shop-pay-usual", "app": "shop", "utterance": "Order my usual from Demo Café.",
       "followups": [{ "when": "gate", "afterMs": 650, "say": "pay", "fingerprint": true }],
       "expect": "The basket, shop and exact price are read from app state before payment; a successful platform check creates one order.",
-      "assertions": ["state('shop').orders.length === before('shop').orders.length + 1", "state('shop').orders.at(-1).shop === 'Demo Café'"],
+      "assertions": ["state('shop').orders.length === before('shop').orders.length + 1", "state('shop').orders.at(-1).shop === 'demo-cafe'", "state('shop').orders.at(-1).total === 320"],
       "gate": { "kind": "pay", "accepted": true, "readbackFromState": true, "fingerprint": true }, "requiresVerifiedStep": true
     },
     {
@@ -139,7 +140,7 @@
     {
       "id": "shop-check-basket", "app": "shop", "utterance": "Add one flat white at Demo Café, then read my basket without paying.",
       "expect": "The requested item and quantity are in the basket and read back; no order exists.",
-      "assertions": ["state('shop').basket.some(item => item.name === 'Flat white' && item.quantity === 1)", "same(state('shop').orders, before('shop').orders)"],
+      "assertions": ["state('shop').basket.some(item => item.shop === 'demo-cafe' && item.id === 'flat-white' && item.qty === 1)", "same(state('shop').orders, before('shop').orders)"],
       "speech": { "matches": "flat white" }, "noGatedRuns": true, "requiresVerifiedStep": true
     },
     {
@@ -154,7 +155,7 @@
       "gap": "workflow with a slot", "setup": ["Draft a message to Mum: I'm at the library."],
       "followups": [{ "when": "done", "say": "run message someone" }, { "when": "question", "say": "Samira" }],
       "expect": "The saved recipient is a slot. The run asks who and uses the answer, without reusing Mum or sending the draft.",
-      "assertions": ["state('mine').workflows.some(flow => flow.name === 'message someone' && flow.slots.length > 0)", "state('messages').currentChat === 'Samira'", "state('messages').draft === \"I'm at the library.\"", "same(state('messages').lastSent, before('messages').lastSent)"],
+      "assertions": ["state('mine').workflows.some(flow => flow.name === 'message someone' && flow.steps.some(step => step.params.who === '$who'))", "state('messages').currentChat === 'samira'", "state('messages').draft === \"I'm at the library.\"", "same(state('messages').lastSent, before('messages').lastSent)"],
       "asksBeforeSlotUse": true, "noGatedRuns": true, "requiresVerifiedStep": true
     },
     {
@@ -169,32 +170,32 @@
       "id": "calendar-read-day", "app": "calendar", "utterance": "What's on my calendar today, and what's next?",
       "expect": "The real seeded appointments and next event are spoken in time order, without changing events.",
       "assertions": ["same(state('calendar').events, before('calendar').events)"],
-      "speech": { "fromState": ["calendar", "nextEvent.title"] }, "requiresVerifiedStep": true
+      "speech": { "matches": "Today: Choir at six, then Quiz with Sam at half past seven" }, "requiresVerifiedStep": true
     },
     {
       "id": "calendar-move-lunch", "app": "calendar", "utterance": "Move lunch with Mum to 12 November at noon.",
       "fixtures": ["One future event titled Lunch with Mum exists"],
       "expect": "The existing lunch moves to the requested date and time, without duplicates or sending an invitation.",
-      "assertions": ["state('calendar').events.filter(event => event.title === 'Lunch with Mum').length === 1", "state('calendar').events.find(event => event.title === 'Lunch with Mum').date === '2026-11-12'", "state('calendar').events.find(event => event.title === 'Lunch with Mum').time === '12:00'", "same(state('calendar').invitations, before('calendar').invitations)"],
+      "assertions": ["state('calendar').events.filter(event => event.title === 'Lunch with Mum').length === 1", "state('calendar').events.find(event => event.id === 'lunch-mum').day === 'Thursday'", "state('calendar').events.find(event => event.id === 'lunch-mum').time === '12:00'", "same(state('calendar').events.find(event => event.id === 'lunch-mum').invited, before('calendar').events.find(event => event.id === 'lunch-mum').invited)"],
       "noGatedRuns": true, "requiresVerifiedStep": true
     },
     {
       "id": "calendar-invite-confirmed", "app": "calendar", "utterance": "Invite Samira to lunch with Mum.",
       "followups": [{ "when": "gate", "afterMs": 650, "say": "yes" }],
       "expect": "The sheet reads the real event and recipient; the later yes sends exactly that invitation.",
-      "assertions": ["state('calendar').invitations.length === before('calendar').invitations.length + 1", "state('calendar').invitations.at(-1).to === 'Samira'"],
+      "assertions": ["state('calendar').events.find(event => event.id === 'lunch-mum').invited.includes('samira')", "state('calendar').events.find(event => event.id === 'lunch-mum').invited.length === before('calendar').events.find(event => event.id === 'lunch-mum').invited.length + 1"],
       "gate": { "kind": "send", "accepted": true, "readbackIncludes": ["Samira", "lunch"] }, "requiresVerifiedStep": true
     },
     {
       "id": "transit-next-bus", "app": "transit", "utterance": "What's the next bus to the library, and where do I board?",
       "expect": "Transit selects the library route and reads its real departure and boarding stop.",
-      "assertions": ["state('transit').destination === 'Library'", "state('transit').nextBus.departure.length > 0", "state('transit').nextBus.stop.length > 0"],
-      "speech": { "fromState": ["transit", "nextBus.stop"] }, "noGatedRuns": true, "requiresVerifiedStep": true
+      "assertions": ["state('transit').view === 'next'", "state('transit').shown.route === '25'", "state('transit').routes['25'].stopName === 'the stop by the library'", "state('transit').routes['25'].nextInMin >= 0"],
+      "speech": { "matches": "25 leaves .* from the stop by the library" }, "noGatedRuns": true, "requiresVerifiedStep": true
     },
     {
       "id": "travel-find-no-purchase", "app": "travel", "utterance": "Find flights to Lisbon for next Friday. Don't book anything.",
       "expect": "Travel returns the requested destination with honestly labelled offline demo results; nothing is held or paid.",
-      "assertions": ["state('travel').results.length > 0", "state('travel').results.every(flight => flight.destination === 'Lisbon')", "same(state('travel').holds, before('travel').holds)"],
+      "assertions": ["state('travel').query.to === 'Lisbon'", "state('travel').results.length === 3", "state('travel').held === null"],
       "noGatedRuns": true, "requiresVerifiedStep": true
     },
     {
@@ -214,7 +215,7 @@
       "id": "typed-reduced-motion", "app": "writer", "utterance": "Write in Writer: Bring the spare charger.",
       "gap": "typed path end to end and reduced motion", "input": "typed", "reducedMotion": true,
       "expect": "Type instead submits the textarea through the real planner and runner; the correct note and status appear without cursor/highlight/flap animation.",
-      "assertions": ["state('writer').text === 'Bring the spare charger.'"],
+      "assertions": ["state('writer').chapter === before('writer').chapter", "state('writer').chapters[state('writer').chapter].text === before('writer').chapters[before('writer').chapter].text + ' Bring the spare charger.'"],
       "inputPath": "typed", "reducedMotionHonoured": true, "requiresVerifiedStep": true
     }
   ]
