@@ -180,3 +180,13 @@ test('the lead 15:50: "what can I do" is everything, "who am I" describes the pe
   await agent.hear('What can I do?');
   assert.deepEqual(spoken, ['Everything. Just tell me what you need.'], 'the reserved word too, never a list');
 });
+
+test('"open <app>" opens every app on the phone, by id and by name, before any app\'s own words', async () => {
+  const all = [...apps];
+  try { all.push((await import('../public/apps/bank/index.js')).default); } catch { /* Bank not merged */ }
+  const r = describeRegistry(all);
+  for (const a of r) for (const said of [`open ${a.id}`, `Open ${a.name}`, `open the ${a.name.replace(/^(?:the|your)\s+/i, '')} app`]) {
+    const p = demoPlan(said, r, { app: null, workflows: [] });
+    assert.deepEqual(p.plan, [{ tool: 'open_app', params: { app: a.id } }], `${said} -> ${JSON.stringify(p)}`);
+  }
+});
