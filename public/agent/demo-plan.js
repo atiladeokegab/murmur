@@ -70,7 +70,9 @@ export function refusal(utterance, apps, context = {}) {
   const raw = String(utterance || '').trim();
   if (!NO_GO.test(raw) && !(BANK_WORDS.test(raw) && !apps.some((a) => a.id === 'bank'))) return null;
   // The words of a message are content, not the request: "Tell Sam: I switched from Monzo" sends. Credentials never go.
-  const p = CREDENTIALS.test(raw) ? null : plan(raw, apps, context, false);
+  // ... unless a second request rides behind it: "Text Sam then check my Barclays balance". A quote ("Tell Sam: ...") is all content.
+  const later = !/^[^:]{1,40}:/.test(raw) && raw.split(/,?\s+(?:and then|then|after that)\s+/i).slice(1).some((x) => NO_GO.test(x));
+  const p = CREDENTIALS.test(raw) || later ? null : plan(raw, apps, context, false);
   return p?.kind === 'task' && p.plan.every((x) => x.tool.startsWith(`messages${SEP}`)) ? null : REFUSE;
 }
 const GARBLED = /\.\.\.|…|\[(?:unintelligible|inaudible|noise)\]|^\W*$/i;

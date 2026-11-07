@@ -151,7 +151,8 @@ test('a real bank is refused before the model is asked, even when the model woul
     const ok = demoPlan('Tell Sam: I switched from Monzo', apps);
     assert.equal(ok.kind, 'task'); assert.match(ok.plan[1].params.text, /Monzo/);
     assert.equal(demoPlan('Text Sam my sort code is 12 34 56', apps).kind, 'refuse', 'credentials never go, even in a message');
-    assert.ok(!demoPlan('Text Sam then check my Barclays balance', apps).plan.some((x) => !x.tool.startsWith('messages__')), 'at most words sent, never a bank step');
+    assert.equal(demoPlan('Text Sam then check my Barclays balance', apps).kind, 'refuse', 'a bank request behind a message is a request, not content');
+    assert.equal(demoPlan('Tell Sam: I moved to Monzo, then went home', apps).kind, 'task', 'a quote is all content');
   } finally { globalThis.fetch = realFetch; }
 });
 
