@@ -2,19 +2,18 @@
 // Back, Your look and the demo controls. The agent (public/agent/) plugs in through `host`; see os/contract.md §9.
 import { createBus, createRegistry, createCursor, createCtx, appKv, loadApps, mountApp } from '../sdk/index.js';
 import appIds from '../apps/apps.js';
-import { earcon } from './earcons.js';
 import { IDLE, reduce, placeLine } from './panel.js';
 import { recogniser } from '../lib/gestures.js';
-import { SIZES, THEMES, readLook, writeLook, applyLook } from '../look.js';
+import { readLook, writeLook, applyLook } from '../look.js';
 import { createToolkit } from '../vendor/toolkit/index.js';
 import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
 import * as passkey from '../passkey.js';
 import { byHand } from './gate.js';
 import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
-// Optional modules from other branches: boot never depends on them. The token must wrap fetch before any /api call.
-const optional = (p) => import(p).catch(() => null);
-(await optional('../agent/token.js'))?.installToken();
+import { installToken } from '../agent/token.js';
+import { play, buzz } from '../sound/index.js';
+installToken(); // wraps fetch before any /api call
 
 const $ = (s) => document.querySelector(s);
 function el(tag, props = {}, ...kids) {
@@ -33,14 +32,14 @@ const saveLook = () => store.set('look', look);
 let agent = null; // declared before the mount loop: Mine reads os.workflows during seed()
 
 // ---------- the Librarian: Your look lives in the ability profile; Stop learning pauses memory ----------
-let librarian;
+let librarian, datastore;
 try {
-  ({ librarian } = createToolkit({ kv: browserKV() }));
+  ({ librarian, datastore } = createToolkit({ kv: browserKV() }));
   if (!(await librarian.getProfile())?.fields?.needs?.length) await writeLook(librarian, look);
   Object.assign(look, await readLook(librarian));
 } catch (e) {
   console.warn('Librarian unavailable; Your look stays on this phone only', e.name);
-  librarian = null;
+  librarian = null; datastore = null;
 }
 if (!/[?&]zoom=/.test(location.search)) applyLook(look);
 saveLook();
@@ -89,8 +88,8 @@ function browserSpeak(text, done) {
   speechSynthesis.speak(u);
   setTimeout(done, 1500 + (text.length * 90) / look.rate); // shortcut: some Android voices never fire onend; settle by length
 }
-const sound = () => !QUIET;
-const ding = (name) => earcon(name, { sound: sound() });
+// Earcons and haptics from public/sound/. The buzz always; the sound only when nothing else is talking.
+const ding = (name) => { buzz(name); if (!QUIET) play(name); };
 
 // ---------- Back: every open, sheet and task is a history entry ----------
 const stack = [];
@@ -121,21 +120,25 @@ function onBack(kind) {
 
 // ---------- the apps ----------
 const bus = createBus();
-(await optional('../inside/forward.js'))?.forward(bus); // /inside watches the bus
 const registry = createRegistry();
 await loadApps(registry, appIds);
 const port = browserKV({ prefix: 'murmur' });
 const appsEl = $('#apps');
 const roots = {}, kvs = {};
-let current = null, agentPress = false;
+let current = null, agentTapping = false, granted = false;
+// Only the agent's own synthetic click on the control it is pressing carries its yes, and only to the first
+// os.confirm after it. A person's real click (even during the cursor's glide) revokes it, so it asks them.
+// shortcut: a person's handler that awaits before os.confirm while the agent clicks could take the grant; apps call confirm first
+appsEl.addEventListener('click', (e) => { granted = !e.isTrusted && agentTapping; }, true);
 let personal = new AbortController(); // the person's own reads (Read it); Stop aborts it too
 const cursor = createCursor(document);
+const take = () => { const g = granted; granted = false; return g; };
 const osFor = (app, kv) => ({
     kv, bus, registry,
     say: (t) => speak(t, personal.signal),
     // A person's own tap on a gated control is their yes (Pay still checks the fingerprint); when the agent
     // pressed it, the runner already asked.
-    confirm: ({ gate, readback }) => (agentPress ? Promise.resolve(true) : byHand({ app: app.id, gate, readback, bus,
+    confirm: ({ gate, readback }) => (take() ? Promise.resolve(true) : byHand({ app: app.id, gate, readback, bus,
       passkey: { usable: fingerprintUsable, confirm: () => passkey.confirm() },
       sheet: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true) })),
     get workflows() { return agent?.workflows; },
@@ -184,7 +187,7 @@ const nowTime = () => { const d = new Date(); return `${pad(d.getHours())}:${pad
 const flap = (s) => el('span', { className: 'flap' }, [...s].map((c) => el('i', { className: c === ':' ? 'sep' : '', textContent: c })));
 const firstSentence = (t) => (String(t || '').match(/^[^.!?]*[.!?]?/) || [''])[0];
 function tilesNow() {
-  const apps = registry.list();
+  const apps = registry.list().filter((a) => a.id !== 'look'); // Your look is the link under the board
   const lines = apps.map((a) => { try { return a.now?.({ day }) || null; } catch { return null; } });
   const i = Math.max(0, lines.findIndex(Boolean));
   return apps.map((a, k) => ({ app: a, now: k === i, line: lines[k] || { why: firstSentence(a.read()) } }))
@@ -241,6 +244,7 @@ function renderPanel() {
     u.hidden = !p.done.undo;
     if (p.done.undo) u.setAttribute('aria-label', `${p.done.line} Undo ${p.done.undo.label || ''}`.trim());
   }
+  $('#lines').hidden = !p.on; // once done, the ticks are the record; the sentences would repeat them
   $('#lines').replaceChildren(...p.lines.map((t, i) => el('li', {}, el('span', { className: 'sr', textContent: `Sentence ${i + 1} of ${p.lines.length}: ` }), t)));
   $('#ticks').replaceChildren(...p.ticks.map((t) => el('li', { className: t.ok ? 'ok' : 'no' },
     el('span', { className: 'sr', textContent: t.ok ? 'Done: ' : 'Failed: ' }), t.label)));
@@ -254,6 +258,8 @@ bus.on('*', (name, e) => {
   if (name === 'task:done') {
     drop('task');
     ding(e.ok ? 'done' : 'stopped');
+    cursor.hide();
+    if (panel.done?.line) show(panel.done.line); // the strip says where it ended, not the last question
     renderPanel();
     clearTimeout(undoTimer);
     if (e.undo) {
@@ -279,13 +285,15 @@ let opener = null;
 function openSheet(kids, focusEl) {
   if (!dialog.open) opener = document.activeElement;
   sheetBody.replaceChildren(...kids);
-  if (!dialog.open) { dialog.show(); $('main').inert = true; push('sheet'); }
+  if (!dialog.open) { dialog.show(); behind(true); push('sheet'); }
   focusEl.focus();
 }
+// Under the sheet the board and the app go inert and dim; the work panel stays live, so Stop still works.
+const behind = (on) => { for (const n of [$('#board-view'), appsEl]) n.inert = on; };
 function closeSheet() {
   if (!dialog.open) return;
   dialog.close();
-  $('main').inert = false;
+  behind(false);
   drop('sheet');
   (opener?.isConnected ? opener : $('#stop:not([hidden])') || $('#board .tile'))?.focus();
 }
@@ -338,7 +346,7 @@ function sheetConfirm({ gate, readback }) {
       closeSheet(); resolve(v === true);
       return true;
     });
-    speak(`${readback}. ${VERB[gate] || 'Yes'}?`, personal.signal);
+    speak(`${String(readback || '').replace(/[.!?\s]+$/, '')}. ${VERB[gate] || 'Yes'}?`, personal.signal);
   });
 }
 async function fingerprintUsable() { return passkey.hasPasskey() || await passkey.available(); }
@@ -382,7 +390,6 @@ addEventListener('keydown', (e) => {
   if (e.target.closest?.('input, textarea, [contenteditable]')) return;
   if (e.key === ' ' && !e.repeat && !dialog.open) { e.preventDefault(); summon(); }
   if (/^[1-9]$/.test(e.key) && !current && !dialog.open) $(`#board li:nth-child(${e.key}) .tile`)?.click();
-  if (e.key === 'D' && e.shiftKey) openDemo();
 });
 
 let lastUtterance = '';
@@ -452,63 +459,9 @@ $('#nolook-exit').addEventListener('click', () => setNoLook(false));
 // Summon on the board: a tap on empty space (not a tile or a control) opens the mic.
 $('#board-view').addEventListener('click', (e) => { if (!e.target.closest('button, a, input, textarea')) summon(); });
 
-// ---------- Your look ----------
-const RATES = [[0.75, 'slow'], [1, 'normal'], [1.25, 'quick'], [1.5, 'fast']];
-const AGENCY = { ask: 'Ask me', just: 'Just do it', teach: 'Teach me' };
-const SPEAKER = { murmur: 'Murmur', reader: 'My screen reader' };
-async function setLook(change, line) {
-  Object.assign(look, change);
-  try { if (librarian) Object.assign(look, await writeLook(librarian, look)); } catch { /* stays on this phone */ }
-  applyLook(look); saveLook(); applySpeaker();
-  speak(line, personal.signal);
-}
-async function openLook(focusKey) {
-  let paused = false;
-  try { paused = !!(await librarian?.getProfile())?.memoryPaused; } catch { /* no Librarian */ }
-  const btn = (k, text, on, pressed) => {
-    const b = el('button', { className: 'choice', type: 'button', textContent: text });
-    b.dataset.k = k;
-    if (pressed != null) b.setAttribute('aria-pressed', String(pressed));
-    b.addEventListener('click', async () => { await on(); openLook(k); });
-    return b;
-  };
-  const group = (title, ...kids) => el('section', { className: 'group' }, el('h3', { textContent: title }), el('div', { className: 'choices' }, ...kids));
-  const i = SIZES.indexOf(look.size), r = RATES.findIndex(([v]) => v === look.rate);
-  const kids = [
-    el('h2', { id: 'sheet-title', textContent: 'Your look' }),
-    group('Who speaks', ...Object.entries(SPEAKER).map(([k, name]) =>
-      btn(`speaker-${k}`, name, () => setLook({ speaker: k }, k === 'reader' ? "Your screen reader speaks now. I'll stay quiet." : "I'll speak."), look.speaker === k))),
-    group('How much Murmur does', ...Object.entries(AGENCY).map(([k, name]) =>
-      btn(`agency-${k}`, name, () => setLook({ agency: k }, { ask: "I'll say each step and wait a beat before I change anything.", just: "I'll just do it. I still ask before I send, pay or call.", teach: "I'll tell you where each control is and you press it." }[k]), look.agency === k))),
-    group(`Text, now ${look.size}%`,
-      btn('smaller', 'Smaller', () => (i <= 0 ? speak('Text is as small as it goes.') : setLook({ size: SIZES[i - 1] }, `Text: smaller. Now ${SIZES[i - 1]} percent.`))),
-      btn('bigger', 'Bigger', () => (i >= SIZES.length - 1 ? speak('Text is as big as it goes, 400 percent.') : setLook({ size: SIZES[i + 1] }, `Text: bigger. Now ${SIZES[i + 1]} percent.`)))),
-    group('Colours', ...Object.entries(THEMES).map(([t, name]) =>
-      btn(`theme-${t}`, name, () => setLook({ theme: t }, `Colours: ${name.toLowerCase()}.`), look.theme === t))),
-    group(`Voice, ${(RATES[r] || RATES[1])[1]}`,
-      btn('slower', 'Slower', () => (r <= 0 ? speak('That is the slowest.') : setLook({ rate: RATES[r - 1][0] }, `Voice: slower. This is ${RATES[r - 1][1]}.`))),
-      btn('faster', 'Faster', () => (r >= RATES.length - 1 ? speak('That is the fastest.') : setLook({ rate: RATES[r + 1][0] }, `Voice: faster. This is ${RATES[r + 1][1]}.`)))),
-    group('Learning', btn('learn', paused ? 'Start learning again' : 'Stop learning', async () => {
-      try { await librarian?.setMemoryPaused(!paused); } catch { /* no Librarian */ }
-      speak(paused ? "Learning is on. I'll notice what you do most." : "Learning is off. I won't note what you do.");
-    })),
-    group('Without looking', btn('nolook', 'No-look mode', () => { closeSheet(); setNoLook(!look.nolook); }, look.nolook)),
-  ];
-  if (await passkey.available() && !passkey.hasPasskey()) {
-    kids.push(group('Paying', btn('passkey', 'Set up your fingerprint for paying', async () => {
-      try { await passkey.setup(); speak("Fingerprint set. I'll ask for it before I pay."); } catch { speak("That didn't work, so nothing changed."); }
-    })));
-  }
-  const done = el('button', { className: 'choice yes', type: 'button', textContent: 'Done' });
-  done.addEventListener('click', () => closeSheet());
-  kids.push(el('div', { className: 'row' }, done));
-  pending = null;
-  openSheet(kids, (focusKey && sheetBody.querySelector(`[data-k="${focusKey}"]`)) || kids[1].querySelector('button'));
-  if (focusKey) sheetBody.querySelector(`[data-k="${focusKey}"]`)?.focus();
-}
-$('#look-link').addEventListener('click', (e) => { e.preventDefault(); openLook(); });
-
-// ---------- demo controls: three taps on the clock, or Shift+D ----------
+// ---------- Your look is an app (public/apps/look/); the demo panel and first open come from wire.js ----------
+$('#look-link').addEventListener('click', (e) => { e.preventDefault(); open('look'); });
+$('#nolook-link').addEventListener('click', () => setNoLook(true));
 async function resetAll() {
   stopAll();
   for (const a of registry.list()) await a.reset();
@@ -517,28 +470,6 @@ async function resetAll() {
   if (current) home();
   renderBoard(); renderPanel();
 }
-function openDemo() {
-  const b = (text, on) => { const x = el('button', { className: 'choice', type: 'button', textContent: text }); x.addEventListener('click', on); return x; };
-  pending = null;
-  const kids = [
-    el('h2', { id: 'sheet-title', textContent: 'Demo' }),
-    el('div', { className: 'choices' },
-      b('Reset', async () => { closeSheet(); await resetAll(); show('Reset. Day 1.'); }),
-      b('Next morning', async () => { closeSheet(); day++; store.set('day', day); await agent?.nextMorning?.(); renderBoard(); show('Next morning.'); }),
-      b(`Planner: ${look.planner === 'offline' ? 'offline' : 'Gemini'}`, () => {
-        look.planner = look.planner === 'offline' ? 'auto' : 'offline'; saveLook(); closeSheet(); show(`Planner: ${look.planner === 'offline' ? 'offline' : 'Gemini'}.`);
-      }),
-      b('Replay', async () => { closeSheet(); const u = lastUtterance; await resetAll(); if (u) hear(u, 'replay'); })),
-    el('div', { className: 'row' }, b('Close', () => closeSheet())),
-  ];
-  openSheet(kids, kids[1].firstChild);
-}
-let clockTaps = [];
-$('#day').addEventListener('click', () => {
-  const t = performance.now();
-  clockTaps = [...clockTaps.filter((x) => t - x < 1500), t];
-  if (clockTaps.length >= 3) { clockTaps = []; openDemo(); }
-});
 
 // ---------- the agent ----------
 // ctxFor(app, hooks): hooks are the agent's { bus, ask, choose, speak, signal }; an AbortSignal alone also works.
@@ -548,7 +479,7 @@ function ctxFor(app, hooks = {}) {
   const ctx = createCtx({ app, root: roots[app.id], bus, kv: kvs[app.id], cursor, speak,
     ask: (q) => sheetConfirm(q), choose: (q) => sheetChoose(q), ...hooks });
   const tap = ctx.tap;
-  ctx.tap = async (...a) => { agentPress = true; try { await tap(...a); } finally { agentPress = false; } };
+  ctx.tap = async (...a) => { agentTapping = true; try { await tap(...a); } finally { agentTapping = false; } };
   return ctx;
 }
 const host = {
@@ -572,13 +503,20 @@ try {
 }
 
 // ---------- start ----------
-new ResizeObserver(([e]) => document.documentElement.style.setProperty('--footer-h', `${Math.ceil(e.borderBoxSize[0].blockSize)}px`))
-  .observe(document.querySelector('footer'));
+for (const [sel, v] of [['footer', '--footer-h'], ['#work', '--work-h']]) {
+  new ResizeObserver(([e]) => document.documentElement.style.setProperty(v, `${Math.ceil(e.borderBoxSize[0]?.blockSize || 0)}px`))
+    .observe(document.querySelector(sel));
+}
 applySpeaker();
 renderBoard(); renderPanel();
 if (look.nolook) { nl.hidden = false; document.documentElement.classList.add('no-look'); }
-const first = !store.get('welcomed', false);
-show(first ? 'Tap anywhere and tell me what you need.' : '');
-if (first) store.set('welcomed', true);
-window.murmur = { bus, registry, host, agent, install, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, ready: Promise.resolve(true) };
+try {
+  const { wireExtras } = await import('./wire.js');
+  await wireExtras({ bus, registry, speak, settings: look, save: () => { saveLook(); applySpeaker(); }, kv: port, appsEl,
+    librarian, datastore, status, clockEl: $('#day'),
+    board: { reset: resetAll, nextMorning: async () => { day++; store.set('day', day); await agent?.nextMorning?.(); renderBoard(); } },
+    replay: async () => { const u = lastUtterance; await resetAll(); if (u) hear(u, 'replay'); }, stop: stopAll });
+  roots.look = $('#app-look'); kvs.look = appKv('look', port);
+} catch (e) { console.error('Your look and the demo panel did not load', e); }
+window.murmur = { bus, registry, host, agent, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, install, ready: Promise.resolve(true) };
 document.documentElement.dataset.ready = 'true';
