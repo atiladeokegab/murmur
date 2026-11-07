@@ -58,6 +58,7 @@ function apply() {
   const html = root.ownerDocument.documentElement;
   if (html) {
     if (!/[?&]zoom=/.test(globalThis.location?.search || '')) applyLook(look); // ?zoom= is for captures
+    html.dataset.size = String(look.size); // look.css tightens padding above 300%
     html.dataset.speaker = look.speaker;
     html.dataset.agency = look.agency;
   }
