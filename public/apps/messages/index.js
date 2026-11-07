@@ -181,7 +181,7 @@ function chatView(c) {
     text.length ? el('h4', { className: 'app-h3' }, `${who} message, sentence by sentence`) : null,
     text.length ? sentenceList(`${who} message`, text, { current: at, keep: true }) : null,
     el('h4', { className: 'app-h3' }, 'Your reply'),
-    el('label', { for: 'msg-draft', className: 'app-label', style: 'display: block; margin-block: 0.25rem 0.375rem' }, 'Your reply, edit it here'),
+    el('label', { for: 'msg-draft', className: 'sr' }, 'Your reply, edit it here'), // the heading above is the visible label
     box,
     button(M.sent(s) ? 'Sent' : 'Send', { id: 'msg-send', className: 'app-btn primary', onclick: () => { sending = sendAsked(); } }),
     button('Back to your chats', { id: 'msg-back', style: `${PAD}; border-color: var(--c-quiet)`, onclick: () => { s.currentChat = null; save(); render(); } }),
