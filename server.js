@@ -83,13 +83,20 @@ function speakLine(text, o) {
 // A provider that says quota or auth (401, 402, 429) rests a minute, so the phone's own voice starts at once.
 const resting = { elevenlabs: 0, gemini: 0 };
 const rest = (name, e) => { if (/\b(401|402|429)\b/.test(e.message)) resting[name] = Date.now() + 60000; };
+// ElevenLabs Creator allows a few requests at once; a page that asks for 20 lines together got 429s and a minute of the phone voice (7 Nov preview).
+let elevenBusy = 0; const elevenWait = [];
+async function elevenSlot(fn) {
+  while (elevenBusy >= 3) await new Promise((r) => elevenWait.push(r));
+  elevenBusy++;
+  try { return await fn(); } finally { elevenBusy--; elevenWait.shift()?.(); }
+}
 async function synth(text, { warm = false } = {}) {
   const today = new Date().toISOString().slice(0, 10);
   if (today !== elevenDay) { elevenDay = today; elevenChars = 0; }
   // shortcut: the cap is per instance and resets on a restart; a shared counter if Murmur ever runs many instances
   if (ELEVEN && text && Date.now() >= resting.elevenlabs && elevenChars + text.length <= ELEVEN_DAILY_CHARS) {
     elevenChars += text.length;
-    try { return { ...(await eleven.tts(ELEVEN, text)), provider: 'elevenlabs' }; }
+    try { return { ...(await elevenSlot(() => eleven.tts(ELEVEN, text))), provider: 'elevenlabs' }; }
     catch (e) { rest('elevenlabs', e); console.warn(`[tts] elevenlabs failed (${String(e.message).slice(0, 40)})`); }
   }
   // The warm never spends Gemini: its free tier allows 10 TTS requests a day, fewer than the fixed lines.
