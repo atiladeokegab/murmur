@@ -1,3 +1,4 @@
+globalThis.webkitSpeechRecognition ||= function Rec() {}; // the phone can hear: the welcome is the talking one
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBus, createRegistry, createCtx, appKv, mountApp, runAction, loadApps } from '../public/sdk/index.js';
@@ -35,7 +36,7 @@ test('first open says one sentence, only once, and reset re-arms it', async () =
   assert.equal(await firstOpen({ kv, say }), true);
   assert.equal(await firstOpen({ kv, say }), false);
   assert.deepEqual(said, [FIRST_WORDS]);
-  assert.equal(FIRST_WORDS, 'Tap anywhere and speak.');
+  assert.equal(FIRST_WORDS, "Hi, I'm Murmur. I run this phone for you by voice. Tap anywhere and speak. Try saying: read my messages.");
   await rearm({ kv });
   assert.equal(await firstOpen({ kv, say }), true);
 });

@@ -3,7 +3,7 @@
 import { appKv, createCtx, mountApp, runAction } from '../sdk/index.js';
 import look, { settings as lookSettings, onSettings } from '../apps/look/index.js';
 import { createDemo, bindDemo } from './demo/index.js';
-import { firstOpen } from './onboard/index.js';
+import { firstOpen, captionIn } from './onboard/index.js';
 
 const SHARED = ['size', 'theme', 'rate', 'speaker', 'agency'];
 
@@ -59,8 +59,10 @@ export async function wireExtras({ bus, registry, speak, settings, save, kv, app
   const demo = createDemo({ registry, bus, run, say, board, replay, stop, onboard, planner });
   const panel = clockEl ? bindDemo(clockEl, demo, { doc }) : null;
 
-  // First open: one sentence, once. Not awaited, so boot never waits on the voice.
-  firstOpen({ kv: onboard.kv, say }).catch((e) => console.warn('first open', e));
+  // First open: the guided welcome, once. Not awaited, so boot never waits on the voice.
+  // Screen-reader mode needs no first tap: the status region is read without one.
+  firstOpen({ kv: onboard.kv, say, bus, caption: captionIn(status), win: doc?.defaultView,
+    ...(lookSettings().speaker === 'reader' ? { waitTap: false } : {}) }).catch((e) => console.warn('first open', e));
 
   // Inside: shell.js forwards the bus itself; forwarding here too would double every row on /inside.
 
