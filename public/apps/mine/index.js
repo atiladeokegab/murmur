@@ -128,9 +128,9 @@ function render() {
 }
 
 // Delete always asks, a person's own tap too; the shell's confirm says yes at once for the agent's press.
-// shortcut: with no os.confirm (agent test fixtures) only the runner's gate applies; fail closed once every fixture passes confirm.
+// No confirm on the mount, no delete.
 async function remove(w) {
-  if (os?.confirm && !(await os.confirm({ gate: 'delete', readback: app.actions.delete.readback(s, { name: w.name }) }))) return;
+  if (!os?.confirm || !(await os.confirm({ gate: 'delete', readback: app.actions.delete.readback(s, { name: w.name }) }))) return;
   if (os?.workflows?.remove) {
     try { await os.workflows.remove(w.name); } catch { return; } // a store that failed keeps the tile
     return refresh(); // the store is the truth; remove() is false when it was already gone
