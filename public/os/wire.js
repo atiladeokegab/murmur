@@ -64,7 +64,8 @@ export async function wireExtras({ bus, registry, speak, settings, save, kv, app
   firstOpen({ kv: onboard.kv, say, bus, caption: captionIn(status), win: doc?.defaultView,
     ...(lookSettings().speaker === 'reader' ? { waitTap: false } : {}) }).catch((e) => console.warn('first open', e));
 
-  // Inside: shell.js forwards the bus itself; forwarding here too would double every row on /inside.
+  // Inside: only a phone opened with ?room=stage (or #stage) sends its bus to the relay, so judges' phones stay off the projector.
+  import('../inside/forward.js').then((m) => { const room = m.roomFrom(doc?.defaultView?.location || {}); if (room) m.forward(bus, { room }); }).catch(() => { /* no Inside: the phone works the same */ });
 
   return { say, demo, off: () => { offSync(); panel?.off(); } };
 }
