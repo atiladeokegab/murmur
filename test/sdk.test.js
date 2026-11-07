@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBus, createRegistry, validate, createCtx, controlName, appKv, mountApp, loadApps, runAction, EVENTS } from '../public/sdk/index.js';
@@ -18,7 +19,7 @@ async function phone({ answers = [] } = {}) {
   const ask = async (q) => { asked.push(q); return answers.shift() ?? false; };
   for (const app of registry.list()) {
     const kv = appKv(app.id, port);
-    roots[app.id] = await mountApp(app, doc.body, { kv, bus, say: (text) => bus.emit('say', { text }) });
+    roots[app.id] = await mountApp(app, doc.body, { kv, bus, say: (text) => bus.emit('say', { text }), confirm: async () => true });
     await app.seed();
   }
   const controller = new AbortController();
@@ -81,6 +82,11 @@ test('hello mounts with a focusable heading, a labelled box and named controls',
   assert.equal(root.querySelector('h2').getAttribute('aria-level'), '1', 'an open app has a level-1 heading for screen-reader navigation');
   assert.equal(controlName(root.querySelector('#hello-box')), 'Your message to Sam');
   assert.equal(controlName(root.querySelector('#hello-send')), 'Send to Sam');
+  // the house field, whose min-height (4.5em) keeps the box well over 44 px; a bare textarea was 36 px
+  assert.equal(root.querySelector('#hello-box').className, 'app-field');
+  assert.equal(root.querySelector('#hello-send').className, 'app-btn primary', 'the house button, 64 px; a bare one was 29 px');
+  const css = readFileSync(new URL('../public/app.css', import.meta.url), 'utf8');
+  assert.match(css, /\.app-field \{[^}]*min-height: 4\.5em/);
 });
 
 test('a step runs through the cursor and is verified by the app, then says where you are', async () => {

@@ -20,11 +20,14 @@ const app = {
 
   async mount(r, os) {
     root = r; kv = os.kv;
-    box = el('textarea', { id: 'hello-box' });
+    box = el('textarea', { id: 'hello-box', className: 'app-field' });   // the house field: at least 44 px to touch at 400%
     box.addEventListener('input', () => { draft = box.value; });
     sendBtn = el('button', { type: 'button', className: 'app-btn primary', id: 'hello-send', textContent: 'Send to Sam' });
-    sendBtn.addEventListener('click', async () => {   // a person's tap is their own yes; the agent is gated by the runner
+    // Send always asks (contract §7): a person's tap reads back and waits for yes; the agent's press was already asked.
+    // No confirm on the mount, no send.
+    sendBtn.addEventListener('click', async () => {
       if (!draft.trim()) return;
+      if (!(os?.confirm && await os.confirm({ gate: 'send', readback: app.actions.send.readback(app.state()) }))) return;
       sent.push(draft);
       await kv.set('sent', sent);
       render();

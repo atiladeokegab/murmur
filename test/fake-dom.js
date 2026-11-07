@@ -26,6 +26,7 @@ class Node {
   dispatchEvent(e) { for (let x = this; x; x = x.parentNode) for (const fn of x.listeners[e.type] || []) fn(e); return true; }
   click() { if (!this.disabled) this.dispatchEvent(new Event('click', { bubbles: true })); }
   focus() { this.ownerDocument.activeElement = this; }
+  remove() { const p = this.parentNode; if (p) p.children = p.children.filter((c) => c !== this); this.parentNode = null; }
   get labels() { const id = this.id; return id ? [...this.ownerDocument.body.all()].filter((n) => n.tagName === 'LABEL' && n.attrs.for === id) : []; }
 }
 class Field extends Node { constructor(d, t) { super(d, t); this.value = ''; } }

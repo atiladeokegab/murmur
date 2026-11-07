@@ -21,7 +21,7 @@ async function phone() {
   registry.register(look);
   const port = browserKV({ storage: fakeStorage(), prefix: 'murmur' });
   const roots = {};
-  for (const app of registry.list()) { roots[app.id] = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say: (text) => bus.emit('say', { text }) }); await app.seed(); }
+  for (const app of registry.list()) { roots[app.id] = await mountApp(app, doc.body, { kv: appKv(app.id, port), bus, say: (text) => bus.emit('say', { text }), confirm: async () => true }); await app.seed(); }
   const ctxFor = (app) => createCtx({ app, root: roots[app.id], bus, kv: appKv(app.id, port), cursor: { async moveTo() {}, hide() {} }, ask: async () => true });
   const run = (name, params, n, of) => runAction({ registry, name, params, bus, ctxFor, n, of });
   const said = [], board = { day: 7, async reset() { this.day = 1; }, async nextMorning() { this.day++; } };

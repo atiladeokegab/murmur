@@ -10,7 +10,7 @@ import { browserKV } from '../ports/browser-kv.js';
 import { playPcm, stopAudio, audioOut } from '../live.js';
 import * as passkey from '../passkey.js';
 import { byHand, checkFingerprint, payAttempt } from './gate.js';
-import { installByName, restoreApps, availableApps } from '../sdk/plugin.js';
+import { installByName, removeByName, restoreApps, availableApps } from '../sdk/plugin.js';
 import { installToken } from '../agent/token.js';
 import { play, buzz, mute, unmute, isMuted, EARCON_NAMES } from '../sound/index.js';
 import { cachedTts, warmTts } from '../voice/tts-cache.js';
@@ -159,12 +159,16 @@ for (const app of registry.list()) {
   await app.seed();
 }
 // Plug-ins (sdk/plugin.js): added apps come back on boot and mount exactly like the built-in ones.
+// After a removal: off the board; home() re-renders and focuses its first tile, so no second render after it.
+const dropApp = (x) => { if (x.ok) { delete roots[x.id]; delete kvs[x.id]; if (current === x.id) home(); else renderBoard(); } return x; };
 const plug = { registry, host: appsEl, port, os: osFor,
   // a plug-in's own Remove button: the sheet asks (gate delete), then the app leaves the board
   confirm: (q) => sheetConfirm(q).then((a) => a === true || a?.result === true),
-  removed: (x) => { if (x.ok) { if (current === x.id) home(); delete roots[x.id]; delete kvs[x.id]; renderBoard(); } speak(x.say, personal.signal); } };
+  removed: (x) => speak(dropApp(x).say, personal.signal) };
 const added = (r) => { roots[r.id] = r.root; kvs[r.id] = r.kv; return r; };
 for (const r of await restoreApps(plug)) added(r); // no renderBoard here: `day` is declared below (TDZ)
+// The agent passes its own gate (confirm(readback) => boolean) so a spoken yes answers; the agent says r.say.
+async function remove(name, { confirm } = {}) { return dropApp(await removeByName(name, plug, confirm && ((q) => confirm(q.readback)))); }
 async function install(name) { const r = await installByName(name, plug); if (r.root) { added(r); renderBoard(); } return r; }
 
 function open(id, { focus = true } = {}) {
@@ -233,7 +237,10 @@ function addTile() {
     const l = (await availableApps(plug)).filter((p) => !p.installed);
     if (!l.length) return speak('Every app is already added.', personal.signal);
     const i = await sheetChoose({ question: 'Which app do you want to add?', choices: l.map((p) => p.name) });
-    if (i != null) speak((await install(l[i].id)).say, personal.signal);
+    if (i == null) return btn.focus();
+    const r = await install(l[i].id);
+    speak(r.say, personal.signal);
+    $(`#board .tile[data-app="${r.id}"]`)?.focus(); // the sheet closed: land on the new app's tile, not the page
   });
   return el('li', {}, btn);
 }
@@ -538,7 +545,7 @@ try {
   const { createAgent } = await import('../agent/index.js');
   agent = await createAgent({
     registry, bus, ctxFor, speak, librarian,
-    os: { open: (id) => open(id), current: () => current, install, home: () => home(),
+    os: { open: (id) => open(id), current: () => current, install, remove, home: () => home(),
       sound: (on) => { (on ? unmute : mute)(); store.set('muted', !on); } },
     fingerprint, // (signal): the agent's gates abort it on Stop, No or a new ask, which withdraws the WebAuthn prompt
     agency: () => look.agency, answers: () => look.answers,
@@ -573,5 +580,5 @@ try {
     replay: async () => { const u = lastUtterance; await resetAll(); if (u) hear(u, 'replay'); }, stop: stopAll });
   roots.look = $('#app-look'); kvs.look = appKv('look', port);
 } catch (e) { console.error('Your look and the demo panel did not load', e); }
-window.murmur = { bus, registry, host, agent, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, install, ready: Promise.resolve(true) };
+window.murmur = { bus, registry, host, agent, open, home, current: host.current, sheet: host.sheet, reset: resetAll, hear, look, install, remove, ready: Promise.resolve(true) };
 document.documentElement.dataset.ready = 'true';

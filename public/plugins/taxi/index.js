@@ -21,6 +21,7 @@ function el(tag, props = {}, ...kids) {
   return n;
 }
 const save = () => kv.set('booking', booking);
+const tell = (e, t = line.textContent) => { if (e?.isTrusted && t) os?.say?.(t); };
 function render() {
   if (toBox.value !== to) toBox.value = to;
   if (whenBox.value !== when) whenBox.value = when;
@@ -40,37 +41,39 @@ const app = {
     whenBox = el('input', { id: 'taxi-when', type: 'text', className: 'app-field', autocomplete: 'off' });
     whenBox.addEventListener('input', () => { when = whenBox.value; });
     quoteBtn = el('button', { type: 'button', id: 'taxi-quote', className: 'app-btn', textContent: 'Get a price' });
-    quoteBtn.addEventListener('click', () => {
+    quoteBtn.addEventListener('click', (e) => {
       const p = place(to);
       quote = p; note = p ? '' : `I don't know ${to || 'that place'}. ${known}`;
-      render();
+      render(); tell(e);
     });
     bookBtn = el('button', { type: 'button', id: 'taxi-book', className: 'app-btn primary', textContent: 'Book and pay' });
-    bookBtn.addEventListener('click', async () => {
+    bookBtn.addEventListener('click', async (e) => {
       const p = place(to);
-      if (!p) { note = `I don't know ${to || 'that place'}. ${known}`; render(); return; }
+      if (!p) { note = `I don't know ${to || 'that place'}. ${known}`; render(); tell(e); return; }
       // The person's own tap asks through the shell (contract §7); the agent's press was already asked. No confirm, no booking.
       if (!(os?.confirm && await os.confirm({ gate: 'pay', readback: `Book ${fare(p, when)}. Pay?` }))) return;
       booking = { name: p.name, price: p.price, eta: p.eta, when: when || null, ref: `NL${100 + p.price + p.eta}` };
       quote = p; note = '';
-      await save(); render();
+      await save(); render(); tell(e, trip.textContent);
     });
     trackBtn = el('button', { type: 'button', id: 'taxi-track', className: 'app-btn', textContent: 'Track my taxi' });
-    trackBtn.addEventListener('click', async () => {
+    trackBtn.addEventListener('click', async (e) => {
       if (!booking) return;
       booking = { ...booking, eta: Math.max(0, booking.eta - 2), tracked: true };
       note = booking.eta ? `Your driver is ${booking.eta} minutes away.` : 'Your taxi is outside.';
-      await save(); render();
+      await save(); render(); tell(e);
     });
     cancelBtn = el('button', { type: 'button', id: 'taxi-cancel', className: 'app-btn quiet', textContent: 'Cancel my taxi' });
-    cancelBtn.addEventListener('click', async () => {
+    cancelBtn.addEventListener('click', async (e) => {
       if (!booking) return;
       if (!(os?.confirm && await os.confirm({ gate: 'delete', readback: `Cancel your taxi to ${booking.name}?` }))) return;
       note = `Cancelled your taxi to ${booking.name}. You were not charged.`;
       booking = null;
-      await save(); render();
+      const had = root.ownerDocument.activeElement === cancelBtn;
+      await save(); render(); tell(e);
+      if (had) toBox.focus();   // Cancel is now disabled: don't leave focus on it
     });
-    line = el('p', { id: 'taxi-line', className: 'app-done' });
+    line = el('p', { id: 'taxi-line', className: 'app-done' });   // the result; a hand tap says it through the shell's one voice, never a second live region
     trip = el('p', { id: 'taxi-trip', className: 'app-why' });
     root.append(
       el('h2', { id: 'taxi-h', textContent: 'Northline Taxis' }),

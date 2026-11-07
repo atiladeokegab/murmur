@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createBus, createRegistry, createCtx, appKv, mountApp, loadApps, runAction } from '../public/sdk/index.js';
-import { installApp, uninstallApp, removeApp, restoreApps, installByName, availableApps, PLUGINS, INSTALL_APP } from '../public/sdk/plugin.js';
+import { installApp, uninstallApp, removeApp, removeByName, restoreApps, installByName, availableApps, appsHeard, PLUGINS, INSTALL_APP, REMOVE_APP } from '../public/sdk/plugin.js';
 import { browserKV } from '../public/ports/browser-kv.js';
 import appIds from '../public/apps/apps.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
@@ -70,7 +70,7 @@ test('install refuses a second app with the same id', async () => {
   p.add(await installApp(TAXI, p.plug));
   await assert.rejects(installApp(TAXI, p.plug), /already registered/);
   await assert.rejects(installApp(bad('hello', `{ go: { describe: 'Go', doing: 'Going', run() {}, verify: () => true } }`), p.plug),
-    /already registered/, 'a plug-in cannot replace a built-in app');
+    /comes with the phone/, 'a plug-in cannot replace a built-in app');
 });
 
 test('a bad gate is refused, and money or message actions may not skip the ask', async () => {
@@ -172,8 +172,8 @@ test('a second plug-in: Corner Grocer installs by name beside taxi, and both com
   assert.deepEqual((await availableApps(again.plug)).map((x) => x.installed), [true, true]);
 });
 
-test('grocer: add and remove go through the controls; an unknown item fails in words', async () => {
-  const p = await phone();
+test('grocer: add and remove go through the controls; remove asks first; an unknown item fails in words', async () => {
+  const p = await phone({ answers: [true, true] });
   p.add(await installApp(GROCER, p.plug));
   const s = () => p.registry.get('grocer').state();
   assert.deepEqual(s().basket, ['milk', 'bread', 'eggs', 'bananas']);
@@ -184,6 +184,7 @@ test('grocer: add and remove go through the controls; an unknown item fails in w
   const rm = await p.run('grocer__remove', { item: 'bananas' });
   assert.equal(rm.ok, true, rm.reason);
   assert.deepEqual(s().basket, ['milk', 'bread', 'eggs', 'tea']);
+  assert.deepEqual([p.asked[0].gate, p.asked[0].readback], ['delete', 'Take bananas out of your basket?']);
   const bad = await p.run('grocer__add', { item: 'caviar' });
   assert.equal(bad.ok, false);
   assert.match(bad.reason, /We don't sell caviar/);
@@ -254,4 +255,224 @@ test('fail closed: with no confirm on the mount, a hand tap books, orders and ca
   g.root.querySelector('#grocer-order').click();
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(p.registry.get('grocer').state().order, null, 'no order without a confirm');
+});
+
+test('review: an encoded path, a query or a capital cannot step outside /plugins/', async () => {
+  const p = await phone();
+  for (const rel of ['%2e%2e%2fapps/hello/index.js', '%2E%2E/apps/hello/index.js', 'taxi%2findex.js', 'taxi/index.js?x=1', 'taxi/index.js#x', 'Taxi/index.js', 'taxi/index.json']) {
+    await assert.rejects(installApp(new URL(rel, PLUGINS).href, p.plug), /plug-ins load only from/, rel);
+  }
+  assert.ok(!p.names().includes('taxi__book'));
+});
+
+test('review: money must be gated pay, never downgraded to send or call; send and call need their own gate or pay', async () => {
+  const p = await phone();
+  for (const [k, gate] of [['pay', 'send'], ['sendMoney', 'send'], ['transfer', 'call'], ['order', 'delete'], ['send', 'call'], ['callDriver', 'send']]) {
+    await assert.rejects(installApp(bad(`down${k.toLowerCase()}${gate}`, `{ ${k}: { describe: 'Do it', doing: 'Doing it', gate: '${gate}', run() {}, verify: () => true } }`), p.plug),
+      /must have a gate of/, `${k} with ${gate}`);
+  }
+  const ok = await installApp(bad('okcall', `{ callDriver: { describe: 'Ring', doing: 'Ringing', gate: 'call', run() {}, verify: () => true }, sendNote: { describe: 'Send', doing: 'Sending', gate: 'pay', run() {}, verify: () => true } }`), p.plug);
+  assert.equal(ok.id, 'okcall', 'the right gate, or the stricter pay, is accepted');
+});
+
+test('review: a corrupt or tampered saved list never stops boot', async () => {
+  const storage = fakeStorage();
+  storage.setItem('murmur:os.plugins:installed', JSON.stringify([null, 5, 'taxi', { id: 'x' }, { id: 'evil', path: '../apps/hello/index.js' }, { id: 'taxi', path: 'taxi/index.js' }]));
+  const p = await phone({ storage });
+  assert.ok(p.names().includes('taxi__book'), 'the good entry still comes back');
+  storage.setItem('murmur:os.plugins:installed', '{not json');
+  const q = await phone({ storage });
+  assert.ok(!q.names().includes('taxi__book') && q.names().includes('hello__send'), 'unreadable list: boot with the built-ins');
+});
+
+test('review: a failed save rolls an install back, and a failed uninstall leaves the app in place', async () => {
+  const p = await phone();
+  const real = p.plug.port;
+  const broken = { ...real, set: async (area, k, v) => { if (area === 'os.plugins') throw new Error('QuotaExceededError'); return real.set(area, k, v); } };
+  await assert.rejects(installApp(TAXI, { ...p.plug, port: broken }), /QuotaExceeded/);
+  assert.ok(!p.names().includes('taxi__book'), 'not half-installed');
+  p.add(await installApp(TAXI, p.plug));
+  await assert.rejects(uninstallApp('taxi', { ...p.plug, port: broken }), /QuotaExceeded/);
+  assert.ok(p.names().includes('taxi__book'), 'still installed, and still in the saved list');
+  assert.ok((await phone({ storage: p.storage })).names().includes('taxi__book'));
+});
+
+test('remove_app by voice: the same delete sheet; a No keeps it; built-ins and unknown names are never asked', async () => {
+  const p = await phone();
+  assert.deepEqual(REMOVE_APP.params, INSTALL_APP.params);
+  assert.equal(typeof REMOVE_APP.describe, 'string');
+  await installByName('grocer', p.plug);
+  await installByName('taxi', p.plug);
+  const asked = [], answers = [false, 'yes', true];
+  const confirm = async (q) => { asked.push(q); return answers.shift(); };
+  const no = await removeByName('Corner Grocer', p.plug, confirm);
+  assert.deepEqual([no.ok, no.cancelled, no.say], [false, true, 'Kept it.']);
+  assert.deepEqual(asked[0], { app: 'grocer', gate: 'delete', readback: 'Remove Corner Grocer from your phone?' });
+  assert.equal((await removeByName('Corner Grocer', p.plug, confirm)).cancelled, true, 'only a literal true removes');
+  assert.ok(p.names().includes('grocer__order'));
+  const yes = await removeByName('my groceries', p.plug, confirm);
+  assert.deepEqual([yes.ok, yes.id, yes.say], [true, 'grocer', 'Removed Corner Grocer.']);
+  assert.ok(!p.names().some((n) => n.startsWith('grocer__')) && p.names().includes('taxi__book'), 'only the named app goes');
+  assert.equal(asked.length, 3);
+  const built = await removeByName('Hello', p.plug, confirm);
+  assert.deepEqual([built.ok, built.say], [false, 'Hello came with the phone, so it stays.']);
+  assert.match((await removeByName('pizza', p.plug, confirm)).say, /There's no pizza on your phone/);
+  assert.match((await removeByName('Corner Grocer', p.plug, confirm)).say, /There's no Corner Grocer/, 'already gone');
+  assert.equal(asked.length, 3, 'none of those asked');
+});
+
+test('a spoken name matches whole words only, and only when it means one app', async () => {
+  const p = await phone();
+  for (const t of ['taxidermy', 'cabbage', 'a cabinet', 'groceriesss', 'corners']) {
+    assert.equal((await installByName(t, p.plug)).ok, false, t);
+    assert.equal(p.registry.get('taxi') || p.registry.get('grocer'), undefined, `${t} installed nothing`);
+  }
+  assert.equal((await installByName('get me a cab', p.plug)).id, 'taxi');
+  assert.equal((await installByName('Corner', p.plug)).id, 'grocer');
+  assert.equal((await removeByName('taxidermy', p.plug, async () => true)).say, "There's no taxidermy on your phone.");
+  assert.ok(p.registry.get('taxi'), 'still there');
+  const two = [{ id: 'a', name: 'Corner Grocer' }, { id: 'b', name: 'Corner Cafe' }];
+  assert.deepEqual(appsHeard(two, 'corner').map((x) => x.id), ['a', 'b'], 'ambiguous: both');
+  assert.deepEqual(appsHeard(two, 'the corner cafe').map((x) => x.id), ['b']);
+  assert.deepEqual(appsHeard(two, 'x'.repeat(90) + ' cafe'), [], 'bounded: only the first 80 characters are heard');
+});
+
+test("one voice: no live region of their own; a person's tap says the result through the shell, an agent's press says nothing", async () => {
+  const p = await phone();
+  const said = [];
+  const plug = { ...p.plug, os: (app, kv) => ({ kv, bus: p.bus, say: (t) => said.push(t), confirm: async () => true }) };
+  const g = p.add(await installApp(GROCER, plug)), t = p.add(await installApp(TAXI, plug));
+  for (const id of ['#grocer-line', '#taxi-line']) assert.equal((g.root.querySelector(id) || t.root.querySelector(id)).role, undefined, `${id}: the shell's status is the only live region`);
+  const person = { type: 'click', isTrusted: true };
+  const milk = [...g.root.all()].find((b) => b.textContent === 'Remove milk');
+  milk.click(); await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(said, [], 'an untrusted click (the agent) says nothing: the runner narrates');
+  [...g.root.all()].find((b) => b.textContent === 'Remove bread').dispatchEvent(person);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(said, ['Took bread out.']);
+  t.root.querySelector('#taxi-to').value = 'Home';
+  t.root.querySelector('#taxi-to').dispatchEvent(new Event('input'));
+  t.root.querySelector('#taxi-book').dispatchEvent(person);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.match(said.at(-1), /^Your taxi to Home is booked, arriving in \d+ minutes\.$/);
+});
+
+test('review: removability is the built-in list, never the saved claim; a claimed Hello stays, and so does its data', async () => {
+  const storage = fakeStorage();
+  storage.setItem('murmur:os.plugins:installed', JSON.stringify([{ id: 'hello', path: 'taxi/index.js' }]));
+  const p = await phone({ storage });
+  await p.plug.port.set('app.hello', 'sent', ['keep me']);
+  let asked = 0;
+  const yes = async () => { asked++; return true; };
+  assert.equal((await removeApp('hello', p.plug, yes)).say, 'Hello came with the phone, so it stays.');
+  assert.equal((await removeByName('hello', p.plug, yes)).say, 'Hello came with the phone, so it stays.');
+  await assert.rejects(uninstallApp('hello', p.plug), /not an added app/);
+  assert.equal(asked, 0, 'never asked');
+  assert.ok(p.names().includes('hello__send') && p.doc.body.querySelector('#app-hello'));
+  assert.deepEqual(await p.plug.port.get('app.hello', 'sent'), ['keep me']);
+  await assert.rejects(installApp(bad('shop', `{ go: { describe: 'Go', doing: 'Going', run() {}, verify: () => true } }`), p.plug),
+    /comes with the phone/, 'a built-in name not on this phone yet is still not a plug-in name');
+});
+
+test('review: a mount that throws leaves no section; a data wipe that fails still cleans the phone, then says so', async () => {
+  const p = await phone();
+  const dir = new URL('throwy/', tmp);
+  mkdirSync(fileURLToPath(dir), { recursive: true });
+  writeFileSync(fileURLToPath(new URL('index.js', dir)), `const f = () => {}; export default { id: 'throwy', name: 'Throwy',
+    mount() { throw new Error('broken mount'); }, read: () => '', place: () => ({}), state: () => ({}), seed: f, reset: f,
+    actions: { go: { describe: 'Go', doing: 'Going', run() {}, verify: () => true } } };`);
+  await assert.rejects(installApp(new URL('index.js', dir).href, p.plug), /broken mount/);
+  assert.equal(p.doc.body.querySelector('#app-throwy'), null, 'no orphan section');
+  assert.equal(p.registry.get('throwy'), undefined);
+  p.add(await installApp(TAXI, p.plug));
+  const real = p.plug.port;
+  await real.set('app.taxi', 'booking', { to: 'Home' });
+  const broken = { ...real, set: async (area, k, v) => { if (area === 'app.taxi' && v === undefined) throw new Error('disk gone'); return real.set(area, k, v); } };
+  const x = await removeApp('taxi', { ...p.plug, port: broken }, async () => true);
+  assert.deepEqual([x.ok, x.say], [true, 'Removed Northline Taxis, but some of its data could not be cleared.']);
+  assert.ok(!p.names().includes('taxi__book') && !p.doc.body.querySelector('#app-taxi'), 'tools and section gone first');
+  assert.ok(!(await phone({ storage: p.storage })).names().includes('taxi__book'), 'and off the saved list');
+  const y = await removeApp('grocer', p.plug, async () => true);
+  assert.equal(y.say, "That app isn't on your phone.");
+});
+
+test('Hello: Send always asks, even on a hand tap; a No, or no confirm on the mount, sends nothing', async () => {
+  const hello = (await import('../public/apps/hello/index.js')).default;
+  const port = browserKV({ storage: fakeStorage(), prefix: 'murmur' });
+  const mount = async (confirm) => {
+    const root = await mountApp(hello, fakeDocument().body, { kv: appKv('hello', port), say() {}, ...(confirm && { confirm }) });
+    await hello.seed();
+    return root;
+  };
+  const tap = async (root, text) => {
+    const box = root.querySelector('#hello-box');
+    box.value = text; box.dispatchEvent(new Event('input'));
+    root.querySelector('#hello-send').click();
+    await new Promise((r) => setTimeout(r, 10));
+  };
+  await tap(await mount(), 'hi');
+  assert.deepEqual(hello.state().sent, [], 'no confirm, no send');
+  const asked = [];
+  let yes = false;
+  const r = await mount(async (q) => { asked.push(q); return yes; });
+  await tap(r, 'On my way');
+  assert.deepEqual(hello.state().sent, [], 'a No sends nothing');
+  assert.deepEqual(asked, [{ gate: 'send', readback: 'Send to Sam: On my way' }], 'the same readback as the agent hears');
+  yes = true;
+  await tap(r, 'On my way');
+  assert.deepEqual(hello.state().sent, ['On my way']);
+});
+
+test('review: forged phone and look rows cannot remove the shell\'s own apps or wipe their data', async () => {
+  const storage = fakeStorage();
+  storage.setItem('murmur:os.plugins:installed', JSON.stringify([{ id: 'phone', path: 'taxi/index.js' }, { id: 'look', path: 'grocer/index.js' }]));
+  const p = await phone({ storage });
+  const { createPhone } = await import('../public/os/phone.js');
+  const f = () => false;
+  p.registry.register(createPhone({ stop: f, where: f, noLook: f, isNoLook: f, sound: f, isSound: f }));   // as the shell does
+  p.registry.register((await import('../public/apps/look/index.js')).default);
+  for (const id of ['phone', 'look']) await p.plug.port.set(`app.${id}`, 'mine', 'keep me');
+  let asked = 0;
+  const yes = async () => { asked++; return true; };
+  for (const [id, name] of [['phone', 'Phone'], ['look', 'Your look']]) {
+    const app = p.registry.get(id);
+    assert.equal((await removeApp(id, p.plug, yes)).say, `${app.name} came with the phone, so it stays.`, id);
+    assert.equal((await removeByName(app.name, p.plug, yes)).say, `${app.name} came with the phone, so it stays.`, name);
+    await assert.rejects(uninstallApp(id, p.plug), /not an added app/);
+    assert.ok(p.registry.get(id), `${id} still registered`);
+    assert.equal(await p.plug.port.get(`app.${id}`, 'mine'), 'keep me', `${id} data kept`);
+  }
+  assert.equal(asked, 0, 'never asked');
+  assert.ok(p.names().includes('taxi__book') && p.names().includes('grocer__order'), 'the modules the rows point at still load');
+});
+
+test('review: an action named to destroy (deleteAll, clearData, removeItem, eraseAll, wipe) must ask with delete, or pay', async () => {
+  const p = await phone();
+  for (const k of ['deleteAll', 'clearData', 'removeItem', 'eraseAll', 'wipe']) {
+    for (const gate of ['null', "'send'", "'call'"]) {
+      await assert.rejects(installApp(bad(`kill${k.toLowerCase()}${gate.replace(/\W/g, '')}`, `{ ${k}: { describe: 'Do it', doing: 'Doing it', gate: ${gate}, run() {}, verify: () => true } }`), p.plug),
+        /must have a gate of delete or pay/, `${k} with ${gate}`);
+    }
+  }
+  const ok = await installApp(bad('killok', `{ clearData: { describe: 'Clear', doing: 'Clearing', gate: 'delete', run() {}, verify: () => true }, wipeAll: { describe: 'Wipe', doing: 'Wiping', gate: 'pay', run() {}, verify: () => true } }`), p.plug);
+  assert.equal(ok.id, 'killok', 'delete, or the stricter pay, is accepted');
+});
+
+test('grocer: a hand-tapped Remove asks first; a No, or no confirm on the mount, keeps the item', async () => {
+  const p = await phone();
+  let yes = false;
+  const asked = [];
+  const g = p.add(await installApp(GROCER, { ...p.plug, os: (app, kv) => ({ kv, say() {}, confirm: async (q) => { asked.push(q); return yes; } }) }));
+  const tapOut = async (item) => { [...g.root.all()].find((n) => n.textContent === `Remove ${item}`).click(); await new Promise((r) => setTimeout(r, 10)); };
+  await tapOut('milk');
+  assert.ok(p.registry.get('grocer').state().basket.includes('milk'), 'a No keeps it');
+  assert.deepEqual(asked, [{ gate: 'delete', readback: 'Take milk out of your basket?' }]);
+  yes = true;
+  await tapOut('milk');
+  assert.ok(!p.registry.get('grocer').state().basket.includes('milk'));
+  await uninstallApp('grocer', p.plug);
+  const bare = p.add(await installApp(GROCER, { ...p.plug, os: (app, kv) => ({ kv, say() {} }) }));
+  [...bare.root.all()].find((n) => n.textContent === 'Remove bread').click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.ok(p.registry.get('grocer').state().basket.includes('bread'), 'no confirm, no change');
 });
