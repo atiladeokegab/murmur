@@ -22,7 +22,7 @@ const focused = () => page.evaluate(() => document.activeElement?.id || document
 
 const tiles = await page.locator('#board .tile').count();
 check('board has a Now tile on top', await page.locator('#board li.now:first-child .tile').count() === 1, `${tiles} tiles`);
-check('first open says the one onboarding line', /Tap anywhere and tell me/.test(await page.locator('#say').textContent()));
+check('first open says the one onboarding line', /^Tap anywhere and speak\.$/.test(await page.locator('#say').textContent()));
 
 await page.locator('#board .tile').first().click();
 check('a tile opens its app and focuses its heading', await page.evaluate(() => document.activeElement.tagName === 'H2' && !document.querySelector('#app-hello').hidden));
