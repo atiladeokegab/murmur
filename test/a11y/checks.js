@@ -1,6 +1,6 @@
 export async function audit(page, axePath) {
   await page.addScriptTag({ path: axePath });
-  return page.evaluate(async () => {
+  const result = await page.evaluate(async () => {
     // Murmur requires 7:1 even for large text, above axe's default AA threshold.
     axe.configure({ checks: [{ id: 'color-contrast', options: {
       contrastRatio: { normal: { expected: 7 }, large: { expected: 7 } },
@@ -13,6 +13,26 @@ export async function audit(page, axePath) {
     })) });
     return { violations: result.violations.map(brief), manual: result.incomplete.map(brief) };
   });
+  const scroll = result.violations.find((rule) => rule.id === 'scrollable-region-focusable');
+  if (scroll) {
+    // Axe can miss Chromium's native Tab stops on scrollable text; prove each one with the keyboard.
+    const previous = await page.evaluateHandle(() => document.activeElement);
+    await page.locator('body').evaluate((el) => { el.tabIndex = -1; el.focus(); el.removeAttribute('tabindex'); });
+    const reached = new Set();
+    const limit = await page.locator('*').count();
+    for (let i = 0; i < limit; i++) {
+      await page.keyboard.press('Tab');
+      const matches = await page.evaluate((nodes) => nodes.flatMap((node, index) =>
+        node.target.length === 1 && document.activeElement?.matches(node.target[0]) ? [index] : []), scroll.nodes);
+      matches.forEach((index) => reached.add(index));
+      if (reached.size === scroll.nodes.length || await page.evaluate(() => document.activeElement === document.body)) break;
+    }
+    await previous.evaluate((el) => el?.isConnected && el.focus());
+    await previous.dispose();
+    scroll.nodes = scroll.nodes.filter((_, index) => !reached.has(index));
+    if (!scroll.nodes.length) result.violations = result.violations.filter((rule) => rule !== scroll);
+  }
+  return result;
 }
 
 export async function smallTargets(page) {

@@ -69,12 +69,14 @@ test('agent cursor is hidden from assistive technology and skips its glide for r
     return {
       hiddenFromAT: ring.getAttribute('aria-hidden'),
       name: ring.dataset.name,
-      transition: getComputedStyle(ring).transitionDuration,
+      transitionProperties: getComputedStyle(ring).transitionProperty.split(',').map((p) => p.trim()),
+      animation: getComputedStyle(ring).animationName,
       left: ring.style.getPropertyValue('--x'),
     };
   });
   assert.equal(result.hiddenFromAT, 'true');
   assert.equal(result.name, 'Send to Sam');
-  assert.equal(result.transition, '0s');
+  assert.ok(result.transitionProperties.every((p) => p === 'opacity' || p === 'none'));
+  assert.equal(result.animation, 'none');
   assert.match(result.left, /^\d+(?:\.\d+)?px$/);
 });

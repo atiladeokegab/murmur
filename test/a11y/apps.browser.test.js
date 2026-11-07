@@ -83,7 +83,7 @@ for (const id of appIds) {
 }
 
 for (const [id, action, resultName] of [
-  ['messages', async (page) => page.getByRole('button', { name: /^Mum\./ }).click(), 'Mum chat'],
+  ['messages', async (page) => page.locator('[data-chat="mum"]').click(), 'Mum chat'],
   ['writer', async (page) => page.locator('#wr-last').click(), 'Read the last page'],
   ['mine', async (page) => page.getByRole('button', { name: "What's in My morning" }).click(), 'Run My morning'],
 ]) {
@@ -92,7 +92,7 @@ for (const [id, action, resultName] of [
     try {
       const root = page.locator(`#app-${id}`);
       const target = id === 'messages'
-        ? page.getByRole('button', { name: /^Mum\./ })
+        ? page.locator('[data-chat="mum"]')
         : id === 'writer' ? page.locator('#wr-last')
           : page.getByRole('button', { name: "What's in My morning" });
       await target.focus();

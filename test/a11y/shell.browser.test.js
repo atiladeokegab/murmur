@@ -65,14 +65,11 @@ test('Calendar shows one active status region; Your look selects the speaking mo
   const page = await shellPage();
   try {
     await page.locator('#look-link').click();
-    await page.getByRole('dialog').waitFor();
-    await page.locator('[data-k="speaker-reader"]').click();
+    await page.locator('#look-speaker-reader').click();
     await page.waitForFunction(() => document.querySelector('#say')?.getAttribute('aria-live') === 'polite');
     await page.evaluate(() => murmur.host.speak('Reader mode stays silent.', new AbortController().signal));
     assert.equal(await page.evaluate(() => window.__tts.includes('Reader mode stays silent.')), false);
 
-    await page.keyboard.press('Escape');
-    await page.getByRole('dialog').waitFor({ state: 'hidden' });
     await page.evaluate(() => murmur.open('calendar'));
     await page.getByRole('button', { name: 'Wednesday', exact: true }).click();
     await page.getByRole('button', { name: 'Add an event' }).click();
@@ -86,8 +83,7 @@ test('Calendar shows one active status region; Your look selects the speaking mo
 
     await page.evaluate(() => murmur.home());
     await page.locator('#look-link').click();
-    await page.getByRole('dialog').waitFor();
-    await page.locator('[data-k="speaker-murmur"]').click();
+    await page.locator('#look-speaker-murmur').click();
     await page.waitForFunction(() => document.querySelector('#say')?.getAttribute('aria-live') === 'off');
     assert.equal(await page.locator('[role="status"][aria-live="polite"]:visible').count(), 0);
     await page.evaluate(() => murmur.host.speak('Murmur voice is enabled.', new AbortController().signal));
@@ -106,11 +102,11 @@ test('Back dismisses a confirmation as No and leaves the app unchanged', async (
     await dialog.waitFor();
     await dialog.getByText('Send?', { exact: true }).waitFor();
     assert.equal(await dialog.locator('#sheet-readback').textContent(), 'Send a message to Mum.');
-    assert.equal(await page.locator('main').getAttribute('inert'), '');
+    assert.equal(await page.locator('#apps').evaluate((el) => el.inert), true);
     await page.goBack();
     await page.waitForFunction(() => !document.querySelector('#sheet').open);
     assert.equal(await page.evaluate(() => window.confirmResult), false);
-    assert.equal(await page.locator('main').getAttribute('inert'), null);
+    assert.equal(await page.locator('#apps').evaluate((el) => el.inert), false);
     assert.equal(await page.locator('#sheet[open]').count(), 0);
   } finally { await page.close(); }
 });
