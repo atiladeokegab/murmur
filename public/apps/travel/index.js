@@ -152,6 +152,8 @@ export function createTravel() {
       },
     },
   };
+  // The runner speaks done(); say what the step found or left (the flights, the bus, the basket), not just "Done."
+  for (const x of Object.values(app.actions)) x.done ??= () => app.read();
   s = fresh();
   return app;
 }

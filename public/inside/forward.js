@@ -1,7 +1,8 @@
 // Phone side: send every bus event to the relay so /inside sees it. Batches; never throws into the OS.
 // Usage from the shell: const off = forward(bus);
-export function forward(bus, { url = '/api/bus', fetchFn = globalThis.fetch, token = tokenOf() } = {}) {
-  const headers = { 'content-type': 'application/json', ...(token && { 'x-murmur-token': token }) };
+// The device token (MURMUR_TOKEN) rides on main's fetch wrapper (public/agent/token.js), so fetch is looked up per call.
+export function forward(bus, { url = '/api/bus', fetchFn = (...a) => globalThis.fetch(...a) } = {}) {
+  const headers = { 'content-type': 'application/json' };
   let queue = [], timer = null;
   const flush = () => {
     timer = null;
@@ -19,11 +20,3 @@ export function forward(bus, { url = '/api/bus', fetchFn = globalThis.fetch, tok
   });
 }
 
-// The relay's MURMUR_TOKEN, when the server sets one: open the phone as /?t=TOKEN once and it is kept.
-export function tokenOf(loc = globalThis.location, store = globalThis.localStorage) {
-  try {
-    const t = new URLSearchParams(loc?.search || '').get('t');
-    if (t) store?.setItem('murmur.t', t);
-    return t || store?.getItem('murmur.t') || '';
-  } catch { return ''; }
-}

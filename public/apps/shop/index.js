@@ -211,6 +211,8 @@ export function createShop({ now = () => Date.now() } = {}) {
       },
     },
   };
+  // The runner speaks done(); say what the step found or left (the flights, the bus, the basket), not just "Done."
+  for (const [k, x] of Object.entries(app.actions)) if (k !== 'pay') x.done ??= () => app.read();
   s = fresh();
   return app;
 }

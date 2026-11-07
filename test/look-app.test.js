@@ -40,7 +40,7 @@ test('rows are real buttons that name their current value', () => {
   assert.equal(controlName(root.querySelector('#look-size-more')), 'Text: bigger. Now 100 percent');
   assert.equal(root.querySelector('#look-size-less').getAttribute('aria-disabled'), 'true');
   assert.equal(root.querySelector('#look-speaker-murmur').getAttribute('aria-pressed'), 'true');
-  assert.equal(root.querySelector('#look-theme-dark').getAttribute('aria-pressed'), 'true', 'a fresh profile starts dark, not light');
+  assert.equal(root.querySelector('#look-theme-auto').getAttribute('aria-pressed'), 'true', 'a fresh profile chooses no colours: it follows the phone');
   assert.equal(root.querySelector('h2').textContent, 'Your look');
 });
 
@@ -112,7 +112,7 @@ test('stop learning pauses the Librarian; what do you know reads memory in plain
 
 test('reset puts every row back to its default', async () => {
   await look.reset();
-  assert.deepEqual(settings(), { size: 100, rate: 1, theme: 'dark', speaker: 'murmur', agency: 'ask', learning: true });
+  assert.deepEqual(settings(), { size: 100, rate: 1.15, theme: 'auto', speaker: 'murmur', agency: 'ask', learning: true });
   assert.equal(look.state().known, null);
-  assert.match(look.read(), /^Your look\. Text 100 percent, colours dark/);
+  assert.match(look.read(), /^Your look\. Text 100 percent, colours match my phone/);
 });

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTally, COLUMNS } from '../public/inside/tally.js';
-import { forward, tokenOf } from '../public/inside/forward.js';
+import { forward } from '../public/inside/forward.js';
 import { createBus } from '../public/sdk/bus.js';
 import { server } from '../server.js';
 import { _ring, allowed } from '../lib/relay.js';
@@ -99,9 +99,6 @@ test('relay: with MURMUR_TOKEN set, the POST needs x-murmur-token and the stream
   assert.equal(allowed(req('GET'), u('/stream'), 'k'), false);
   assert.equal(allowed(req('GET'), u('/stream?t=k'), 'k'), true);
   assert.equal(allowed(req('GET'), u('/stream'), ''), true);
-  const store = new Map(), ls = { setItem: (k, v) => store.set(k, v), getItem: (k) => store.get(k) ?? null };
-  assert.equal(tokenOf({ search: '?t=k' }, ls), 'k');
-  assert.equal(tokenOf({ search: '' }, ls), 'k', 'kept after the first visit');
 });
 
 test('tally: a yes for another app or another task does not let a gated step through', () => {
@@ -115,15 +112,6 @@ test('tally: a yes for another app or another task does not let a gated step thr
   for (const [type, e] of [['step:start', { task: 't1', action: 'pay', app: 'shop', gate: 'pay' }], ['confirm', { task: 't1', app: 'shop', gate: 'pay', result: true }],
     ['step:verified', { task: 't1', action: 'pay', app: 'shop' }]]) ok.add({ type, ...e });
   assert.equal(ok.tally().bypassed, 0);
-});
-
-test('forward() sends x-murmur-token when given one', async () => {
-  const bus = createBus(), calls = [];
-  const off = forward(bus, { fetchFn: async (url, init) => { calls.push(init); }, token: 'k' });
-  bus.emit('heard', { text: 'hi' });
-  await new Promise((r) => setTimeout(r, 60));
-  off();
-  assert.equal(calls[0].headers['x-murmur-token'], 'k');
 });
 
 test('forward() posts every bus event as {events:[{type, ...payload}]} with keepalive', async () => {

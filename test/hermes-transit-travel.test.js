@@ -92,3 +92,17 @@ test('travel: "book the 9:40" picks and holds in one step; "hold it" with nothin
   assert.equal(app.state().held.id, 'TA311');
   assert.match(asked[0].readback, /^Tagus Air, Friday at nine forty from Heathrow/);
 });
+
+test('done lines: Travel reads its flights, Transit its answer, Shop its basket; pay keeps the runner\'s "Paid."', async () => {
+  const { createTravel } = await import('../public/apps/travel/index.js');
+  const { createTransit } = await import('../public/apps/transit/index.js');
+  const { createShop } = await import('../public/apps/shop/index.js');
+  const travel = createTravel(), transit = createTransit(), shop = createShop();
+  const { run } = await phone([travel, transit, shop], { answers: [true] });
+  assert.ok((await run('travel__findFlights', { to: 'Lisbon', day: 'Friday' })).ok);
+  assert.match(travel.actions.findFlights.done(travel.state(), {}), /^Three flights Friday\. Northline at six fifty-five.*Simulated fares/);
+  for (const k of Object.keys(transit.actions)) assert.equal(typeof transit.actions[k].done, 'function', k);
+  assert.ok((await run('shop__addToBasket', { item: 'croissant' })).ok);
+  assert.match(shop.actions.addToBasket.done(shop.state(), {}), /^Basket: /);
+  assert.equal(shop.actions.pay.done, undefined);
+});

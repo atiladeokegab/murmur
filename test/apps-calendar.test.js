@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createBus, createRegistry, createCtx, controlName, appKv, mountApp, runAction } from '../public/sdk/index.js';
 import { browserKV } from '../public/ports/browser-kv.js';
-import calendar, { dayOf, timeOf, matches } from '../public/apps/calendar/index.js';
+import calendar, { dayOf, timeOf, matches, heardTime } from '../public/apps/calendar/index.js';
 import appIds from '../public/apps/apps.js';
 import { fakeDocument, fakeStorage } from './fake-dom.js';
 
@@ -37,6 +37,8 @@ test('calendar: real heading, named day buttons with pressed state, every action
   const { root } = await phone();
   assert.equal(root.querySelector('h2').textContent, 'Calendar');
   assert.equal(controlName(root.querySelector('#cal-day-Monday')), 'Monday, today');
+  assert.equal(root.querySelector('#cal-day-Wednesday').textContent, 'Wed', 'short visible name, full name in aria-label');
+  assert.equal(controlName(root.querySelector('#cal-day-Wednesday')), 'Wednesday');
   assert.equal(root.querySelector('#cal-day-Monday').getAttribute('aria-pressed'), 'true');
   assert.equal(controlName(root.querySelector('#cal-next')), "What's next");
   for (const [k, a] of Object.entries(calendar.actions)) {
@@ -113,13 +115,17 @@ test('calendar: invite is gated with a readback from state; no means nothing sen
 test("calendar: a person's own Send invite tap gets the shell's ask-first sheet with the same readback", async () => {
   for (const yes of [false, true]) {
     const asked = [];
-    const { root, s } = await phone({ confirm: async (q) => { asked.push(q); return yes; } });
+    const { root, s, said } = await phone({ confirm: async (q) => { asked.push(q); return yes; } });
     const tap = async (id) => { root.querySelector(`#${id}`).dispatchEvent({ type: 'click', isTrusted: true }); await new Promise((r) => setTimeout(r)); };
     await tap('cal-day-Tuesday'); await tap('cal-ev-lunch'); await tap('cal-invite');
     const who = root.querySelector('#cal-who'); who.value = 'Mum'; who.dispatchEvent(new Event('input'));
     await tap('cal-send');
     assert.deepEqual(asked, [{ gate: 'send', readback: 'Send Mum an invite: Lunch with Mum, Tuesday at 12:30 pm.' }]);
     assert.deepEqual(ev(s(), 'lunch').invited, yes ? ['Mum'] : []);
+    // one live region: the person's result goes to the shell's say once, never a second role=status in the app
+    assert.deepEqual(said().filter((t) => /^(Invite sent|Not sent)/.test(t)), [yes ? 'Invite sent to Mum.' : 'Not sent.']);
+    assert.equal(root.querySelector('#cal-status').getAttribute('role'), null);
+    assert.equal(root.querySelector('#cal-status').textContent, '');
   }
 });
 
@@ -138,9 +144,27 @@ test('calendar: day, time and event matching', () => {
   assert.equal(dayOf('tomorrow'), 'Tuesday');
   assert.equal(dayOf('Weds'), 'Wednesday');
   assert.equal(dayOf('nope'), null);
+  assert.equal(dayOf('um Wednesday'), 'Wednesday');
+  assert.equal(dayOf('Wednesday please'), 'Wednesday');
+  assert.equal(dayOf('please'), null);
   assert.equal(timeOf('7:30 pm'), '19:30');
   assert.equal(timeOf('12am'), '00:00');
   assert.equal(timeOf('25:00'), null);
   assert.deepEqual(matches(example.events, 'Mum').map((e) => e.id), ['lunch']);
   assert.deepEqual(matches(example.events, 'my book club').map((e) => e.id), ['bookclub']);
+  // a time names the event at that time ("move my 12:30"); a bare 1 to 7 is afternoon
+  assert.deepEqual(matches(example.events, '12:30').map((e) => e.id), ['lunch']);
+  assert.deepEqual(matches(example.events, "my seven o'clock").map((e) => e.id), ['bookclub', 'callsam']);
+  assert.deepEqual(matches(example.events, '3pm meeting'), []);
+  assert.equal(heardTime("three o'clock"), '15:00');
+  assert.equal(heardTime('lunch'), null);
+});
+
+test('calendar: "move my 12:30" finds the event by its time; a time with nothing on says so', async () => {
+  const p = await phone();
+  assert.equal((await p.run('calendar__move', { event: '12:30', day: 'Wednesday' })).ok, true);
+  assert.equal(ev(p.s(), 'lunch').day, 'Wednesday');
+  const none = await p.run('calendar__move', { event: '3pm', day: 'Thursday' });
+  assert.equal(none.ok, false);
+  assert.match(none.reason, /Nothing's at 3 pm this week/);
 });

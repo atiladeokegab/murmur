@@ -9,7 +9,7 @@ const SEED = [
   { id: 'callsam', title: 'Call Sam', day: 'Friday', time: '19:00', mins: 30, with: 'Sam', invited: [] },
 ];
 
-let root = null, kv = null, osConfirm = null;
+let root = null, kv = null, osConfirm = null, osSay = null;
 let events = [], shown = TODAY, open = null, picking = false, clash = null, adding = false, inviting = false;
 let lastMoved = null, lastAdded = null, lastInvite = null, status = '';
 let draft = { title: '', day: '', time: '', to: '', who: '' };
@@ -22,8 +22,11 @@ const mins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m
 const order = (a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || mins(a.time) - mins(b.time);
 /** "today", "tomorrow", "wed", "Wednesday" -> "Wednesday"; null if not a day. */
 export function dayOf(s, today = TODAY) {
-  const q = String(s ?? '').trim().toLowerCase();
-  if (!q || q === 'today') return today;
+  const raw = String(s ?? '').trim().toLowerCase();
+  // dictation leaves fillers in: "um Wednesday", "Wednesday please"
+  const q = raw.replace(/[^a-z ]/g, ' ').replace(/\b(um+|uh+|erm?|please|on|this|the|like|so)\b/g, ' ').trim().replace(/\s+/g, ' ');
+  if (!raw || q === 'today') return today;
+  if (q.includes(' ')) return q.split(' ').map((w) => dayOf(w, today)).find(Boolean) ?? null;
   if (q === 'tomorrow') return DAYS[(DAYS.indexOf(today) + 1) % 7];
   return DAYS.find((d) => q.length >= 3 && d.toLowerCase().startsWith(q.slice(0, 3)) && d.toLowerCase().startsWith(q.replace(/s$/, ''))) ?? null;
 }
@@ -42,10 +45,22 @@ export function spoken(t) {
   const [h, m] = t.split(':').map(Number);
   return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
 }
-/** The best-matching events for what was said ("lunch with Mum", "lunch", "Mum"). Ties come back together. */
+const NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+/** "3pm", "three o'clock", "my 12:30 meeting" -> "15:00", "15:00", "12:30". A bare 1 to 7 is afternoon. Not a time: null. */
+export function heardTime(q) {
+  const s = String(q ?? '').toLowerCase().replace(/\b(my|the|meeting|event|appointment|thing|o'?clock)\b/g, ' ')
+    .trim().replace(/^[a-z]+/, (w) => NUMS[w] ?? w);
+  const t = timeOf(s);
+  if (!t || /[ap]\.?m/.test(s)) return t;
+  const h = Number(t.slice(0, 2));
+  return h >= 1 && h <= 7 ? `${h + 12}${t.slice(2)}` : t;
+}
+/** The best-matching events for what was said ("lunch with Mum", "lunch", "Mum", or a time: "my 12:30"). Ties come back together. */
 export function matches(list, said) {
   const q = String(said ?? '').toLowerCase().replace(/\b(the|my|a)\b/g, ' ').replace(/\s+/g, ' ').trim();
   if (!q) return [];
+  const at = heardTime(q);
+  if (at) return list.filter((e) => e.time === at);
   const score = (e) => {
     const t = e.title.toLowerCase();
     if (t === q) return 4;
@@ -81,11 +96,14 @@ function el(tag, props = {}, ...kids) {
   return n;
 }
 const $ = (id) => root.querySelector(`#${id}`);
-function btn(id, text, onClick, cls = 'choice') {
+function btn(id, text, onClick, cls = 'choice', label) {
   const b = el('button', { type: 'button', id, className: cls, textContent: text });
+  if (label) b.setAttribute('aria-label', label);
   b.addEventListener('click', (e) => { personal = !!e?.isTrusted; pressed = b; onClick(); });
   return b;
 }
+// Short visible names so a day never breaks mid-word at 400%; the full name stays in the accessible name.
+const dayBtn = (id, d, tail, onClick) => btn(id, d.slice(0, 3) + tail, onClick, 'choice', d + tail);
 function field(id, label, key, type = 'text') {
   const i = el('input', { id, type, value: draft[key], autocomplete: 'off' });
   i.addEventListener('input', () => { draft[key] = i.value; });
@@ -177,7 +195,7 @@ function render(focusId) {
   const e = ev();
   const days = DAYS.map((d) => {
     const on = d === shown && !adding;
-    const b = btn(`cal-day-${d}`, d === TODAY ? `${d}, today` : d, () => show(d));
+    const b = dayBtn(`cal-day-${d}`, d, d === TODAY ? ', today' : '', () => show(d));
     b.setAttribute('aria-pressed', String(on));
     return b;
   });
@@ -202,7 +220,7 @@ function render(focusId) {
     } else if (picking) {
       body.push(el('h4', { id: 'cal-pick-h', tabIndex: -1, textContent: `Move ${e.title} to` }), ...field('cal-to-time', 'At', 'to'),
         el('div', { className: 'cal-grid', role: 'group', 'aria-label': 'Days' }, ...DAYS.map((d) => {
-          const b = btn(`cal-to-${d}`, d === e.day ? `${d}, now` : d, () => pickDay(d));
+          const b = dayBtn(`cal-to-${d}`, d, d === e.day ? ', now' : '', () => pickDay(d));
           if (d === e.day) b.setAttribute('aria-current', 'true');
           return b;
         })));
@@ -218,7 +236,9 @@ function render(focusId) {
   }
   root.querySelector('#cal-days').replaceChildren(...days);
   root.querySelector('#cal-body').replaceChildren(...body);
-  $('cal-status').textContent = status;
+  // One voice: inside the OS, a person's result goes to the shell's #say (the one live region); the agent's own run says it via ctx.say.
+  $('cal-status').textContent = osSay ? '' : status;
+  if (osSay && personal && status) osSay(status);
   const target = focusId && $(focusId);
   target?.scrollIntoView?.({ block: focusId === 'cal-pick-h' ? 'start' : 'nearest', behavior: still() ? 'auto' : 'smooth' });
   if (target && personal) target.focus?.({ preventScroll: true });
@@ -231,7 +251,7 @@ async function openEvent(ctx, e) {
 }
 async function pickOne(ctx, said) {
   const found = matches(events, said);
-  if (!found.length) throw new Error(`There's nothing called ${said} this week.`);
+  if (!found.length) { const at = heardTime(said); throw new Error(at ? `Nothing's at ${spoken(at)} this week.` : `There's nothing called ${said} this week.`); }
   if (found.length === 1) return found[0];
   const c = await ctx.choose(`${found.map((x) => `${x.title} on ${x.day}`).join(' or ')}?`, found.map((x) => ({ label: `${x.title} on ${x.day}`, id: x.id })));
   if (!c) throw new Error('No event chosen.');
@@ -244,7 +264,7 @@ const app = {
   name: 'Calendar',
 
   async mount(r, os) {
-    root = r; kv = os.kv; osConfirm = os.confirm || null;
+    root = r; kv = os.kv; osConfirm = os.confirm || null; osSay = os.say || null;
     // Tokens only (os/contract.md §2.1); the buttons reuse the shell's .choice.
     const style = el('style', { textContent: `#app-calendar{padding:0 var(--gutter)}#app-calendar ol{padding:0}
 #app-calendar li{padding:0.25rem 0}#app-calendar label,#app-calendar h4{display:block;margin-top:var(--gutter)}
@@ -258,7 +278,7 @@ const app = {
 .cal-fly{position:fixed;z-index:20;pointer-events:none;padding:var(--pad-tile);border-radius:var(--r-btn);background:var(--c-accent);color:var(--c-on-accent);font-weight:700;font-size:var(--fs-sheet);white-space:nowrap}
 #app-calendar input{box-sizing:border-box;width:100%;padding:0 var(--gutter);min-height:var(--h-link);font:inherit;font-size:var(--fs-sheet);background:var(--c-board);color:var(--c-ink);border:var(--bw-talk) solid var(--c-ink);border-radius:var(--r-btn)}` });
     root.append(style, el('h2', { id: 'calendar-h', textContent: 'Calendar' }),
-      el('p', { id: 'cal-status', role: 'status' }),
+      el('p', { id: 'cal-status' }),
       el('div', { className: 'choices' },
         btn('cal-next', "What's next", () => { const n = nextOf(events); open = n?.id ?? null; adding = picking = inviting = false; clash = null;
           if (n) shown = n.day; status = n ? '' : 'Nothing else this week.'; render(n ? 'cal-ev-h' : 'cal-status'); }),

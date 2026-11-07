@@ -58,7 +58,7 @@ function fill(action, slots) {
 }
 
 const DAY = '(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)';
-const NO_GO = /\b(bank|banking|balance|transfer (?:\w+ )?(?:money|funds|pounds|quid|euros|dollars)|account number|sort code|overdraft|doctor|gp|prescription|medication|diagnos\w*|nhs|benefits|universal credit|tax return|hmrc|passport|driving licence|council tax)\b/i;
+const NO_GO = /\b(bank|banking|balance|transfer (?:\w+ )?(?:money|funds|pounds|quid|euros|dollars)|account number|sort code|overdraft|doctor|gp|prescription|medication|diagnos\w*|nhs|benefits|universal credit|tax return|hmrc|passport|driving licence|council tax|savings|mortgage|loan|credit card|pin number|move (?:my |some )?money|barclays|hsbc|lloyds|natwest|santander|monzo|starling|nationwide|halifax|revolut)\b/i;
 const GARBLED = /\.\.\.|…|\[(?:unintelligible|inaudible|noise)\]|^\W*$/i;
 
 /**
@@ -117,12 +117,13 @@ function plan(said, apps, context, dry) {
 
   // The OS's own verbs
   // Install: "install X", "add X app", or "Add Northline Taxis" (capitalised words: a name, not "a flat white").
-  if (((m = t.match(/^(?:install|download)\s+(?:the\s+)?(.+?)(?:\s+app)?$/i)) || (m = t.match(/^(?:add|get)\s+(?:the\s+)?(.+?)\s+app$/i)) ||
+  if (((m = t.match(/^(?:install|download)\s+(?:the\s+)?(.+?)(?:\s+app)?$/i)) || (m = t.match(/^(?:add|get(?!\s+rid\b))\s+(?:the\s+)?(.+?)\s+app$/i)) ||
        (m = t.match(/^(?:[Aa]dd|[Gg]et)\s+(?:the\s+)?([A-Z][\w'&]*(?:\s+[A-Z][\w'&]*)+)$/))) && !apps.some((a) => a.name.toLowerCase() === m[1].toLowerCase())) {
     return task([{ tool: 'install_app', params: { name: m[1] } }]);
   }
   if (/^(?:what are |list |say )?(?:my |the )?(?:tiles|routines|workflows)$/i.test(t) || /^what (?:tiles|routines) do i have$/i.test(t)) return task([{ tool: 'list_workflows', params: {} }]);
   if ((m = t.match(/^(?:remove|delete|forget)\s+(?:the\s+|my\s+)?(.+?)(?:\s+(?:tile|routine|workflow))?$/i)) && isWorkflow(m[1], context)) return task([{ tool: 'remove_workflow', params: { name: m[1] } }]);
+  if ((m = t.match(/^(?:remove|delete|uninstall|get rid of)\s+(?:the\s+|my\s+)?(.+?)(?:\s+app)?$/i)) && apps.some((a) => a.name.toLowerCase() === m[1].toLowerCase() || a.id === m[1].toLowerCase())) return task([{ tool: 'remove_app', params: { name: m[1] } }]);
   if (/^(?:go )?(?:home|back to (?:the )?(?:board|home))$|^(?:show|open) (?:the )?(?:board|home)$/i.test(t)) return task([{ tool: 'go_home', params: {} }]);
   if ((m = t.match(/^(?:turn |switch )?(?:the )?(?:sounds?|haptics|vibrations?|sounds? and (?:haptics|vibrations?))\s+(on|off)$/i)) ||
       (m = t.match(/^(?:turn|switch)\s+(on|off)\s+(?:the )?(?:sounds?|haptics|vibrations?)/i))) return task([{ tool: 'sound', params: { on: m[1].toLowerCase() === 'on' } }]);
@@ -236,8 +237,10 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:book|get|call|order)\s+(?:me\s+)?(?:a\s+)?(?:taxi|cab)(?:\s+(?:to\s+)?(?:the\s+)?(.+))?$/i))) {
     return task([step('taxi', ['book'], m[1] ? { to: m[1].toLowerCase() } : {})]);
   }
-  if ((m = t.match(/^(?:pay|send)\s+(\w+)\s+(?:£\s*)?(\d+(?:\.\d\d)?|[a-z -]+?)(?:\s+(?:pounds?|quid))?$/i)) && money(m[2]) > 0) {
-    return task([step('bank', ['payPerson', 'pay'], { who: name(m[1]), amount: money(m[2]) })]);
+  // "Pay Sam twenty pounds", "Pay Samira five pounds fifty", "Send Sam £20 please"
+  if ((m = t.match(/^(?:pay|send)\s+(\w+)\s+(?:£\s*)?(\d+(?:\.\d\d)?|[a-z -]+?)(?:\s+(?:pounds?|quid)(?:\s+(?:and\s+)?(?!please\b)(\d\d|[a-z -]+?)(?:\s+p(?:ence)?)?)?)?(?:,?\s+please)?$/i))
+    && money(m[2]) > 0 && (!m[3] || (money(m[3]) > 0 && money(m[3]) < 100))) {
+    return task([step('bank', ['payPerson', 'pay'], { who: name(m[1]), amount: money(m[2]) + (m[3] ? money(m[3]) / 100 : 0) })]);
   }
 
   // Travel
@@ -251,7 +254,8 @@ function plan(said, apps, context, dry) {
   if ((m = t.match(/^(?:book|hold)\s+(?:the\s+)?(.+)$/i))) return task([step('travel', ['hold', 'book', 'pick'], { flight: m[1] })]);
 
   if ((m = t.match(/^(?:open|go to|show|play|start)\s+(?:the\s+|my\s+)?(.+?)(?:\s+and\s+.+)?$/i))) {
-    const app = apps.find((a) => [a.id, a.name.toLowerCase(), a.name.toLowerCase().replace(/^the\s+/, '')].includes(m[1].toLowerCase()));
+    const said = m[1].toLowerCase().replace(/\s+app$/, ''); // "open the travel app"
+    const app = apps.find((a) => [a.id, a.name.toLowerCase(), a.name.toLowerCase().replace(/^the\s+/, '')].includes(said));
     if (app) return task([{ tool: 'open_app', params: { app: app.id } }]);
     if (/^(?:open|go to)\b/i.test(t)) return { kind: 'unknown', plan: [], say: `I don't have ${cap(m[1])} on this phone.` };
   }
