@@ -237,13 +237,13 @@ function addTile() {
 setInterval(() => { const f = $('#board .now .flap'); if (f) f.replaceWith(flap(nowTime())); }, 15000);
 
 // ---------- the work panel: place line, current step, Stop, the Done line with Undo, the sentences ----------
-let panel = { ...IDLE }, undoTimer = null;
+let panel = { ...IDLE }, undoTimer = null, asking = ''; // asking: the open sheet's question, which the heading shows
 const work = $('#work');
 function renderPanel() {
   const p = panel;
   work.hidden = !(p.on || p.done || current);
   $('#place').textContent = p.place || (current ? placeLine(registry.get(current).place()) : '');
-  $('#step').textContent = p.on ? p.step : '';
+  $('#step').textContent = p.on ? asking || p.step : '';
   $('#step').hidden = !p.on;
   $('#slot-a').hidden = $('#slot-b').hidden = !(p.on || p.done);
   $('#done-line').hidden = p.on || !p.done;
@@ -278,14 +278,14 @@ bus.on('*', (name, e) => {
     drop('task');
     ding(e.ok ? 'done' : 'stopped');
     setTimeout(() => { if (!panel.on) cursor.hide(); }, 400); // the ring rests on the last press a moment
-    if (panel.done?.line) show(panel.done.line); // the strip says where it ended, not the last question
+    if (panel.done?.line && !readerSpeaks()) show(panel.done.line); // the strip says where it ended; in reader mode the runner's line already does
     renderPanel();
     clearTimeout(undoTimer);
     if (e.undo) {
       const ms = Math.max(0, (e.undo.until ?? Date.now() + 8000) - Date.now());
       undoTimer = setTimeout(() => { panel = { ...panel, done: panel.done && { ...panel.done, undo: null } }; renderPanel(); }, ms);
       $('#undo').focus();
-    } else $('#done-line').focus();
+    } else $('#talk').focus(); // focus on Talk for what's next; the status region says the line
     return;
   }
   if (name === 'undo') ding('undo');
@@ -303,7 +303,8 @@ const VERB = { send: 'Send', pay: 'Pay', call: 'Call', delete: 'Delete' };
 const verbOf = ({ gate, readback }) => (gate === 'pay' && /\b(hold|held)\b/i.test(readback || '') ? 'Hold' : VERB[gate] || 'Yes');
 const GRACE_MS = 500; // a yes this soon could not have heard the readback
 let opener = null;
-function openSheet(kids, focusEl) {
+function openSheet(kids, focusEl, question) {
+  asking = question; renderPanel(); show(question); // the heading and caption ask what the sheet asks, no stale "Sam or Samira?"
   if (!dialog.open) opener = document.activeElement;
   sheetBody.replaceChildren(...kids);
   const rising = !dialog.open;
@@ -318,6 +319,7 @@ const behind = (on) => { for (const n of [$('#board-view'), appsEl]) n.inert = o
 function closeSheet() {
   if (!dialog.open) return;
   dialog.close();
+  asking = ''; renderPanel();
   behind(false);
   drop('sheet');
   (opener?.isConnected ? opener : $('#stop:not([hidden])') || $('#board .tile'))?.focus();
@@ -337,7 +339,8 @@ function showSheet(kind, q, answer) {
     const no = el('button', { className: 'choice', type: 'button', id: 'sheet-no', textContent: 'No' });
     yes.addEventListener('click', () => answerSheet(true));
     no.addEventListener('click', () => answerSheet(false));
-    openSheet([el('h2', { id: 'sheet-title', textContent: verb === 'Hold' || !q.question ? `${verb}?` : q.question }), read, el('div', { className: 'row' }, yes, no)], read);
+    const title = verb === 'Hold' || !q.question ? `${verb}?` : q.question;
+    openSheet([el('h2', { id: 'sheet-title', textContent: title }), read, el('div', { className: 'row' }, yes, no)], read, title);
   } else {
     const h = el('h2', { id: 'sheet-title', tabIndex: -1, textContent: q.question });
     const btns = q.choices.map((c, i) => {
@@ -347,7 +350,7 @@ function showSheet(kind, q, answer) {
     });
     const none = el('button', { className: 'choice', type: 'button', textContent: 'None of these' });
     none.addEventListener('click', () => answerSheet(null));
-    openSheet([h, el('div', { className: 'row' }, ...btns, none)], h);
+    openSheet([h, el('div', { className: 'row' }, ...btns, none)], h, q.question);
   }
 }
 function hideSheet(kind) { if (pending?.kind === kind) { pending = null; closeSheet(); } }

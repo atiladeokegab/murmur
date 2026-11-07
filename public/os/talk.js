@@ -11,7 +11,7 @@ export function talkAnywhere({ doc = document, start, listening, wait = (f, ms) 
     if (!e.isTrusted || e.button > 0 || e.target.closest?.('.nolook')) return; // no-look mode has its own surface
     cancel(); swallow = false;
     at = { x: e.clientX, y: e.clientY };
-    timer = wait(() => { timer = null; swallow = true; if (!listening()) start(); }, LONG_MS);
+    timer = wait(() => { timer = null; swallow = true; if (!listening()) { try { navigator.vibrate?.(30); } catch { /* no buzz */ } start(); } }, LONG_MS); // start dings the earcon
   };
   const onMove = (e) => { if (at && Math.hypot(e.clientX - at.x, e.clientY - at.y) > SLOP) cancel(); }; // a scroll, not a hold
   const onClick = (e) => {
