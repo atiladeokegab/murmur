@@ -13,6 +13,7 @@ before(async () => {
   axePath = process.env.AXE_CORE || require.resolve('axe-core/axe.min.js');
   // The audit must not need a model key or an external service.
   process.env.GEMINI_API_KEY = '';
+  process.env.ELEVENLABS_API_KEY = '';
   ({ server } = await import('../../server.js'));
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');

@@ -8,6 +8,7 @@ let browser, server, url;
 before(async () => {
   const { chromium } = await import(process.env.PLAYWRIGHT || 'playwright');
   process.env.GEMINI_API_KEY = '';
+  process.env.ELEVENLABS_API_KEY = '';
   ({ server } = await import('../../server.js'));
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');

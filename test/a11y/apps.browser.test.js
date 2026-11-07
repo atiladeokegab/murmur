@@ -12,6 +12,7 @@ before(async () => {
   if (!process.env.AXE_CORE) throw new Error('Set AXE_CORE to the local axe-core/axe.min.js path.');
   axePath = process.env.AXE_CORE;
   process.env.GEMINI_API_KEY = '';
+  process.env.ELEVENLABS_API_KEY = '';
   ({ server } = await import('../../server.js'));
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
