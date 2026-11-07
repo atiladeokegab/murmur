@@ -14,4 +14,4 @@ if [ -n "${GEMINI_TTS_MODEL:-}" ]; then ENV_VARS="$ENV_VARS,GEMINI_TTS_MODEL=$GE
 timeout 900 gcloud run deploy murmur --source . \
   --project hackathon-starter-ao --region europe-west1 \
   --allow-unauthenticated --set-env-vars "$ENV_VARS" --quiet \
-  --max-instances 1 --timeout 3600 # the Inside relay lives in one instance's memory, so phone and laptop must share it; SSE stays open an hour
+  --max-instances 1 --timeout 3600 ${DEPLOY_FLAGS:-} # DEPLOY_FLAGS="--no-traffic --tag preview" for a preview URL; the Inside relay lives in one instance's memory, so phone and laptop must share it; SSE stays open an hour
