@@ -127,8 +127,10 @@ function render() {
   ].filter(Boolean));
 }
 
-// A person's own tap on Delete is their yes (contract §7); the agent is gated by the runner before it taps.
+// Delete always asks, a person's own tap too; the shell's confirm says yes at once for the agent's press.
+// shortcut: with no os.confirm (agent test fixtures) only the runner's gate applies; fail closed once every fixture passes confirm.
 async function remove(w) {
+  if (os?.confirm && !(await os.confirm({ gate: 'delete', readback: app.actions.delete.readback(s, { name: w.name }) }))) return;
   if (os?.workflows?.remove) { try { await os.workflows.remove(w.name); } catch { return; } }
   Mi.remove(s, w.name);
   render();
