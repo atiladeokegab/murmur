@@ -407,6 +407,20 @@ function plan(said, apps, context, dry) {
 
   // Uber, Deliveroo, Maps (demo apps; each only when it is on the phone)
   const has = (id) => apps.some((a) => a.id === id);
+  // The media apps: "Play Spotify", "Play my liked songs on Spotify", "Pause Netflix", "Next episode", "What's playing?"
+  {
+    const MEDIA = { spotify: 'spotify', podcasts: 'podcasts', podcast: 'podcasts', audible: 'audible', 'bbc sounds': 'sounds', sounds: 'sounds', netflix: 'netflix', youtube: 'youtube', 'you tube': 'youtube' };
+    const on = t.match(/\s+(?:on|in)\s+(spotify|podcasts?|audible|bbc sounds|sounds|netflix|you ?tube)$/i);
+    const named = on ? MEDIA[on[1].toLowerCase()] : MEDIA[t.replace(/^(?:play|pause|resume|start)\s+(?:the\s+)?/i, '').toLowerCase()];
+    const media = named || (Object.values(MEDIA).includes(context.app) ? context.app : null);
+    const bare = on ? t.slice(0, on.index) : t;
+    if (media && has(media)) {
+      if (/^(?:pause|stop playing|hold)(?:\s+(?:it|the music|the show|this|.+))?$/i.test(bare) && !/^stop$/i.test(t)) return task([step(media, ['pause'])]);
+      if (/^(?:next|skip)(?:\s+(?:one|song|track|episode|chapter|video|station|please))?$|^play (?:the )?next(?:\s+\w+)?$/i.test(bare)) return task([step(media, ['next'])]);
+      if (/^what'?s (?:this|playing|on)$|^what is (?:this|playing)$|^what (?:song|episode|show) is this$/i.test(bare)) return task([step(media, ['playing'])]);
+      if (/^(?:play|resume|start|put on)\b/i.test(bare)) return task([step(media, ['play'])]);
+    }
+  }
   if (has('uber') && /^(?:how far (?:away )?is (?:a|the|my|an?) (?:car|uber|ride|cab|taxi)|how (?:long|far) (?:for|until|till) (?:a|the) (?:car|uber|ride|cab)|(?:are there|any) (?:cars|ubers) near(?:by| me)?)(?:\s+(?:on|in)\s+uber)?$/i.test(t)) return task([step('uber', ['howFar'])]);
   if (has('uber') && /^(?:book|get|order|call)\s+(?:me\s+)?(?:a|an)\s+(?:car|uber|ride|cab|taxi)(?:\s+home)?(?:\s+(?:on|with)\s+uber)?$|^(?:book|get)\s+(?:me\s+)?(?:a\s+)?(?:car|uber|ride) home$/i.test(t)) return task([step('uber', ['bookHome'])]);
   if (has('deliveroo') && (/^(?:(?:get|show|find)\s+(?:me\s+)?)?my usual(?:\s+(?:on|from)\s+deliveroo)?$/i.test(t) && (here === 'deliveroo' || /deliveroo/i.test(t) || !has('shop'))

@@ -15,4 +15,10 @@ export default [
   'weather',
   'clock',
   'bank',
+  'spotify',
+  'podcasts',
+  'audible',
+  'sounds',
+  'netflix',
+  'youtube',
 ];
