@@ -139,6 +139,9 @@ test('the Writer: dictate, change, new chapter, open chapter', async () => {
     assert.ok(r.ok, `${name}: ${r.reason}`);
   }
   assert.equal(p.said.at(-1), 'The hotel was freezing.');
+  const W = writer.actions, st = writer.state();
+  assert.deepEqual([W.dictate.done(st, {}), W.change.done(st, {}), W.newChapter.done(st, {}), W.openChapter.done(st, { n: 1 }), W.carryOn.done(st, {})],
+    ['Added.', 'Changed.', 'Chapter 3 started.', 'Chapter 1.', ''], 'short done lines');
   assert.equal(writer.state().chapters[2].text, 'The hotel was freezing. I slept in my coat.');
   const r = await p.run('writer__openChapter', { n: 9 });
   assert.equal(r.reason, "There's no chapter 9. The book has 3.");
@@ -156,7 +159,7 @@ test('Mine: explain, run, and delete only after the yes', async () => {
   assert.equal(mine.state().workflows.length, 1);
   r = await p.run('mine__delete', { name: 'My morning' });
   assert.ok(r.ok, r.reason);
-  assert.match(p.asked[1].readback, /^Delete My morning\?/);
+  assert.equal(p.asked[1].readback, "Delete 'My morning'?");
   assert.equal(mine.state().workflows.length, 0);
   assert.equal(mine.read(), 'Mine. Nothing saved yet. Do something once, then say "save that as" and a name.');
 });
@@ -242,6 +245,10 @@ test("a person's own tap on Send or Delete asks first, with the readback; No sen
   await messages.reset();
   const tap = (sel) => doc.body.querySelector(sel).dispatchEvent({ type: 'click', isTrusted: true });
   const settle = () => new Promise((r) => setTimeout(r, 0));
+  const row = doc.body.querySelector('[data-chat="mum"]');
+  const [name, , why] = row.children;
+  assert.deepEqual([name.tagName.toLowerCase(), name.className, name.textContent, why.className], ['b', 'app-title', 'Mum', 'app-why'], 'the name is its own bold element, the preview muted');
+  assert.match(row.textContent, /^Mum\. New: .+/, 'the row still reads "Mum. New: ..."');
   tap('[data-chat="sam"]');
   const box = doc.body.querySelector('#msg-draft');
   box.value = "I'm ten minutes late."; box.dispatchEvent({ type: 'input' });
@@ -256,7 +263,7 @@ test("a person's own tap on Send or Delete asks first, with the readback; No sen
   await mine.reset();
   doc2.body.querySelector('[data-delete="My morning"]').dispatchEvent({ type: 'click', isTrusted: true }); await settle();
   assert.equal(asked2[0].gate, 'delete');
-  assert.match(asked2[0].readback, /^Delete My morning\?/);
+  assert.equal(asked2[0].readback, "Delete 'My morning'?");
   assert.equal(mine.state().workflows.length, 1, 'No deletes nothing');
 });
 

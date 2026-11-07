@@ -18,6 +18,8 @@ export const BUILTINS = {
   explain: { describe: "Say what's in a saved tile", params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   edit_workflow: { describe: 'Drop a step from a saved tile', params: { type: 'object', properties: { name: { type: 'string' }, drop: { type: 'string' } }, required: ['name', 'drop'] } },
   install_app: INSTALL_APP,
+  // shortcut: REMOVE_APP's literal from plugin.js (branch plugin-voice-remove); import it once that is on main
+  remove_app: { describe: 'Take an added app off the phone, by its name', params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   recall: { describe: 'Say what Murmur remembers about you', params: { type: 'object', properties: {} } },
   list_workflows: { describe: 'Say the saved tiles', params: { type: 'object', properties: {} } },
   remove_workflow: { describe: 'Remove a saved tile (asks first)', params: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },

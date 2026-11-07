@@ -5,12 +5,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as demo from './lib/demo.js';
 import * as gemini from './lib/gemini.js';
+import * as eleven from './lib/eleven.js';
 import * as agent from './lib/agent/planner.js';
 import { createGuard } from './lib/guard.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const KEY = process.env.GEMINI_API_KEY || '';
 const PROVIDER = KEY ? 'gemini' : 'demo';
+const ELEVEN = process.env.ELEVENLABS_API_KEY || '';
+const ELEVEN_DAILY_CHARS = Number(process.env.ELEVENLABS_DAILY_CHARS) || 60000; // the URL is public: cap what ElevenLabs can bill
 const LIVE_URL = process.env.MURMUR_LIVE_URL || ''; // test only: point the browser at a fake Live server
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8',
@@ -58,21 +61,62 @@ const api = {
     catch (e) { console.warn(`[live] token failed (${String(e.message).slice(0, 40)})`); throw Object.assign(new Error('live unavailable'), { status: 503 }); }
   },
   async 'POST /api/tts'(body) {
-    if (!KEY) throw Object.assign(new Error('tts unavailable'), { status: 503 });
-    try { return await gemini.tts(KEY, String(body.text || '').slice(0, 400)); }
-    catch (e) { console.warn(`[tts] failed (${String(e.message).slice(0, 40)})`); throw Object.assign(new Error('tts unavailable'), { status: 503 }); }
+    return speakLine(String(body.text || '').slice(0, 400));
   },
 };
+
+// Spoken lines: ElevenLabs first (under its daily character cap), then Gemini, then 503 and the phone's own voice.
+// Each line is synthesised once per instance; repeated fixed lines cost nothing.
+const said = new Map();
+let elevenDay = '', elevenChars = 0;
+function speakLine(text, o) {
+  if (!said.has(text)) {
+    const p = synth(text, o);
+    p.catch(() => said.delete(text)); // a failed line is tried again next time
+    said.set(text, p);
+    if (said.size > 300) said.delete(said.keys().next().value); // shortcut: oldest-first eviction, ~40 MB of audio at most
+  }
+  return said.get(text);
+}
+// A provider that says quota or auth (401, 402, 429) rests a minute, so the phone's own voice starts at once.
+const resting = { elevenlabs: 0, gemini: 0 };
+const rest = (name, e) => { if (/\b(401|402|429)\b/.test(e.message)) resting[name] = Date.now() + 60000; };
+async function synth(text, { warm = false } = {}) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== elevenDay) { elevenDay = today; elevenChars = 0; }
+  // shortcut: the cap is per instance and resets on a restart; a shared counter if Murmur ever runs many instances
+  if (ELEVEN && text && Date.now() >= resting.elevenlabs && elevenChars + text.length <= ELEVEN_DAILY_CHARS) {
+    elevenChars += text.length;
+    try { return { ...(await eleven.tts(ELEVEN, text)), provider: 'elevenlabs' }; }
+    catch (e) { rest('elevenlabs', e); console.warn(`[tts] elevenlabs failed (${String(e.message).slice(0, 40)})`); }
+  }
+  // The warm never spends Gemini: its free tier allows 10 TTS requests a day, fewer than the fixed lines.
+  if (KEY && text && !warm && Date.now() >= resting.gemini) {
+    try { return { ...(await gemini.tts(KEY, text)), provider: 'gemini' }; }
+    catch (e) { rest('gemini', e); console.warn(`[tts] gemini failed (${String(e.message).slice(0, 40)})`); }
+  }
+  throw Object.assign(new Error('tts unavailable'), { status: 503 });
+}
+
+/** At boot: the agent's fixed lines (the ack, Done., every step label) into this instance's cache, one at a time. */
+export async function warmTts() {
+  const names = [...(await import('./public/apps/apps.js')).default, 'look'];
+  const apps = (await Promise.all(names.map((n) => import(`./public/apps/${n}/index.js`).then((m) => m.default, () => null)))).filter(Boolean);
+  const { createAgent } = await import('./public/agent/index.js');
+  const lines = createAgent({ registry: apps, bus: { on() {}, emit() {} } }).fixedLines();
+  for (const l of lines) await speakLine(l, { warm: true }).catch(() => {});
+  return lines;
+}
 
 const guard = createGuard();
 
 export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
-    if (url.pathname === '/health') return send(res, 200, { ok: true, provider: PROVIDER, live: (!!KEY || !!LIVE_URL) && !process.env.MURMUR_NO_LIVE, tts: !!KEY });
+    if (url.pathname === '/health') return send(res, 200, { ok: true, provider: PROVIDER, live: (!!KEY || !!LIVE_URL) && !process.env.MURMUR_NO_LIVE, tts: !!KEY || !!ELEVEN });
     const handler = api[`${req.method} ${url.pathname}`];
     if (url.pathname.startsWith('/api/')) {
-      const no = guard(req, { model: !!KEY }); // every /api route may call the model once a key is set
+      const no = guard(req, { model: !!KEY || !!ELEVEN }); // every /api route may spend a key once one is set
       if (no) return send(res, no.status, { error: no.error, say: no.say });
     }
     if (handler) return send(res, 200, await handler(await readJson(req)));
@@ -95,4 +139,5 @@ export const server = http.createServer(async (req, res) => {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT) || 8080;
   server.listen(port, () => console.log(`Murmur on http://localhost:${port} (provider: ${PROVIDER})`));
+  if (ELEVEN) warmTts().catch((e) => console.warn('[tts] warm failed', e.name));
 }

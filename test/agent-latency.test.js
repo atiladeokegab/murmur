@@ -8,6 +8,7 @@ import { describeRegistry } from '../public/agent/plan.js';
 import { phone, memoryKV } from './agent-fixtures.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+async function until(f, n = 400) { for (let i = 0; i < n; i++) { if (f()) return; await wait(5); } throw new Error('timed out'); }
 
 async function setup(o = {}) {
   const { librarian } = createToolkit({ kv: memoryKV() });
@@ -101,9 +102,35 @@ test('ctx.type types letter by letter in a browser, instantly under reduced moti
     const t0 = Date.now();
     await ctx.type(el, 'Hi Sam');
     assert.deepEqual(seen, ['H', 'Hi', 'Hi ', 'Hi S', 'Hi Sa', 'Hi Sam']);
-    assert.ok(Date.now() - t0 >= 100, 'about 25 ms a letter');
+    assert.ok(Date.now() - t0 >= 50, 'about 10 ms a letter');
+    const long = 'x'.repeat(200), t1 = Date.now();
+    seen.length = 0; await ctx.type(el, long);
+    assert.ok(Date.now() - t1 < 600, 'long text is capped near 400 ms'); assert.equal(seen.at(-1), long); assert.ok(seen.length <= 40);
     seen.length = 0; reduce = true;
     await ctx.type(el, 'Hi Sam');
     assert.deepEqual(seen, ['Hi Sam']);
   } finally { delete globalThis.matchMedia; }
+});
+
+test('a line that has started always finishes: later lines queue behind it, only Stop cuts one', async () => {
+  let active = 0, most = 0;
+  const started = [], cut = [];
+  const voice = (t, signal) => new Promise((r) => {
+    started.push(t); active++; most = Math.max(most, active);
+    const fin = (ok) => { if (!ok) cut.push(t); active--; r(ok); };
+    const timer = setTimeout(() => fin(true), 15);
+    signal?.addEventListener('abort', () => { clearTimeout(timer); fin(false); }, { once: true });
+  });
+  const s = await setup({ agency: () => 'ask', speak: voice });
+  const p = s.agent.hear("Text Sam I'm ten minutes late");
+  await until(() => started.some((t) => / or .+\?$/.test(t)));
+  await s.agent.hear('Sam');
+  await until(() => s.agent.gates.current);
+  await s.agent.yes(); await p;
+  await until(() => active === 0);
+  assert.equal(most, 1, 'never two lines at once');
+  assert.deepEqual(cut, [], 'no started line was cut');
+  assert.equal(started[0], ACK, '"On it." is always said, first');
+  assert.ok(started.indexOf(ACK) < started.findIndex((t) => / or .+\?$/.test(t)));
+  assert.equal(s.state('messages').lastSent?.to, 'sam'); // Stop emptying the queue: 'Stop empties the speech queue' above
 });
