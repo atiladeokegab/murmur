@@ -83,6 +83,7 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
     const of = steps.length;
     let status = 'done', lastApp = null, gatedRan = null, line = '', reason = '', madeUndo = null, more = '';
     failed = null;
+    gates.setSaid?.(utterance); // "send Sam ..." already said send: that is the yes for its send gate (the lead, 7 Nov)
     task.bus.emit('task:start', { utterance, plan: steps.map(({ tool, params }) => ({ name: tool, params })), ...plan });
 
     for (let i = 0; i < steps.length; i++) {
@@ -204,15 +205,18 @@ export function createRunner({ registry, bus, ctxFor, gates, choose = async () =
  * @param {(sheet|null)=>void} [o.onChange]  the shell shows or hides the sheet: { gate, readback, question }
  */
 export function createGates({ say = async () => {}, clock = { now: () => Date.now() }, fingerprint = async () => false,
-  risky = () => false, grace = 500, onChange = () => {} }) {
+  risky = () => false, grace = 250, onChange = () => {} }) {
   let open = null; // { gate, readback, openedAt, resolve, checking }
+  let said = ''; // the task's own words
   return {
+    setSaid(u) { said = String(u || ''); },
     get current() { return open && { gate: open.gate, openedAt: open.openedAt, readback: open.readback }; },
     ask({ gate, readback }) {
       if (open) open.resolve(false);
       // a travel hold is a pay gate whose readback says "held for 24 hours": the shell's sheet says Hold, so does the voice
       const question = gate === 'pay' && /\b(hold|held)\b/i.test(readback || '') ? 'Hold?'
         : { send: 'Send it?', pay: 'Pay?', call: 'Call?', delete: 'Delete it?' }[gate] || 'Do it?';
+      if (gate === 'send' && !risky(gate) && /\bsend\b/i.test(said)) { said = ''; say(String(readback || '').replace(/\?$/, '.')); return Promise.resolve(true); }
       return new Promise((resolve) => {
         const o = { gate, readback, openedAt: clock.now(), checking: false, ctl: new AbortController(),
           resolve: (r) => { o.ctl.abort(); open = null; onChange(null); resolve(r); } }; // Stop, No or a new ask withdraws the fingerprint prompt
