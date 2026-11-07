@@ -99,9 +99,14 @@ html.big .inside #tally div { flex: 1 1 0; min-width: 0; flex-direction: row-rev
 html.big .inside #tally dd { font-size: 1.25rem; padding: .1rem .35rem; min-width: 0; }
 html.big .inside #tally dt { white-space: normal; line-height: 1.1; }
 html.big .inside #tally :is(.t-tasks, .t-failed, .t-modelCalls) { display: none; } /* the room needs verified, asked, bypassed */
-/* one column that scrolls as a whole and follows the newest row; each section is as tall as its rows */
-html.big .inside main { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 0; }
-html.big .inside section { flex: none; max-height: none; }
-html.big .inside section > ol { overflow: visible; flex: none; }
+/* one column: Heard and Plan stay on top, Actions takes the rest and follows its newest step, Asked under it;
+   Memory is on the laptop view only */
+html.big .inside main { display: flex; flex-direction: column; gap: 6px; overflow: hidden; min-height: 0; }
+html.big .inside section { flex: none; max-height: none; min-height: 0; }
+html.big .inside section:has(#c-Actions) { flex: 1 1 auto; }
+html.big .inside section:has(#c-Memory) { display: none; }
 html.big .inside h2 { padding: .3rem .6rem; }
 html.big .inside li.old { display: none; } /* history lives on the laptop view; the room sees what is happening now */
+/* the room reads what was heard, the plan, and each step's verify; the paths, providers and params stay on the laptop */
+html.big .inside :is(#c-Heard, #c-Plan) .meta, html.big .inside #c-Heard .raw, html.big .inside #c-Actions p.meta:not(:has(.res)) { display: none; }
+html.big .inside section > ol > li { padding: .35rem 0; }

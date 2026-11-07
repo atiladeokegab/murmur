@@ -77,7 +77,6 @@ function draw() {
     }
     // A row grows after it lands (the press, the verify), so follow the bottom whenever anything changed.
     if (moved) ol.scrollTo({ top: ol.scrollHeight, behavior: smooth() ? 'smooth' : 'auto' });
-    if (moved && document.documentElement.classList.contains('big')) $('cols').scrollTo({ top: $('cols').scrollHeight, behavior: smooth() ? 'smooth' : 'auto' }); // big: the one column follows the newest row
   }
   // FLIP: rows that a fold or a growing row moved glide to their new place instead of jumping
   for (const [li, y] of y0) { const d = y - at(li); if (Math.abs(d) > 1) li.animate([{ transform: `translateY(${d}px)` }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)', composite: 'add' }); }
