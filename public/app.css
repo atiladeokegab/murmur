@@ -205,11 +205,9 @@ footer > * { width: min(100%, var(--w-column)); margin-inline: auto; }
   block-size: min(2.8em, 14svh); overflow-y: auto; } /* fixed: a longer sentence scrolls in place, the screen above never moves */
 /* Big text: the talk bar keeps to its job, so the screen above it still has room to read and scroll. */
 @container bar (max-width: 22em) { .talk .hint { display: none; } .talk { min-height: var(--h-link); padding-block: 0.4rem; } }
-.say #say { min-width: 0; }
+.say #say { min-width: 0; } /* no quote marks: a closing quote after the line moved whenever its length changed, and that is a layout shift */
 .say:has(#say:empty) { visibility: hidden; } /* nothing said: no lone "Murmur" label; the row keeps its height */
 .say .who { color: var(--c-accent); font-weight: 700; white-space: nowrap; }
-.say #say:not(:empty)::before { content: "\201C"; }
-.say #say:not(:empty)::after { content: "\201D"; }
 .typed { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
 .typed input {
   flex: 1; min-width: 0; min-height: var(--h-link); padding: 0 1rem; font: inherit; font-size: var(--fs-sheet);
@@ -288,7 +286,7 @@ dialog:not([open]) { display: block; visibility: hidden; opacity: 0; translate: 
   .now .flap { display: none; }
 }
 @container bar (max-width: 15em) {
-  .say { display: block; block-size: auto; overflow: visible; margin-bottom: 6px; font-size: 0.75rem; padding-inline: 0; } /* grows: a scroll box with nothing focusable is out of reach from a keyboard */
+  .say { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; block-size: auto; min-block-size: 2.8em; margin-bottom: 6px; font-size: 0.75rem; padding-inline: 0; } /* two lines, reserved: no scroll box, and the bar never grows */
   .say .who { margin-right: 0.3em; }
   .welcome-caption { font-size: 0.75rem; padding-inline: 0; margin-bottom: 6px; } /* build-look's first-open caption keeps step with the say line */
   .talk { font-size: 0.75rem; min-height: 72px; padding: 0.2rem 12px; border-radius: var(--r-btn); gap: 0.4rem; }
@@ -374,7 +372,7 @@ body:has(dialog[open]) .agent-cursor { visibility: hidden; }
 .work { position: sticky; top: 0; z-index: 2; background: var(--c-page); padding: clamp(10px, 2.4vh, 20px) var(--gutter) 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .work .place { margin: 0; font-size: var(--fs-place); color: var(--c-quiet); }
 .work .step { margin: 0; font: 700 var(--fs-step)/1.05 var(--f-read); color: var(--c-accent); }
-.slot-a { min-block-size: calc(2 * 1.05 * var(--fs-step)); display: grid; align-content: start; }
+.slot-a { min-block-size: calc(2 * 1.05 * var(--fs-step) + 1rem + var(--bw-now)); display: grid; align-content: start; padding: 1rem 1.125rem 0; border: var(--bw-now) solid transparent; border-bottom: 0; border-radius: var(--r-now) var(--r-now) 0 0; } /* the Done card's frame, clear until Done: only colour changes, so nothing moves */
 .slot-b { min-block-size: var(--h-stop); display: grid; }
 .slot[hidden] { display: none; }
 .work .step, .done-line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
@@ -392,13 +390,13 @@ body:has(dialog[open]) .agent-cursor { visibility: hidden; }
 .done-ms { display: none; }
 .done:not(:has(.undo:not([hidden]))) .done-ms { display: block; padding: 0.5rem 1.125rem; }
 /* Done: the line (slot a), the ticks and Undo (slot b) read as one card. Every slot keeps its height: nothing below jumps (CLS). */
-.work:has(.done:not([hidden])) .ticks { visibility: visible; margin-top: -0.5rem; padding: 0.5rem 1.125rem 0; block-size: calc(1.4em + 0.5rem); border-inline: var(--bw-now) solid var(--c-accent); } /* bridges the panel gap without moving */
+.work:has(.done:not([hidden])) .ticks { visibility: visible; border-color: var(--c-accent); }
 .work:has(.done:not([hidden])) .done { margin-top: -0.5rem; padding-top: 0.5rem; }
-.work:has(.done:not([hidden])) .slot-a { padding: 1rem 1.125rem 0; border: var(--bw-now) solid var(--c-accent); border-bottom: 0; border-radius: var(--r-now) var(--r-now) 0 0; }
+.work:has(.done:not([hidden])) .slot-a { border-color: var(--c-accent); }
 .work:has(.done:not([hidden])) .done { border-top: 0; border-radius: 0 0 var(--r-now) var(--r-now); }
 .done-line { margin: 0; font: 700 var(--fs-title)/1.2 var(--f-read); }
 .done-ms { margin: 0; font: 500 var(--fs-hint)/1.2 var(--f-read); color: var(--c-quiet); }
-.work .ticks { margin: 0; padding: 0; list-style: none; display: flex; gap: 0.4rem; block-size: 1.4em; overflow: hidden; font: 700 var(--fs-why)/1.4 var(--f-read); }
+.work .ticks { margin: -0.5rem 0 0; padding: 0.5rem 1.125rem 0; list-style: none; display: flex; gap: 0.4rem; block-size: calc(1.4em + 0.5rem); overflow: hidden; border-inline: var(--bw-now) solid transparent; font: 700 var(--fs-why)/1.4 var(--f-read); } /* already in the Done card's shape, so nothing moves at Done */
 .work .ticks:empty { visibility: hidden; } /* the row keeps its height before the first tick */
 .work .ticks li::before { content: "\2713"; color: var(--c-accent); }
 .work .ticks li.no::before { content: "\2717"; color: var(--c-ink); }
@@ -452,8 +450,8 @@ body:has(dialog[open]) .agent-cursor { visibility: hidden; }
 .app-card, .app-body { display: flex; flex-direction: column; gap: 0.5rem; }
 .app-card { padding: 0.75rem; border: 1px solid var(--c-slat); border-radius: var(--r-btn); background: var(--c-board); }
 @container board (max-width: 15em) {
-  .work:has(.done:not([hidden])) .slot-a { padding: 0 0.6rem; }
-  .work:has(.done:not([hidden])) .ticks { padding-inline: 0.6rem; margin-top: -0.5rem; }
+  .slot-a { padding: 0 0.6rem; min-block-size: calc(2 * 1.05 * var(--fs-step) + var(--bw-now)); }
+  .work .ticks { padding-inline: 0.6rem; }
   .done:not(:has(.undo:not([hidden]))) .done-ms { padding: 0 0.6rem; }
   .done .undo { padding-block: 0; }
   .work { position: static; } /* big text: the panel scrolls with the page, so the app below it can be reached */
