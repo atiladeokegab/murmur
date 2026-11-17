@@ -2,6 +2,8 @@
   <img src="docs/readme/banner.svg" alt="Murmur: a phone built for ears." width="100%">
 </p>
 
+<p align="center"><b>🏆 1st place</b><br>AI Agents for Accessibility hackathon · UCL East, London · 7 November 2026</p>
+
 <p align="center">
   <img alt="Node 24" src="https://img.shields.io/badge/Node-24-339933?logo=nodedotjs&logoColor=white">
   <img alt="No dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-000000">
